@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.0_Erken_Erişim-orange.svg)](#)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.1_Erken_Erişim-orange.svg)](#)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -113,7 +113,7 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **Early access (`v0.1.0`).** This application writes directly to the laptop's embedded controller (EC). It has only been tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions, it acts in monitor-only mode. Use at your own risk.
+> **Early access (`v0.1.1`).** This application writes directly to the laptop's embedded controller (EC). It has only been tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions, it acts in monitor-only mode. Use at your own risk.
 
 **Features:**
 - Custom fan curves with separate CPU/GPU targets.
