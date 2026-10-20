@@ -24,7 +24,7 @@ public sealed class EcFanHardware : IFanHardware
     private const int MaxRpm = 7000;
     // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
     private const double CpuRpmPerPercent = 54.5, GpuRpmPerPercent = 52.5;
-    private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(60);
 
     private readonly TimeSpan _ecRefresh;
     private readonly Stopwatch _sinceEcRead = new();
