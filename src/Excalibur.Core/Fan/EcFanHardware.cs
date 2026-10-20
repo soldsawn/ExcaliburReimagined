@@ -6,8 +6,9 @@ namespace Excalibur.Core.Fan;
 
 /// <summary>
 /// <see cref="IFanHardware"/> on the real machine: temperatures and RPM from the
-/// firmware's WMI sensor block (GET 0x0200) on every read, fan targets / applied percent /
-/// Cooling Boost from the EC only every <c>ecRefresh</c>. Every EC transaction can collide
+/// firmware's WMI sensor block (GET 0x0200) on every read, fan targets / Cooling Boost from
+/// the EC only every <c>ecRefresh</c>; the applied percent is worked out from the RPM
+/// (<see cref="AppliedPercent"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
 /// battery read shuts the machine down as "critical battery"; WMI goes through Windows'
 /// driver and is safe. Targets we write and verify update the cached EC values at once.
@@ -16,13 +17,15 @@ public sealed class EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeS
 {
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
+    // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
+    private const double CpuRpmPerPercent = 54.5, GpuRpmPerPercent = 52.5;
     private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(5);
 
     private readonly TimeSpan _ecRefresh = ecRefresh ?? DefaultEcRefresh;
     private readonly Stopwatch _sinceEcRead = new();
     private EcBlock? _ec;
 
-    private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget, int CpuApplied, int GpuApplied, bool Boost);
+    private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget, bool Boost);
 
     public FanSnapshot Read()
     {
@@ -41,14 +44,14 @@ public sealed class EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeS
             try
             {
                 _ec = new EcBlock(Target(FanRegisters.CpuTarget), Target(FanRegisters.GpuTarget),
-                    Percent(FanRegisters.CpuApplied), Percent(FanRegisters.GpuApplied),
                     (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0);
                 _sinceEcRead.Restart();
             }
             catch (TimeoutException ex) { throw new FanReadException("EC read timed out.", ex); }
         }
         var e = _ec;
-        return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget, e.CpuApplied, e.GpuApplied, e.Boost);
+        return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget,
+            AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent), e.Boost);
     }
 
     public void SetTarget(FanId fan, FanTarget target)
@@ -92,9 +95,7 @@ public sealed class EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeS
         => FanTarget.FromRaw(ec.ReadStable(reg))
            ?? throw new FanReadException($"Fan target 0x{reg:X2} holds an invalid value.");
 
-    private int Percent(byte reg)
-    {
-        byte v = ec.ReadStable(reg);
-        return v <= 100 ? v : throw new FanReadException($"Applied percent 0x{reg:X2} = {v} is out of range.");
-    }
+    /// <summary>The percent the EC is driving a fan at, from its RPM; clamped to 0..100.</summary>
+    public static int AppliedPercent(int rpm, double rpmPerPercent)
+        => Math.Clamp((int)Math.Round(rpm / rpmPerPercent), 0, 100);
 }
