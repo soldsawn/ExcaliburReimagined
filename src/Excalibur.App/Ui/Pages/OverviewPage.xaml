@@ -1,0 +1,79 @@
+<UserControl x:Class="Excalibur.App.Ui.Pages.OverviewPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:Excalibur.App.Ui.Controls">
+    <StackPanel>
+        <TextBlock Text="Panel" Style="{StaticResource PageTitle}" />
+        <TextBlock x:Name="Subtitle" Style="{StaticResource Caption}" FontSize="13" Margin="0,2,0,18" />
+
+        <!-- fault banner -->
+        <Border x:Name="FaultBanner" Style="{StaticResource CardBox}" BorderBrush="{DynamicResource Bad}" Margin="0,0,0,14" Visibility="Collapsed">
+            <DockPanel>
+                <Button x:Name="ClearFault" DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Content="Tekrar dene" />
+                <StackPanel>
+                    <TextBlock Text="Fanlarda bir sorun oldu" Style="{StaticResource CardTitle}" Foreground="{DynamicResource Bad}" />
+                    <TextBlock Text="Uygulama fan bilgilerini güvenle okuyamadı, bu yüzden fanları orijinal ayara bıraktı. &quot;Tekrar dene&quot; ile yeniden başlatabilirsiniz."
+                               Style="{StaticResource Caption}" Margin="0,4,12,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- CPU / GPU -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <c:BracketCard Style="{StaticResource CardBox}" Padding="20,16,20,18">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock Text="İŞLEMCİ" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SubText}" />
+                        <TextBlock x:Name="CpuName" Style="{StaticResource Caption}" HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <TextBlock x:Name="CpuTemp" Style="{StaticResource BigValue}" Text="–" Margin="0,6,0,0" />
+                    <DockPanel Margin="0,4,0,10">
+                        <TextBlock x:Name="CpuFan" Style="{StaticResource Mono}" Text="–" />
+                        <TextBlock x:Name="CpuDuty" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <c:BlockBar x:Name="CpuBar" Height="8" Fill="{DynamicResource Value}" Empty="{DynamicResource CardHover}" />
+                </StackPanel>
+            </c:BracketCard>
+            <c:BracketCard Grid.Column="2" Style="{StaticResource CardBox}" Padding="20,16,20,18">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock Text="EKRAN KARTI" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SubText}" />
+                        <TextBlock x:Name="GpuName" Style="{StaticResource Caption}" HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <TextBlock x:Name="GpuTemp" Style="{StaticResource BigValue}" Text="–" Margin="0,6,0,0" />
+                    <DockPanel Margin="0,4,0,10">
+                        <TextBlock x:Name="GpuFan" Style="{StaticResource Mono}" Text="–" />
+                        <TextBlock x:Name="GpuDuty" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <c:BlockBar x:Name="GpuBar" Height="8" Fill="{DynamicResource Value}" Empty="{DynamicResource CardHover}" />
+                </StackPanel>
+            </c:BracketCard>
+        </Grid>
+
+        <!-- power at a glance -->
+        <UniformGrid x:Name="Stats" Columns="3" Margin="0,14,0,0" />
+
+        <!-- profile -->
+        <Border Style="{StaticResource CardBox}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="Fan profili" Style="{StaticResource CardTitle}" />
+                <TextBlock x:Name="ProfileHint" Style="{StaticResource Caption}" Margin="0,4,0,12" />
+                <ContentControl x:Name="ProfileHost" Focusable="False" />
+                <TextBlock x:Name="ProfileError" Style="{StaticResource Caption}" Foreground="{DynamicResource Bad}" Visibility="Collapsed" />
+            </StackPanel>
+        </Border>
+
+        <!-- facts -->
+        <Border Style="{StaticResource CardBox}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="Sistem" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
+                <UniformGrid x:Name="Facts" Columns="4" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

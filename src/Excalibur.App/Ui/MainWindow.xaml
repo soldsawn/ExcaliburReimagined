@@ -1,0 +1,69 @@
+<Window x:Class="Excalibur.App.Ui.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Excalibur Reimagined" Icon="/Assets/app.ico" Width="1180" Height="780" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
+        FontFamily="{StaticResource UiFont}" FontSize="14"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Grid x:Name="Root" Background="{DynamicResource Bg}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="32" />
+        </Grid.RowDefinitions>
+
+        <!-- sidebar: brand, navigation, settings at the bottom -->
+        <Border Grid.Column="0" Background="{DynamicResource Sidebar}">
+            <DockPanel LastChildFill="False">
+                <StackPanel DockPanel.Dock="Top" Margin="22,18,0,22">
+                    <TextBlock Text="Excalibur" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="28"
+                               Foreground="{DynamicResource Accent}" />
+                    <TextBlock Text="R E I M A G I N E D" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubText}" Margin="2,0,0,0" />
+                    <Border Height="2" Width="150" HorizontalAlignment="Left" Margin="0,10,0,0" CornerRadius="1">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="{DynamicResource AccentColor}" Offset="0" />
+                                <GradientStop Color="Transparent" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="Nav" DockPanel.Dock="Top" />
+
+                <StackPanel x:Name="NavBottom" DockPanel.Dock="Bottom" Margin="0,0,0,12" />
+            </DockPanel>
+        </Border>
+
+        <!-- content: caption buttons over the page -->
+        <Grid Grid.Column="1">
+            <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <ContentControl x:Name="PageHost" Margin="32,26,32,28" Focusable="False" />
+            </ScrollViewer>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button x:Name="MinButton" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Küçült" />
+                <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Büyüt" />
+                <Button x:Name="CloseButton" Style="{StaticResource CloseButton}" Content="&#xE8BB;" ToolTip="Kapat (fanlar ve tepsi simgesi çalışmaya devam eder)" />
+            </StackPanel>
+        </Grid>
+
+        <!-- status bar -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0">
+            <DockPanel Margin="16,0" VerticalAlignment="Center">
+                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{DynamicResource Off}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusText" Style="{StaticResource Caption}" TextWrapping="NoWrap" VerticalAlignment="Center" />
+                <TextBlock x:Name="UpdatedText" Style="{StaticResource Caption}" TextWrapping="NoWrap" DockPanel.Dock="Right"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

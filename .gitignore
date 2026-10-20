@@ -1,0 +1,38 @@
+# build
+bin/
+obj/
+*.user
+.vs/
+__pycache__/
+TestResults/
+
+# third-party installers, binaries and decompiled vendor code (not ours, large)
+analysis/vendor/
+analysis/decompiled/
+analysis/decompiled43/
+analysis/cq171/raw/
+analysis/cq171/unpacked/
+analysis/cq171/ghidra/
+analysis/cq171/acpi/*.aml
+analysis/acpi/*.aml
+tools/iasl/
+tools/iasl-*.zip
+tools/ilspy/
+tools/innoextract/
+tools/innounp/
+tools/pawnio-modules/
+
+# personal notes, machine logs and dumps (kept on disk, never in the repo)
+docs/*
+!docs/agents/
+!docs/adr/
+analysis/
+
+# graphify output (generated; may quote personal docs)
+graphify-out/
+
+# Claude Code project instructions (local only)
+CLAUDE.md
+
+# Windows event log dump from the shutdown investigation (personal)
+kapanma/

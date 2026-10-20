@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ExcaliburReimagined</AssemblyName>
+    <RootNamespace>Excalibur.App</RootNamespace>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Product>Excalibur Reimagined</Product>
+    <Description>Casper Excalibur G870 control center: fan curves and more, without the vendor software.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinForms (tray) and WPF (main window) share this project; their type names clash
+         (Color, Point, Application...), so each file says which one it uses. -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+    <!-- WPF drops System.IO (Path clashes with Shapes.Path); no code here uses Shapes. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The main window's title-bar / taskbar icon; the same file is the exe icon. -->
+    <Resource Include="Assets/app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Excalibur.Core\Excalibur.Core.csproj" />
+  </ItemGroup>
+
+</Project>

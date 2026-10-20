@@ -1,0 +1,119 @@
+<UserControl x:Class="Excalibur.App.Ui.Pages.FanPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:Excalibur.App.Ui.Controls">
+    <StackPanel>
+        <TextBlock Text="Soğutma" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="Fanlar seçtiğiniz profile göre saniyede bir ayarlanır. Hangi profil seçili olursa olsun, ısınınca fanlar güvenlik için hızlanır."
+                   Style="{StaticResource Caption}" FontSize="13" Margin="0,2,0,18" />
+
+        <Border x:Name="FaultBanner" Style="{StaticResource CardBox}" BorderBrush="{DynamicResource Bad}" Margin="0,0,0,14" Visibility="Collapsed">
+            <DockPanel>
+                <Button x:Name="ClearFault" DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Content="Tekrar dene" />
+                <TextBlock Text="Uygulama fan bilgilerini güvenle okuyamadı, bu yüzden fanları orijinal ayara bıraktı. &quot;Tekrar dene&quot; ile yeniden başlatabilirsiniz." Style="{StaticResource Body}"
+                           Foreground="{DynamicResource Bad}" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <Border Style="{StaticResource CardBox}">
+            <StackPanel>
+                <TextBlock Text="Profil" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
+                <ContentControl x:Name="ProfileHost" Focusable="False" />
+                <TextBlock x:Name="CommandError" Style="{StaticResource Caption}" Foreground="{DynamicResource Bad}" Visibility="Collapsed" />
+            </StackPanel>
+        </Border>
+
+        <c:BracketCard Style="{StaticResource CardBox}" Margin="0,14,0,0">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,10">
+                    <TextBlock x:Name="CurveTitle" Text="Eğri" Style="{StaticResource CardTitle}" />
+                    <WrapPanel HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <WrapPanel.Resources>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                <Setter Property="Margin" Value="6,0,16,0" />
+                                <Setter Property="VerticalAlignment" Value="Center" />
+                            </Style>
+                        </WrapPanel.Resources>
+                        <Rectangle Width="16" Height="3" Fill="{DynamicResource Accent}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="CpuLegendText" Text="Profil eğrisi" />
+                        <Rectangle x:Name="GpuLegend" Width="16" Height="3" Fill="{DynamicResource Ok}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="GpuLegendText" Text="Ekran kartı eğrisi" />
+                        <Rectangle Width="16" Height="2" Fill="{DynamicResource SubText}" VerticalAlignment="Center" />
+                        <TextBlock Text="Orijinal ayar" />
+                        <Rectangle Width="16" Height="2" Fill="{DynamicResource Bad}" VerticalAlignment="Center" />
+                        <TextBlock Text="Alt sınır (koruma)" />
+                        <Ellipse Width="9" Height="9" Fill="{DynamicResource Value}" VerticalAlignment="Center" />
+                        <TextBlock Text="İşlemci şu an" />
+                        <Ellipse Width="9" Height="9" Fill="{DynamicResource Ok}" VerticalAlignment="Center" />
+                        <TextBlock Text="Ekran kartı şu an" />
+                        <Rectangle Width="16" Height="2" Fill="{DynamicResource SubText}" Opacity="0.5" VerticalAlignment="Center" />
+                        <TextBlock Text="Son 10 dakikanın izi" />
+                    </WrapPanel>
+                </DockPanel>
+                <c:CurveChart x:Name="Chart" Height="300" />
+                <TextBlock Text="İpucu: grafiğin üzerinde gezinin; renkli noktaların üzerine gelince fanın neden o hızda döndüğünü görürsünüz."
+                           Style="{StaticResource Caption}" Margin="0,8,0,0" />
+            </StackPanel>
+        </c:BracketCard>
+
+        <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Style="{StaticResource CardBox}">
+                <StackPanel>
+                    <TextBlock Text="Fanları elle ayarla" Style="{StaticResource CardTitle}" />
+                    <TextBlock Text="Seçtiğiniz hız, süre dolana kadar geçerli; sonra önceki profile döner. Isınırsa fanlar yine güvenlik için hızlanır."
+                               Style="{StaticResource Caption}" Margin="0,4,0,14" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="130" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="34" />
+                            <RowDefinition Height="34" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="İşlemci" Style="{StaticResource Body}" VerticalAlignment="Center" />
+                        <Slider x:Name="CpuSlider" Grid.Column="1" Style="{StaticResource ThinSlider}" Minimum="25" Maximum="100" Value="60" VerticalAlignment="Center" />
+                        <TextBlock x:Name="CpuSliderText" Grid.Column="2" Style="{StaticResource Mono}" Foreground="{DynamicResource Text}"
+                                   VerticalAlignment="Center" Margin="14,0,0,0" />
+                        <TextBlock Grid.Row="1" Text="Ekran kartı" Style="{StaticResource Body}" VerticalAlignment="Center" />
+                        <Slider x:Name="GpuSlider" Grid.Row="1" Grid.Column="1" Style="{StaticResource ThinSlider}" Minimum="25" Maximum="100" Value="60" VerticalAlignment="Center" />
+                        <TextBlock x:Name="GpuSliderText" Grid.Row="1" Grid.Column="2" Style="{StaticResource Mono}" Foreground="{DynamicResource Text}"
+                                   VerticalAlignment="Center" Margin="14,0,0,0" />
+                    </Grid>
+                    <DockPanel Margin="0,14,0,0">
+                        <Button x:Name="ApplyManual" DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="Uygula" VerticalAlignment="Top" />
+                        <WrapPanel x:Name="Durations" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource CardBox}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Son olaylar" Style="{StaticResource CardTitle}" />
+                    <TextBlock DockPanel.Dock="Top" Text="Profil değişiklikleri, ısınma uyarıları ve sorunlar."
+                               Style="{StaticResource Caption}" Margin="0,4,0,10" />
+                    <ScrollViewer Height="170" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="EventList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,5">
+                                        <TextBlock Text="{Binding Time}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                                   Foreground="{DynamicResource SubText}" Width="68" />
+                                        <TextBlock Text="{Binding Message}" FontSize="12.5" Foreground="{DynamicResource Text}" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>
