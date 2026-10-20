@@ -32,7 +32,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
   <img src="assets/screenshots/tray-menu.png" width="18%" alt="Simge alanı menüsü" />
 </p>
 <sub>*Ekran görüntüleri uygulamanın deneme modundan alınmıştır.*</sub>
-
+<a id="özellikler"></a>
 ## ✨ Özellikler
 
 - 🌀 **Gelişmiş Fan Kontrolü:** Sessiz, Dengeli ve Performans profilleri. İşlemci (CPU) ve ekran kartı (GPU) fanlarını ayrı ayrı yönetme imkânı.
@@ -44,7 +44,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 > **🛠️ Planlanan Özellikler:** Klavye ışığı kontrolü, pil şarj sınırı koyma, uygulamaya/oyuna özel otomatik profiller, klavye kısayolları ve İngilizce dil seçeneği.
 
 ---
-
+<a id="kurulum"></a>
 ## 🚀 Kurulum
 
 Henüz tek tıklamalı bir kurulum dosyası (`.exe`) bulunmamaktadır. Kurulumu kod üzerinden birkaç saniyede yapabilirsiniz:
@@ -80,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File tools\scripts\install-fan.ps1
 > **Not:** Kurulum, eğer sisteminizde eski bir NoteBook FanControl (`NbfcService`) varsa çakışmayı önlemek için onu geçici olarak devre dışı bırakır. Kaldırma işleminde eski hâline geri döndürür. Uygulamayı kaldırmak isterseniz aynı klasörde `powershell -ExecutionPolicy Bypass -File tools\scripts\uninstall-fan.ps1` komutunu çalıştırmanız yeterlidir.
 
 ---
-
+<a id="teknik-detaylar-ve-güvenlik"></a>
 ## ⚙️ Teknik Detaylar ve Güvenlik (Geliştiriciler İçin)
 
 Fan kontrolü riskli bir işlemdir. Bu yüzden sistem, donanımınızı korumak için katı kurallarla tasarlandı:
