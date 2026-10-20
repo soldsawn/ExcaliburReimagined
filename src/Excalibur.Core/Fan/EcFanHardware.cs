@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Management;
 using System.Text;
 using Excalibur.Core.Hardware;
 
@@ -11,21 +12,60 @@ namespace Excalibur.Core.Fan;
 /// (<see cref="AppliedPercent"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
 /// battery read shuts the machine down as "critical battery"; WMI goes through Windows'
-/// driver and is safe. Targets we write and verify update the cached EC values at once.
+/// driver and is safe. Targets we write and verify update the cached EC values at once, and the
+/// Fn+1 Cooling Boost state also arrives at once through the firmware's <c>GMC_WMIEvent</c>
+/// (the watcher lives as long as the process; if it cannot start, the EC refresh still catches the state).
 /// </summary>
-public sealed class EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null) : IFanHardware
+public sealed class EcFanHardware : IFanHardware
 {
+    private readonly EmbeddedController ec;
+    private readonly GmWmiGateway wmi;
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
     // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
     private const double CpuRpmPerPercent = 54.5, GpuRpmPerPercent = 52.5;
     private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(5);
 
-    private readonly TimeSpan _ecRefresh = ecRefresh ?? DefaultEcRefresh;
+    private readonly TimeSpan _ecRefresh;
     private readonly Stopwatch _sinceEcRead = new();
     private EcBlock? _ec;
+    private volatile bool _boost;
 
-    private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget, bool Boost);
+    private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
+
+    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null)
+    {
+        this.ec = ec;
+        this.wmi = wmi;
+        _ecRefresh = ecRefresh ?? DefaultEcRefresh;
+        StartBoostWatcher();
+    }
+
+    private void StartBoostWatcher()
+    {
+        try
+        {
+            var watcher = new ManagementEventWatcher(new ManagementScope(@"root\wmi"), new WqlEventQuery("SELECT * FROM GMC_WMIEvent"));
+            watcher.EventArrived += (_, e) =>
+            {
+                if (e.NewEvent["EventDetail"] is byte[] detail && TryParseBoostEvent(detail, out bool on)) _boost = on;
+            };
+            watcher.Start();
+        }
+        catch (ManagementException) { }
+    }
+
+    /// <summary>
+    /// Fn+1 event payload: byte 1 = 3 (Cooling Boost), byte 3 = 1 when turned on, 0 when off
+    /// (checked live on the G870, 2026-10-20).
+    /// </summary>
+    public static bool TryParseBoostEvent(byte[] detail, out bool on)
+    {
+        on = false;
+        if (detail.Length < 4 || detail[1] != 3) return false;
+        on = detail[3] != 0;
+        return true;
+    }
 
     public FanSnapshot Read()
     {
@@ -43,15 +83,15 @@ public sealed class EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeS
         {
             try
             {
-                _ec = new EcBlock(Target(FanRegisters.CpuTarget), Target(FanRegisters.GpuTarget),
-                    (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0);
+                _ec = new EcBlock(Target(FanRegisters.CpuTarget), Target(FanRegisters.GpuTarget));
+                _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
                 _sinceEcRead.Restart();
             }
             catch (TimeoutException ex) { throw new FanReadException("EC read timed out.", ex); }
         }
         var e = _ec;
         return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget,
-            AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent), e.Boost);
+            AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent), _boost);
     }
 
     public void SetTarget(FanId fan, FanTarget target)
