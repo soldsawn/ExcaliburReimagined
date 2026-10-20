@@ -32,6 +32,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
   <img src="assets/screenshots/tray-menu.png" width="18%" alt="Simge alanı menüsü" />
 </p>
 <sub>*Ekran görüntüleri uygulamanın deneme modundan alınmıştır.*</sub>
+
 <a id="özellikler"></a>
 ## ✨ Özellikler
 
