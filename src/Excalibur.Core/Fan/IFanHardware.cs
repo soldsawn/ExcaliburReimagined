@@ -6,7 +6,7 @@ public interface IFanHardware
     /// <summary>Reads and validates one snapshot; throws <see cref="FanReadException"/> when it cannot be trusted.</summary>
     FanSnapshot Read();
 
-    /// <summary>Writes one fan target and verifies the read-back; throws <see cref="FanWriteException"/>.</summary>
+    /// <summary>Writes one fan target (the real hardware checks it by the RPM afterwards); throws <see cref="FanWriteException"/>.</summary>
     void SetTarget(FanId fan, FanTarget target);
 
     /// <summary>The EC firmware version string (e.g. "P008B0"), or null when unreadable.</summary>

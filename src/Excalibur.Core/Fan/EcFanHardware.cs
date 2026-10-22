@@ -12,7 +12,8 @@ namespace Excalibur.Core.Fan;
 /// (<see cref="AppliedPercent"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
 /// battery read shuts the machine down as "critical battery"; WMI goes through Windows'
-/// driver and is safe. Targets we write and verify update the cached EC values at once, and the
+/// driver and is safe. A target we write is not read back: <see cref="FanFollowCheck"/> checks it by
+/// the RPM (only 0xFF, the safe state, keeps a read-back). Targets we write update the cached EC values at once, and the
 /// Fn+1 Cooling Boost state also arrives at once through the firmware's <c>GMC_WMIEvent</c>
 /// (the watcher lives as long as the process; if it cannot start, the EC refresh still catches the state).
 /// </summary>
@@ -31,6 +32,12 @@ public sealed class EcFanHardware : IFanHardware
     private EcBlock? _ec;
     private volatile bool _boost;
     private ManagementEventWatcher? _boostWatcher; // kept so it is plainly alive as long as this object
+    private readonly FanFollowCheck _follow = new();
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly int[] _lastPercent = new int[2];
+
+    /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
+    public Action<string>? Log { get; set; }
 
     private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
 
@@ -83,9 +90,35 @@ public sealed class EcFanHardware : IFanHardware
             }
             catch (TimeoutException ex) { throw new FanReadException("EC read timed out.", ex); }
         }
+        int cpuPercent = AppliedPercent(cpuRpm, CpuRpmPerPercent), gpuPercent = AppliedPercent(gpuRpm, GpuRpmPerPercent);
+        (_lastPercent[0], _lastPercent[1]) = (cpuPercent, gpuPercent);
+        CheckFollow(FanId.Cpu, cpuPercent);
+        CheckFollow(FanId.Gpu, gpuPercent);
         var e = _ec;
-        return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget,
-            AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent), _boost);
+        return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget, cpuPercent, gpuPercent, _boost);
+    }
+
+    /// <summary>Acts on <see cref="FanFollowCheck"/>: one more write, or one EC read to see what the register holds.</summary>
+    private void CheckFollow(FanId fan, int percent)
+    {
+        var now = _clock.Elapsed;
+        var follow = _follow.Check(fan, percent, _boost, now, out var target);
+        if (follow == FanFollow.None) return;
+        byte reg = FanRegisters.TargetOf(fan);
+        try
+        {
+            if (follow == FanFollow.Rewrite)
+            {
+                ec.WriteByte(reg, target.Value);
+                return;
+            }
+            var held = FanTarget.FromRaw(ec.ReadStable(reg));
+            Log?.Invoke($"!! {fan} fan runs at {percent}% and does not follow its target {target}; the EC holds {held?.ToString() ?? "an invalid value"}");
+            // Let the loop see what is really there, so it writes the target again if needed.
+            if (held is { } h && _ec is not null)
+                _ec = fan == FanId.Cpu ? _ec with { CpuTarget = h } : _ec with { GpuTarget = h };
+        }
+        catch (TimeoutException) { } // the 60-s EC refresh shows the truth anyway
     }
 
     /// <summary>Temperatures and applied percents from WMI only: never touches the EC (the guardian's normal read).</summary>
@@ -115,14 +148,17 @@ public sealed class EcFanHardware : IFanHardware
         if (!FanRegisters.IsWritable(reg, target.Value))
             throw new InvalidOperationException($"Refusing to write 0x{target.Value:X2} to 0x{reg:X2}.");
 
-        // One retry: a stray byte from Windows' EC driver can spoil a single read-back.
+        // One retry: a write that timed out may or may not have landed, and for 0xFF a stray byte from
+        // Windows' EC driver can spoil the single read-back.
         for (int attempt = 0; attempt < 2; attempt++)
         {
             try
             {
                 ec.WriteByte(reg, target.Value);
-                if (ec.ReadStable(reg) == target.Value)
+                // Only the safe state is read back; any other target is checked by the RPM.
+                if (!target.IsAuto || ec.ReadStable(reg) == target.Value)
                 {
+                    _follow.Wrote(fan, target, _lastPercent[(int)fan], _clock.Elapsed);
                     if (_ec is not null)
                         _ec = fan == FanId.Cpu ? _ec with { CpuTarget = target } : _ec with { GpuTarget = target };
                     return;
@@ -130,7 +166,9 @@ public sealed class EcFanHardware : IFanHardware
             }
             catch (TimeoutException) { }
         }
-        throw new FanWriteException($"{fan} fan target {target} did not read back from 0x{reg:X2}.");
+        throw new FanWriteException(target.IsAuto
+            ? $"{fan} fan target {target} did not read back from 0x{reg:X2}."
+            : $"{fan} fan target {target} could not be written to 0x{reg:X2}.");
     }
 
     public string? ReadEcVersion()

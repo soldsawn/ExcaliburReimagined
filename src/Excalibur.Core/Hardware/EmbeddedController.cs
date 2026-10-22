@@ -115,8 +115,8 @@ public sealed class EmbeddedController : IDisposable
 
     /// <summary>
     /// Writes one EC register (ACPI WR_EC, command 0x81) under the EC mutex. Single
-    /// attempt, no retry: if the handshake times out we stop and let the caller check
-    /// the register, rather than risk re-sending bytes into a half-finished transaction.
+    /// attempt, no retry: if the handshake times out we let the bus settle and stop, rather than
+    /// risk re-sending bytes into a half-finished transaction; the caller decides what follows.
     /// Callers must restrict which addresses they pass; this method does not.
     /// </summary>
     public void WriteByte(byte address, byte value)
@@ -133,6 +133,12 @@ public sealed class EmbeddedController : IDisposable
             WaitStatus(StatusIbf, expectSet: false);
             WritePort(DataPort, value);
             WaitStatus(StatusIbf, expectSet: false);
+        }
+        catch (TimeoutException)
+        {
+            // Leave the bus idle for whoever goes next (us retrying, or Windows).
+            SettleAfterTimeout();
+            throw;
         }
         finally { SlowOps.Check($"ec write 0x{address:X2}", sw.Elapsed); }
     }

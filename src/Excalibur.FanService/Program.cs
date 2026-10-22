@@ -69,6 +69,7 @@ builder.Services.AddSingleton(new FanControlLoop(hardware));
 var settingsStore = new ServiceSettingsStore(runtime.SettingsPath);
 var fileLog = new FanFileLog(runtime.LogDirectory, "fan");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+if (hardware is EcFanHardware ecFans) ecFans.Log = m => fileLog.Write(DateTimeOffset.Now, m);
 var history = new HistoryRecorder(runtime.HistoryDirectory, settingsStore.Current.History, m => fileLog.Write(DateTimeOffset.Now, m));
 settingsStore.Changed += s => history.Mode = s.History;
 builder.Services.AddSingleton(settingsStore);
