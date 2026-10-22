@@ -42,9 +42,6 @@ public partial class MainWindow : Window
                 ["Renk, efekt (sabit, nefes, renk döngüsü) ve parlaklık",
                  "Sıcaklığa göre renk: serinken mavi, ısınınca kırmızı",
                  "Klavyeye bir süre dokunulmayınca ışığı söndürme"])),
-            new("battery", "Pil", "\uE83F", () => InfoPage.Planned("Pil",
-                "Pilin ömrünü uzatma seçenekleri.",
-                ["Şarjı %60 ya da %80'de durdurma — dizüstünün bunu destekleyip desteklemediği araştırılıyor"])),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
             new("settings", "Ayarlar", "\uE713", () => InfoPage.Settings(_connection), Bottom: true),
         ];
@@ -127,7 +124,7 @@ public partial class MainWindow : Window
         timer.Tick += async (_, _) =>
         {
             timer.Stop();
-            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("display", 5), ("automation", 8), ("settings", -1) })
+            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("display", 5), ("automation", 7), ("settings", -1) })
             {
                 var button = index >= 0 ? (RadioButton)Nav.Children[index] : (RadioButton)NavBottom.Children[0];
                 button.IsChecked = true;
