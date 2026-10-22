@@ -31,7 +31,9 @@ builder.Services.AddWindowsService(o => o.ServiceName = "ExcaliburFanGuardian");
 // The guardian only needs the targets now and then; fewer EC reads, fewer collisions with Windows.
 // Shorter than the service's minute: it must notice a target the dead service left behind soon.
 builder.Services.AddSingleton<IFanHardware>(new EcFanHardware(ec, new GmWmiGateway(), TimeSpan.FromSeconds(10)));
-builder.Services.AddSingleton(new FanFileLog(FanPaths.LogDirectory, "guardian"));
+var fileLog = new FanFileLog(FanPaths.LogDirectory, "guardian");
+SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+builder.Services.AddSingleton(fileLog);
 builder.Services.AddHostedService<GuardianWorker>();
 
 using var host = builder.Build();

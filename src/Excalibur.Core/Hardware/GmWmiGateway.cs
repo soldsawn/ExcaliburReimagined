@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Management;
 
 namespace Excalibur.Core.Hardware;
@@ -26,14 +27,20 @@ public sealed class GmWmiGateway
         // The firmware keeps a single shared response buffer, so requests must not interleave.
         lock (_gate)
         {
-            using var instance = GetInstance()
-                ?? throw new InvalidOperationException($"{ClassName} is not present on this system.");
-            instance["BufferBytes"] = request.ToBytes();
-            instance.Put();
+            // The handler reads the EC through Windows' driver, so a collision stalls this call.
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                using var instance = GetInstance()
+                    ?? throw new InvalidOperationException($"{ClassName} is not present on this system.");
+                instance["BufferBytes"] = request.ToBytes();
+                instance.Put();
 
-            using var reply = GetInstance()
-                ?? throw new InvalidOperationException($"{ClassName} disappeared after write.");
-            return SmiCommand.FromBytes((byte[])reply["BufferBytes"]);
+                using var reply = GetInstance()
+                    ?? throw new InvalidOperationException($"{ClassName} disappeared after write.");
+                return SmiCommand.FromBytes((byte[])reply["BufferBytes"]);
+            }
+            finally { SlowOps.Check($"wmi 0x{request.A1:X4}", sw.Elapsed); }
         }
     }
 

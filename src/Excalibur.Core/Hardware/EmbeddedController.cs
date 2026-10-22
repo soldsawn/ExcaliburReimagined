@@ -51,21 +51,26 @@ public sealed class EmbeddedController : IDisposable
     public byte ReadByte(byte address, int retries = MaxReadRetries)
     {
         using var ecLock = EcLock.Acquire();
-        TimeoutException? last = null;
-        for (int attempt = 0; attempt <= retries; attempt++)
+        var sw = Stopwatch.StartNew();
+        try
         {
-            try
+            TimeoutException? last = null;
+            for (int attempt = 0; attempt <= retries; attempt++)
             {
-                Resync();
-                return ReadByteLocked(address);
+                try
+                {
+                    Resync();
+                    return ReadByteLocked(address);
+                }
+                catch (TimeoutException ex)
+                {
+                    last = ex;
+                    SettleAfterTimeout();
+                }
             }
-            catch (TimeoutException ex)
-            {
-                last = ex;
-                SettleAfterTimeout();
-            }
+            throw last!;
         }
-        throw last!;
+        finally { SlowOps.Check($"ec read 0x{address:X2}", sw.Elapsed); }
     }
 
     /// <summary>
@@ -118,14 +123,19 @@ public sealed class EmbeddedController : IDisposable
     public void WriteByte(byte address, byte value)
     {
         using var ecLock = EcLock.Acquire();
-        Resync();
-        WaitStatus(StatusIbf, expectSet: false);
-        WritePort(CommandPort, CmdWrite);
-        WaitStatus(StatusIbf, expectSet: false);
-        WritePort(DataPort, address);
-        WaitStatus(StatusIbf, expectSet: false);
-        WritePort(DataPort, value);
-        WaitStatus(StatusIbf, expectSet: false);
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            Resync();
+            WaitStatus(StatusIbf, expectSet: false);
+            WritePort(CommandPort, CmdWrite);
+            WaitStatus(StatusIbf, expectSet: false);
+            WritePort(DataPort, address);
+            WaitStatus(StatusIbf, expectSet: false);
+            WritePort(DataPort, value);
+            WaitStatus(StatusIbf, expectSet: false);
+        }
+        finally { SlowOps.Check($"ec write 0x{address:X2}", sw.Elapsed); }
     }
 
     /// <summary>Raw EC status byte (port 0x66): bit0 = OBF, bit1 = IBF. Diagnostic only.</summary>
@@ -243,8 +253,10 @@ public sealed class EmbeddedController : IDisposable
         {
             var mutex = new Mutex(false, EcMutexName);
             bool owned;
+            var sw = Stopwatch.StartNew();
             try { owned = mutex.WaitOne(TimeSpan.FromSeconds(2)); }
             catch (AbandonedMutexException) { owned = true; } // prior owner crashed; we hold it now
+            SlowOps.Check("ec lock wait", sw.Elapsed);
             if (!owned)
             {
                 mutex.Dispose();
