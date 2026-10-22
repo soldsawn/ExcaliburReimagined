@@ -37,7 +37,12 @@ public sealed record FanLoopOptions
     public int MaxReadFailures { get; init; } = 3;
     public int MaxWriteFailures { get; init; } = 2;
     /// <summary>Smaller changes than this are not written (the EC ramps anyway).</summary>
-    public int MinWriteDelta { get; init; } = 2;
+    public int MinWriteDelta { get; init; } = 4;
+    /// <summary>
+    /// The shortest time between two writes to the same fan: every EC write can collide with Windows'
+    /// own EC driver. A safety raise, a user's change and the hand-over to or from the EC are not held back.
+    /// </summary>
+    public TimeSpan MinWriteInterval { get; init; } = TimeSpan.FromSeconds(5);
     public TimeSpan MaxManualDuration { get; init; } = TimeSpan.FromMinutes(10);
 }
 
@@ -77,6 +82,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private int? _cpuCurve, _gpuCurve;
     private string? _profileChangedBy;
     private DateTimeOffset? _profileChangedAt;
+    private readonly DateTimeOffset?[] _lastWrite = new DateTimeOffset?[2];
+    private bool _userChanged;
 
     public const int MaxEvents = 50;
 
@@ -237,10 +244,12 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             foreach (var fan in new[] { FanId.Cpu, FanId.Gpu })
             {
                 var want = decision.Of(fan);
-                if (!NeedsWrite(s.TargetOf(fan), want)) continue;
+                bool urgent = _userChanged || (fan == FanId.Cpu ? cpuRaised : gpuRaised) is not null;
+                if (!NeedsWrite(fan, s.TargetOf(fan), want, urgent, now)) continue;
                 try
                 {
                     hardware.SetTarget(fan, want);
+                    _lastWrite[(int)fan] = now;
                 }
                 catch (FanWriteException ex)
                 {
@@ -255,16 +264,19 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                 }
             }
             if (!failedThisTick) _writeFailures = 0;
+            _userChanged = false;
             _applied = decision;
             _holdsFans = !decision.Cpu.IsAuto || !decision.Gpu.IsAuto;
             return Publish();
         }
     }
 
-    private bool NeedsWrite(FanTarget current, FanTarget want)
+    private bool NeedsWrite(FanId fan, FanTarget current, FanTarget want, bool urgent, DateTimeOffset now)
     {
         if (want.IsAuto || current.IsAuto) return want != current;
         if (want.Percent == 100 && current.Percent != 100) return true;
+        if (urgent) return want != current;
+        if (_lastWrite[(int)fan] is { } last && now - last < _options.MinWriteInterval) return false;
         return Math.Abs(want.Percent - current.Percent) >= _options.MinWriteDelta;
     }
 
@@ -298,6 +310,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     {
         _profileChangedBy = source;
         _profileChangedAt = now;
+        _userChanged = true;
     }
 
     private void ResetSmoothing()

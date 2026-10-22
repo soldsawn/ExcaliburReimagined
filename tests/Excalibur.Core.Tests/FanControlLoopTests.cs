@@ -37,6 +37,36 @@ public class FanControlLoopTests
     }
 
     [Fact]
+    public void Curve_changes_are_written_at_most_every_5_s_per_fan()
+    {
+        _loop.Start(FanProfile.Balanced, T0);
+        TickAt(1);
+        var writeTicks = new List<int>();
+        for (int i = 2; i <= 40; i++)
+        {
+            _hw.CpuTempC = Math.Min(48 + i / 2.0, 66); // a slow climb: the curve wants a little more every tick
+            int before = _hw.Writes.Count(w => w.Fan == FanId.Cpu);
+            TickAt(i);
+            if (_hw.Writes.Count(w => w.Fan == FanId.Cpu) > before) writeTicks.Add(i);
+        }
+        _output.WriteLine(string.Join(", ", writeTicks));
+        Assert.True(writeTicks.Count >= 3);
+        Assert.True(writeTicks[0] >= 6, "the first change waits 5 s after the write at second 1");
+        Assert.All(writeTicks.Zip(writeTicks.Skip(1)), p => Assert.True(p.Second - p.First >= 5));
+    }
+
+    [Fact]
+    public void A_users_change_is_written_at_once()
+    {
+        _loop.Start(FanProfile.Balanced, T0);
+        TickAt(1);
+        _loop.SetManual(60, 61, TimeSpan.FromMinutes(1), T0.AddSeconds(2));
+        TickAt(2);
+        Assert.Equal(P(60), _hw.CpuTarget);
+        Assert.Equal(P(61), _hw.GpuTarget);
+    }
+
+    [Fact]
     public void Unknown_ec_firmware_is_monitor_only_and_never_writes_a_percent()
     {
         _hw.EcVersion = "P010A0";
