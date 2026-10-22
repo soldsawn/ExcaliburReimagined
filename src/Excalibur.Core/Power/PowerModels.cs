@@ -23,6 +23,14 @@ public static class PowerModeInfo
         _ => 75,
     };
 
+    /// <summary>CPU long-term limit (PL1) the firmware sets for each mode in the MCHBAR copy, read live on the G870 (2026-10-22).</summary>
+    public static int CpuWatts(PowerMode mode) => mode switch
+    {
+        PowerMode.HighPerformance => 55,
+        PowerMode.Gaming => 45,
+        _ => 35,
+    };
+
     /// <summary>The mode whose GPU limit is <paramref name="watts"/> (within 2 W), or null when it matches none.</summary>
     public static PowerMode? FromGpuWatts(int watts)
     {

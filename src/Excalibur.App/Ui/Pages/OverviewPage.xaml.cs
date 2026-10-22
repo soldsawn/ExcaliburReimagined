@@ -94,7 +94,8 @@ public partial class OverviewPage : UserControl
             string.Join(" · ", new[]
             {
                 power?.CpuWatts is { } cw ? $"işlemci {cw}" + (power.CpuPl1Watts is { } l ? $" / {l} W" : " W") : null,
-                power?.GpuWatts is { } w ? $"ekran kartı sınırı {w} W" : null,
+                power?.GpuPowerWatts is { } gw ? $"ekran kartı {gw}" + (power.GpuWatts is { } gl ? $" / {gl} W" : " W")
+                    : power?.GpuWatts is { } w ? $"ekran kartı sınırı {w} W" : null,
             }.Where(x => x is not null)));
         Set("source", s is null || power is null ? "–" : power.OnBattery ? "Pil" : power.UsbCAdapter ? "USB-C" : "Priz",
             power is null ? "" : power.OnBattery ? $"%{power.BatteryPercent} · yalnız Ofis modu" : power.BatteryPercent is { } b ? $"pil %{b}" : "");

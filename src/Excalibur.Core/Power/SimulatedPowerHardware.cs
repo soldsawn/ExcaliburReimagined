@@ -20,7 +20,7 @@ public sealed class SimulatedPowerHardware : IPowerHardware
     /// <summary>The G870's PL1 per mode (35/45/55 W), lowered by the user's limit, and a CPU drawing a little under it.</summary>
     public CpuPower? ReadCpuPower()
     {
-        int pl1 = _mode switch { PowerMode.Office => 35, PowerMode.HighPerformance => 55, _ => 45 };
+        int pl1 = PowerModeInfo.CpuWatts(_mode ?? PowerMode.Gaming);
         return new CpuPower(12 + Random.Shared.Next(0, 8), Math.Min(pl1, _cpuLimit?.Pl1Watts ?? pl1), Math.Min(115, _cpuLimit?.Pl2Watts ?? 115));
     }
 

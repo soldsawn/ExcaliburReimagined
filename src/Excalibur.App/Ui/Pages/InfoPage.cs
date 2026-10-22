@@ -61,6 +61,30 @@ internal static class InfoPage
         return card;
     }
 
+    /// <summary>A small (i) that explains a term in a tooltip when hovered.</summary>
+    internal static TextBlock Tip(string explanation)
+    {
+        var t = new TextBlock
+        {
+            Text = "", FontSize = 13, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.Help,
+            ToolTip = new TextBlock { Text = explanation, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 },
+        };
+        t.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
+        t.SetResourceReference(TextBlock.ForegroundProperty, "SubText");
+        ToolTipService.SetInitialShowDelay(t, 150);
+        ToolTipService.SetShowDuration(t, 30000);
+        return t;
+    }
+
+    /// <summary>A text followed by its (i) explanation.</summary>
+    internal static StackPanel Labeled(string text, string style, string explanation, double top = 0, double bottom = 0)
+    {
+        var label = Text(text, style);
+        label.VerticalAlignment = VerticalAlignment.Center;
+        return new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, top, 0, bottom), Children = { label, Tip(explanation) } };
+    }
+
     internal static TextBlock Text(string text, string style, double top = 0, double bottom = 0, bool accent = false, double width = double.NaN)
     {
         var t = new TextBlock { Text = text, Margin = new Thickness(0, top, 0, bottom), Width = width };
