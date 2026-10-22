@@ -207,8 +207,9 @@ internal sealed class TrayContext : ApplicationContext
             await Task.WhenAny(send, Task.Delay(TimeSpan.FromSeconds(3)));
         }
         catch { }
-        AppInstances.CloseMainWindow();
-        ExitThread();
+        // Whatever goes wrong closing the window, the icon must still go (a lost exception here used to keep it open).
+        try { AppInstances.CloseMainWindow(); }
+        finally { ExitThread(); }
     }
 
     private async Task SendAsync(FanRequest request)

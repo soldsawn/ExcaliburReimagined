@@ -55,9 +55,11 @@ internal static class AppInstances
         {
             using (p)
             {
-                if (p.Id == me.Id || p.MainWindowHandle == IntPtr.Zero) continue;
+                if (p.Id == me.Id) continue;
                 try
                 {
+                    // Inside the try: a process that exits meanwhile throws on MainWindowHandle too.
+                    if (p.MainWindowHandle == IntPtr.Zero) continue;
                     p.CloseMainWindow();
                     p.WaitForExit(2000);
                 }
