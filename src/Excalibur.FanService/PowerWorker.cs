@@ -5,7 +5,8 @@ namespace Excalibur.FanService;
 /// <summary>
 /// Runs the power logic beside the fan loop, on its own timer: a slow or stuck firmware call
 /// (WMI) can only delay power changes, never the fans. Polls the power source every 2 s and
-/// applies the saved mode again 5 s after the laptop wakes from sleep.
+/// applies the saved mode (and CPU limit) again 5 s after the laptop wakes from sleep; puts the firmware's CPU limits
+/// back when the service stops.
 /// </summary>
 public sealed class PowerWorker(PowerManager power, PowerSignal signal, ILogger<PowerWorker> logger) : BackgroundService
 {
@@ -42,6 +43,8 @@ public sealed class PowerWorker(PowerManager power, PowerSignal signal, ILogger<
         finally
         {
             signal.Changed -= OnPower;
+            // The firmware's CPU limits go back while the service is not running.
+            power.RestoreCpuLimit();
         }
     }
 

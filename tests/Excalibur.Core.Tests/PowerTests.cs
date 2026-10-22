@@ -136,6 +136,38 @@ public sealed class PowerTests : IDisposable
     }
 
     [Fact]
+    public void A_cpu_limit_is_written_saved_and_put_back_when_cleared()
+    {
+        Assert.True(_power.SetCpuLimit(new CpuLimit(25, 35)).Ok);
+        Assert.Equal(new CpuLimit(25, 35), _settings.Current.CpuLimit);
+        Assert.Equal(new CpuLimit(25, 35), _power.Status.CpuLimit);
+        Assert.True(_power.SetCpuLimit(null).Ok);
+        Assert.Null(_settings.Current.CpuLimit);
+        Assert.Equal([new CpuLimit(25, 35), null], _hw.CpuLimits);
+    }
+
+    [Fact]
+    public void An_invalid_or_failed_cpu_limit_is_not_saved()
+    {
+        Assert.Equal("cpu_limit_invalid", _power.SetCpuLimit(new CpuLimit(5, 35)).Code);
+        _hw.FailCpuLimit = true;
+        Assert.Equal("cpu_limit_failed", _power.SetCpuLimit(new CpuLimit(25, 35)).Code);
+        Assert.Null(_settings.Current.CpuLimit);
+    }
+
+    [Fact]
+    public void The_saved_cpu_limit_is_applied_at_start_every_minute_after_resume_and_released_on_stop()
+    {
+        _power.SetCpuLimit(new CpuLimit(25, 35));
+        _hw.CpuLimits.Clear();
+        for (int i = 0; i < 31; i++) _power.Poll(); // polls 1 and 31 check it
+        _power.Reapply();
+        _power.RestoreCpuLimit();
+        Assert.Equal([new CpuLimit(25, 35), new CpuLimit(25, 35), new CpuLimit(25, 35), null], _hw.CpuLimits);
+        Assert.Equal(new CpuLimit(25, 35), _settings.Current.CpuLimit); // the choice stays for the next start
+    }
+
+    [Fact]
     public void Automation_off_never_switches_the_fan_profile()
     {
         Poll(Wall);
@@ -269,5 +301,12 @@ public sealed class PowerTests : IDisposable
         public int? ReadGpuWatts() => GpuWatts;
         public CpuPower? Cpu { get; set; }
         public CpuPower? ReadCpuPower() => Cpu;
+        public bool FailCpuLimit { get; set; }
+        public List<CpuLimit?> CpuLimits { get; } = [];
+        public void ApplyCpuLimit(CpuLimit? limit)
+        {
+            if (FailCpuLimit) throw new PowerException("MSR write failed");
+            CpuLimits.Add(limit);
+        }
     }
 }

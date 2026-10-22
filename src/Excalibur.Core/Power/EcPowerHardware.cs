@@ -6,15 +6,27 @@ namespace Excalibur.Core.Power;
 /// <summary>
 /// The real power hardware: the performance mode through the firmware's WMI method (SET 0x0300,
 /// a2 = mode; works without administrator rights, docs/03), the power source from Windows plus the
-/// USB-C adapter flag (GET 0x0206, a4 = 1), the GPU limit from the NVIDIA driver (NVML) and, when given a
-/// <see cref="CpuPowerMeter"/>, the CPU's power and limits.
+/// USB-C adapter flag (GET 0x0206, a4 = 1), the GPU limit and draw from the NVIDIA driver (NVML) and, when given a
+/// <see cref="CpuPowerMeter"/> and <see cref="CpuLimiter"/>, the CPU's power and limits.
 /// Shares the <see cref="GmWmiGateway"/> with the fan hardware: the firmware has one response buffer.
 /// </summary>
-public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null) : IPowerHardware
+public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null, CpuLimiter? cpuLimiter = null) : IPowerHardware
 {
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
     public CpuPower? ReadCpuPower() => cpu?.Read(_clock.Elapsed);
+
+    public int? ReadGpuPowerWatts() => Nvml.PowerUsageWatts();
+
+    public void ApplyCpuLimit(CpuLimit? limit)
+    {
+        if (cpuLimiter is null)
+        {
+            if (limit is null) return;
+            throw new PowerException("CPU limits are not available (PawnIO IntelMSR module missing).");
+        }
+        cpuLimiter.Apply(limit);
+    }
 
     private const ushort PerformanceModeFunction = 0x0300, AdapterFunction = 0x0206;
     private static readonly TimeSpan AdapterRecheck = TimeSpan.FromSeconds(30);
@@ -87,14 +99,20 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null)
     private static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
 }
 
-/// <summary>Reads the GPU power limit the driver enforces; every failure is "unknown" (null).</summary>
+/// <summary>Reads the GPU power limit the driver enforces and the power drawn now; every failure is "unknown" (null).</summary>
 internal static class Nvml
 {
     private static readonly object Gate = new();
     private static bool _tried, _ready;
     private static IntPtr _device;
 
-    public static int? EnforcedPowerLimitWatts()
+    public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit);
+
+    public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage);
+
+    private delegate int MilliwattQuery(IntPtr device, out uint milliwatts);
+
+    private static int? Milliwatts(MilliwattQuery query)
     {
         lock (Gate)
         {
@@ -110,7 +128,7 @@ internal static class Nvml
             if (!_ready) return null;
             try
             {
-                return nvmlDeviceGetEnforcedPowerLimit(_device, out uint milliwatts) == 0 ? (int)Math.Round(milliwatts / 1000.0) : null;
+                return query(_device, out uint milliwatts) == 0 ? (int)Math.Round(milliwatts / 1000.0) : null;
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
         }
@@ -119,4 +137,5 @@ internal static class Nvml
     [DllImport("nvml.dll")] private static extern int nvmlInit_v2();
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
 }

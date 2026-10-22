@@ -16,6 +16,12 @@ public interface IPowerHardware
 
     /// <summary>The CPU's power and limits now; null when they cannot be read.</summary>
     CpuPower? ReadCpuPower() => null;
+
+    /// <summary>The power the GPU draws now, in watts; null when it cannot be read.</summary>
+    int? ReadGpuPowerWatts() => null;
+
+    /// <summary>Puts the user's CPU limits in force, or the firmware's when null; throws <see cref="PowerException"/> when that fails.</summary>
+    void ApplyCpuLimit(CpuLimit? limit) { }
 }
 
 public sealed class PowerException(string message, Exception? inner = null) : Exception(message, inner);
@@ -35,7 +41,9 @@ public sealed record PowerStatus(
     int? GpuWatts,
     PowerLock Lock,
     bool AutomationEnabled,
-    CpuPower? Cpu = null);
+    CpuPower? Cpu = null,
+    int? GpuPowerWatts = null,
+    CpuLimit? CpuLimit = null);
 
 /// <summary>
 /// The service's power logic (docs/09 A3). It decides, the hardware does:
@@ -61,8 +69,11 @@ public sealed class PowerManager
 
     private PowerSource? _source;
     private PowerMode? _applied;
-    private int? _gpuWatts;
+    private int? _gpuWatts, _gpuPower;
     private CpuPower? _cpu;
+    private int _polls;
+    // How often the CPU limit is checked again (the firmware may reset it, e.g. after sleep): every 30 polls, about a minute.
+    private const int CpuLimitCheckEvery = 30;
 
     /// <param name="switchProfile">(fan profile name, <c>FanSource</c>) — switches the fan profile the way a user command does.</param>
     public PowerManager(IPowerHardware hardware, ServiceSettingsStore settings, Action<string, string> switchProfile, Action<string>? log = null)
@@ -81,7 +92,7 @@ public sealed class PowerManager
             {
                 var source = _source ?? new PowerSource(false, null, false);
                 return new PowerStatus(Effective(), _settings.Current.PowerMode, source, _gpuWatts, LockOf(source),
-                    _settings.Current.PowerAutomation.Enabled, _cpu);
+                    _settings.Current.PowerAutomation.Enabled, _cpu, _gpuPower, _settings.Current.CpuLimit);
             }
         }
     }
@@ -99,7 +110,9 @@ public sealed class PowerManager
         lock (_gate)
         {
             _gpuWatts = SafeGpuWatts();
+            _gpuPower = SafeGpuPower();
             _cpu = SafeCpuPower();
+            if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(_settings.Current.CpuLimit);
             // The battery percent changes all the time; only a change of power source counts.
             bool sameSource = _source is { } known && known.OnBattery == source.OnBattery && known.UsbCAdapter == source.UsbCAdapter;
             if (sameSource) { _source = source; return; }
@@ -115,6 +128,7 @@ public sealed class PowerManager
     {
         lock (_gate)
         {
+            ApplyCpuLimit(_settings.Current.CpuLimit);
             if (_source is not { } source) return;
             _applied = null;
             Apply(source, first: true);
@@ -139,7 +153,36 @@ public sealed class PowerManager
         }
     }
 
+    /// <summary>The user set their own CPU limits, or null to let the power mode decide again.</summary>
+    public PowerResult SetCpuLimit(CpuLimit? limit)
+    {
+        if (limit?.Validate() is { Count: > 0 } errors) return PowerResult.Fail("cpu_limit_invalid", string.Join("; ", errors));
+        lock (_gate)
+        {
+            if (!ApplyCpuLimit(limit)) return PowerResult.Fail("cpu_limit_failed", "The CPU limit could not be written.");
+            _settings.Update(s => s with { CpuLimit = limit }, out _);
+            _log(limit is null ? "power: CPU limit back to the power mode" : $"power: CPU limit {limit.Pl1Watts} W / {limit.Pl2Watts} W");
+            return PowerResult.Success;
+        }
+    }
+
+    /// <summary>When the service stops: the firmware's CPU limits go back (the saved choice stays for the next start).</summary>
+    public void RestoreCpuLimit()
+    {
+        lock (_gate) ApplyCpuLimit(null);
+    }
+
     // ---- decisions -------------------------------------------------------------------------
+
+    private bool ApplyCpuLimit(CpuLimit? limit)
+    {
+        try { _hw.ApplyCpuLimit(limit); return true; }
+        catch (Exception ex) when (ex is PowerException or InvalidOperationException)
+        {
+            _log($"power: could not write the CPU limit ({ex.Message})");
+            return false;
+        }
+    }
 
     private void Apply(PowerSource source, bool first)
     {
@@ -208,6 +251,12 @@ public sealed class PowerManager
     private int? SafeGpuWatts()
     {
         try { return _hw.ReadGpuWatts(); }
+        catch (Exception ex) when (ex is PowerException or InvalidOperationException) { return null; }
+    }
+
+    private int? SafeGpuPower()
+    {
+        try { return _hw.ReadGpuPowerWatts(); }
         catch (Exception ex) when (ex is PowerException or InvalidOperationException) { return null; }
     }
 

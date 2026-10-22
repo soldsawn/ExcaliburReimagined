@@ -62,10 +62,13 @@ public sealed record ServiceSettings
     /// <summary>What to change when the charger is plugged in or out (off by default).</summary>
     public PowerAutomation PowerAutomation { get; init; } = new();
 
+    /// <summary>The user's own CPU power limits; null = the power mode decides (nothing is written).</summary>
+    public CpuLimit? CpuLimit { get; init; }
+
     // Value equality over the lists (a record would compare them by reference).
     public bool Equals(ServiceSettings? other) =>
         other is not null && Version == other.Version && Profile == other.Profile && History == other.History
-        && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation
+        && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit
         && CustomProfiles.SequenceEqual(other.CustomProfiles)
         && (Slots is null ? other.Slots is null : other.Slots is not null && Slots.SequenceEqual(other.Slots));
 
@@ -105,6 +108,7 @@ public sealed record ServiceSettings
         }
         // Gaming and High performance are never used on battery (the stock software does the same).
         if (PowerAutomation.OnBattery.Mode is { } bm && bm != Power.PowerMode.Office) errors.Add("only Office can be used on battery");
+        if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
         return errors;
     }
 
@@ -140,6 +144,7 @@ public sealed record ServiceSettings
 
         PowerMode? powerMode = ReadMode(node, "powerMode", problems);
         var automation = ReadAutomation(node, known, problems);
+        var cpuLimit = ReadCpuLimit(node, problems);
 
         int version = Get(node, "version", 1, problems);
         if (version > CurrentVersion) problems.Add($"settings version {version} is newer than this build ({CurrentVersion}); unknown fields ignored");
@@ -147,7 +152,7 @@ public sealed record ServiceSettings
         return (new ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
-            CustomProfiles = customs, Slots = slots,
+            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit,
         }, problems);
     }
 
@@ -158,6 +163,18 @@ public sealed record ServiceSettings
         if (Enum.TryParse(text, ignoreCase: true, out PowerMode mode) && Enum.IsDefined(mode)) return mode;
         problems.Add($"unknown power mode '{text}'; ignored");
         return null;
+    }
+
+    private static CpuLimit? ReadCpuLimit(JsonObject node, List<string> problems)
+    {
+        var token = node.FirstOrDefault(kv => string.Equals(kv.Key, "cpuLimit", StringComparison.OrdinalIgnoreCase)).Value;
+        if (token is null) return null;
+        CpuLimit? limit = null;
+        try { limit = token.Deserialize<CpuLimit>(Json); }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException) { }
+        // A bad limit is dropped: the power mode decides, which is always safe.
+        if (limit is null || limit.Validate().Count > 0) { problems.Add("the CPU limit is unusable; the power mode decides"); return null; }
+        return limit;
     }
 
     private static IReadOnlyList<CustomProfile> ReadCustomProfiles(JsonObject node, List<string> problems)

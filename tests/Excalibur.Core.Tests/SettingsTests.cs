@@ -221,4 +221,14 @@ public sealed class SettingsTests : IDisposable
         Assert.Contains("\"Hour1\"", json);
         Assert.Equal(request, JsonSerializer.Deserialize<FanRequest>(json, FanPipe.Json));
     }
+    [Fact]
+    public void A_cpu_limit_survives_the_file_and_a_bad_one_is_dropped()
+    {
+        var saved = new ServiceSettings { CpuLimit = new Excalibur.Core.Power.CpuLimit(25, 35) };
+        Assert.Equal(saved, ServiceSettings.Parse(saved.ToJson()).Settings);
+
+        var (bad, problems) = ServiceSettings.Parse("""{"cpuLimit":{"pl1Watts":5,"pl2Watts":35}}""");
+        Assert.Null(bad.CpuLimit);
+        Assert.Single(problems);
+    }
 }

@@ -13,6 +13,9 @@ public interface ICpuPowerRegisters
     /// <summary>Throws <see cref="InvalidOperationException"/> when the read fails.</summary>
     ulong ReadMsr(uint index);
 
+    /// <summary>Only <see cref="CpuLimiter"/> calls this, and only for 0x610. Throws <see cref="InvalidOperationException"/> on failure.</summary>
+    void WriteMsr(uint index, ulong value);
+
     /// <summary>The MCHBAR copy of the package limit (MCHBAR + 0x59A0); null when it cannot be read.</summary>
     ulong? ReadMchbarLimit();
 }

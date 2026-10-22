@@ -29,7 +29,7 @@ using Excalibur.Core.Hardware;
 //
 //   msr               CPU power limits PL1/PL2 and present package power (IntelMSR module,
 //                     never touches the EC). Saved to analysis/ec/msr-<timestamp>.txt.
-//   msr-test          Writes lower CPU limits (PL1 25 W, PL2 35 W) to MSR 0x610 for 40 s while
+//   msr-test          Writes lower CPU limits (PL1 15 W, PL2 20 W) to MSR 0x610 for 40 s while
 //                     printing the package power, then restores the original. Asks for EVET.
 //
 // Every other mode is read-only.
@@ -716,7 +716,7 @@ static int Msr(string intelMsrPath)
 static int MsrTest(string intelMsrPath)
 {
     const uint Units = 0x606, Limit = 0x610, Energy = 0x611;
-    const int Pl1Watts = 25, Pl2Watts = 35;
+    const int Pl1Watts = 15, Pl2Watts = 20;
     using var msr = PawnIoSession.Load(File.ReadAllBytes(intelMsrPath));
     ulong Read(uint index) => msr.Execute("ioctl_read_msr", [index], 1)[0];
     void Write(uint index, ulong value) => msr.Execute("ioctl_write_msr", [index, value], 0);

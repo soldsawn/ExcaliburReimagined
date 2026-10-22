@@ -3,8 +3,8 @@ using Excalibur.Core.Power;
 namespace Excalibur.Core.Hardware;
 
 /// <summary>
-/// <see cref="ICpuPowerRegisters"/> through PawnIO's official IntelMSR module (read only: this class
-/// never calls its write) and IntelMCHBAR module (which has no write at all).
+/// <see cref="ICpuPowerRegisters"/> through PawnIO's official IntelMSR module (written only by
+/// <see cref="CpuLimiter"/>, for the package power limit) and IntelMCHBAR module (which has no write at all).
 /// </summary>
 public sealed class PawnIoCpuPowerRegisters : ICpuPowerRegisters, IDisposable
 {
@@ -30,6 +30,8 @@ public sealed class PawnIoCpuPowerRegisters : ICpuPowerRegisters, IDisposable
     }
 
     public ulong ReadMsr(uint index) => _msr.Execute("ioctl_read_msr", [index], 1)[0];
+
+    public void WriteMsr(uint index, ulong value) => _msr.Execute("ioctl_write_msr", [index, value], 0);
 
     public ulong? ReadMchbarLimit()
     {

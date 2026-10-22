@@ -152,6 +152,12 @@ public sealed class FanPipeServer(
                     return result.Ok
                         ? new FanResponse(true, Status: Status())
                         : new FanResponse(false, result.Message, Status: Status(), Code: result.Code);
+                case "setcpulimit":
+                    // No cpuLimit = the power mode decides again.
+                    var limitResult = power.SetCpuLimit(req.CpuLimit);
+                    return limitResult.Ok
+                        ? new FanResponse(true, Status: Status())
+                        : new FanResponse(false, limitResult.Message, Status: Status(), Code: limitResult.Code);
                 case "getsettings":
                     return new FanResponse(true, Status: Status(), Settings: settings.Current);
                 case "updatesettings":

@@ -12,16 +12,73 @@ public class CpuPowerTests
     private sealed class FakeRegisters : ICpuPowerRegisters
     {
         public uint Energy;
+        public ulong Limit = Msr;
         public ulong? Mchbar = MchbarGaming;
+        public List<ulong> Writes { get; } = [];
         public ulong ReadMsr(uint index) => index switch
         {
             0x606 => Units,
-            0x610 => Msr,
+            0x610 => Limit,
             0x611 => Energy,
             _ => throw new InvalidOperationException(),
         };
+        public void WriteMsr(uint index, ulong value)
+        {
+            Assert.Equal(0x610u, index);
+            Writes.Add(value);
+            Limit = value;
+        }
         public ulong? ReadMchbarLimit() => Mchbar;
     }
+
+    [Fact]
+    public void A_limit_changes_only_the_two_power_fields()
+    {
+        var regs = new FakeRegisters();
+        new CpuLimiter(regs).Apply(new CpuLimit(15, 20));
+        // The value msr-test wrote on the G870, 2026-10-22, which held the CPU at 20.0 W.
+        Assert.Equal([0x004280A000DF8078UL], regs.Writes);
+    }
+
+    [Fact]
+    public void Applying_the_same_limit_again_writes_nothing_and_clearing_restores_the_original()
+    {
+        var regs = new FakeRegisters();
+        var limiter = new CpuLimiter(regs);
+        limiter.Apply(new CpuLimit(25, 35));
+        limiter.Apply(new CpuLimit(25, 35));
+        Assert.Single(regs.Writes);
+        limiter.Apply(null);
+        Assert.Equal(Msr, regs.Limit);
+        Assert.Equal(2, regs.Writes.Count);
+    }
+
+    [Fact]
+    public void A_limit_the_firmware_reset_is_written_again()
+    {
+        var regs = new FakeRegisters();
+        var limiter = new CpuLimiter(regs);
+        limiter.Apply(new CpuLimit(25, 35));
+        regs.Limit = Msr; // e.g. after sleep
+        limiter.Apply(new CpuLimit(25, 35));
+        Assert.Equal(2, regs.Writes.Count);
+    }
+
+    [Fact]
+    public void Clearing_without_ever_limiting_touches_nothing()
+    {
+        var regs = new FakeRegisters();
+        new CpuLimiter(regs).Apply(null);
+        Assert.Empty(regs.Writes);
+    }
+
+    [Theory]
+    [InlineData(25, 35, true)]
+    [InlineData(10, 35, false)]
+    [InlineData(25, 120, false)]
+    [InlineData(27, 35, false)]
+    [InlineData(45, 40, false)]
+    public void Limits_are_checked(int pl1, int pl2, bool ok) => Assert.Equal(ok, new CpuLimit(pl1, pl2).Validate().Count == 0);
 
     [Fact]
     public void The_lower_copy_of_each_limit_is_in_force()
