@@ -28,9 +28,8 @@ using var ec = EmbeddedController.Open(module);
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(o => o.ServiceName = "ExcaliburFanGuardian");
-// The guardian only needs the targets now and then; fewer EC reads, fewer collisions with Windows.
-// Shorter than the service's minute: it must notice a target the dead service left behind soon.
-builder.Services.AddSingleton<IFanHardware>(new EcFanHardware(ec, new GmWmiGateway(), TimeSpan.FromSeconds(10)));
+// The guardian reads only the WMI sensors (ReadSensors); the EC is touched just to hand the fans back.
+builder.Services.AddSingleton(new EcFanHardware(ec, new GmWmiGateway()));
 var fileLog = new FanFileLog(FanPaths.LogDirectory, "guardian");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
 builder.Services.AddSingleton(fileLog);

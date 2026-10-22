@@ -17,6 +17,9 @@ public sealed record FanSnapshot(
     public FanTarget TargetOf(FanId fan) => fan == FanId.Cpu ? CpuTarget : GpuTarget;
 }
 
+/// <summary>The firmware's sensor block alone (temperatures and the percent worked out from RPM), no EC read.</summary>
+public sealed record FanSensors(int CpuTempC, int GpuTempC, int CpuAppliedPercent, int GpuAppliedPercent);
+
 /// <summary>A read that failed or did not pass the sanity checks; the loop counts these.</summary>
 public sealed class FanReadException(string message, Exception? inner = null) : Exception(message, inner);
 

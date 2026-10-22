@@ -12,23 +12,22 @@ public class GuardianMonitorTests
 
     private HeartbeatRecord Beat(bool holds = true) => new(++_seq, T0, holds, 1234);
 
-    private static FanSnapshot Held(int cpuC = 50, int gpuC = 45, int cpu = 30, int gpu = 30)
-        => Snap(cpuC, gpuC, P(cpu), P(gpu));
+    private static FanSensors Sensors(int cpuC = 50, int gpuC = 45, int cpu = 30, int gpu = 30) => new(cpuC, gpuC, cpu, gpu);
 
     [Fact]
     public void A_live_service_holding_fans_is_left_alone()
     {
         for (int t = 0; t <= 60; t += 2)
-            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Held(), true, S(t)).Action);
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Sensors(), true, S(t)).Action);
     }
 
     [Fact]
-    public void A_frozen_heartbeat_with_held_fans_is_reset_after_the_stale_window()
+    public void A_frozen_heartbeat_is_reset_after_the_stale_window()
     {
         var last = Beat();
-        _g.Evaluate(last, Held(), true, S(0));
-        Assert.Equal(GuardianAction.None, _g.Evaluate(last, Held(), true, S(8)).Action);
-        var v = _g.Evaluate(last, Held(), true, S(10));
+        _g.Evaluate(last, Sensors(), true, S(0));
+        Assert.Equal(GuardianAction.None, _g.Evaluate(last, Sensors(), true, S(8)).Action);
+        var v = _g.Evaluate(last, Sensors(), true, S(10));
         Assert.Equal(GuardianAction.ResetToAuto, v.Action);
         Assert.False(v.ServiceAlive);
     }
@@ -37,61 +36,85 @@ public class GuardianMonitorTests
     public void A_dead_process_is_detected_sooner()
     {
         var last = Beat();
-        _g.Evaluate(last, Held(), true, S(0));
-        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Held(), false, S(4)).Action);
+        _g.Evaluate(last, Sensors(), true, S(0));
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), false, S(4)).Action);
     }
 
     [Fact]
-    public void Missing_heartbeat_with_held_fans_is_reset()
-    {
-        _g.Evaluate(null, Held(), false, S(0));
-        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(null, Held(), false, S(2)).Action);
-    }
-
-    [Fact]
-    public void Nothing_to_do_when_the_fans_are_already_on_the_ec()
-    {
-        _g.Evaluate(null, Snap(50, 45), false, S(0));
-        Assert.Equal(GuardianAction.None, _g.Evaluate(null, Snap(50, 45), false, S(30)).Action);
-    }
-
-    [Fact]
-    public void Unreadable_ec_and_no_service_resets_blindly()
+    public void Missing_heartbeat_is_reset_even_when_the_sensors_are_unreadable()
     {
         _g.Evaluate(null, null, false, S(0));
         Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(null, null, false, S(2)).Action);
     }
 
     [Fact]
-    public void Unreadable_ec_with_a_live_service_is_left_alone()
+    public void A_dead_service_is_handed_back_once_not_every_evaluation()
+    {
+        _g.Evaluate(null, Sensors(), false, S(0));
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(null, Sensors(), false, S(2)).Action);
+        _g.HandedBack(S(2));
+        for (int t = 4; t <= 60; t += 2)
+            Assert.Equal(GuardianAction.None, _g.Evaluate(null, Sensors(), false, S(t)).Action);
+    }
+
+    [Fact]
+    public void A_failed_hand_back_is_retried()
+    {
+        _g.Evaluate(null, Sensors(), false, S(0));
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(null, Sensors(), false, S(2)).Action);
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(null, Sensors(), false, S(4)).Action);
+    }
+
+    [Fact]
+    public void A_service_that_dies_again_is_handed_back_again()
+    {
+        var last = Beat();
+        _g.Evaluate(last, Sensors(), true, S(0));
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(12)).Action);
+        _g.HandedBack(S(12));
+        last = Beat();
+        Assert.True(_g.Evaluate(last, Sensors(), true, S(14)).ServiceAlive);
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(26)).Action);
+    }
+
+    [Fact]
+    public void Unreadable_sensors_with_a_live_service_are_left_alone()
     {
         _g.Evaluate(Beat(), null, true, S(0));
         Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), null, true, S(2)).Action);
     }
 
     [Fact]
-    public void Sustained_heat_with_a_slow_held_fan_overrides_a_live_service()
+    public void Sustained_heat_with_a_slow_fan_overrides_a_live_service()
     {
-        for (int t = 0; t < 4; t += 2)
-            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Held(cpuC: 93, cpu: 40), true, S(t)).Action);
-        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(Beat(), Held(cpuC: 93, cpu: 40), true, S(4)).Action);
+        for (int t = 0; t < 8; t += 2)
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Sensors(cpuC: 93, cpu: 40), true, S(t)).Action);
+        var v = _g.Evaluate(Beat(), Sensors(cpuC: 93, cpu: 40), true, S(8));
+        Assert.Equal(GuardianAction.ResetToAuto, v.Action);
+        Assert.True(v.ServiceAlive);
     }
 
     [Fact]
-    public void Heat_with_fans_already_at_100_is_left_to_the_service()
+    public void After_overriding_a_live_service_it_waits_before_doing_it_again()
+    {
+        for (int t = 0; t <= 8; t += 2) _g.Evaluate(Beat(), Sensors(cpuC: 93, cpu: 40), true, S(t));
+        _g.HandedBack(S(8));
+        for (int t = 10; t < 68; t += 2)
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Sensors(cpuC: 93, cpu: 40), true, S(t)).Action);
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(Beat(), Sensors(cpuC: 93, cpu: 40), true, S(68)).Action);
+    }
+
+    [Fact]
+    public void Heat_with_fans_already_at_full_speed_is_left_to_the_service()
     {
         for (int t = 0; t <= 20; t += 2)
-            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Held(cpuC: 95, gpuC: 90, cpu: 100, gpu: 100), true, S(t)).Action);
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Sensors(cpuC: 95, gpuC: 90, cpu: 100, gpu: 100), true, S(t)).Action);
     }
 
     [Fact]
-    public void A_service_that_comes_back_is_alive_again()
+    public void Heat_while_the_ec_runs_the_fans_is_not_the_services_fault()
     {
-        var last = Beat();
-        _g.Evaluate(last, Held(), true, S(0));
-        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Held(), true, S(12)).Action);
-        var v = _g.Evaluate(Beat(), Held(), true, S(14));
-        Assert.Equal(GuardianAction.None, v.Action);
-        Assert.True(v.ServiceAlive);
+        for (int t = 0; t <= 20; t += 2)
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(holds: false), Sensors(cpuC: 93, cpu: 40), true, S(t)).Action);
     }
 }

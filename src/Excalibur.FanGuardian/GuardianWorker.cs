@@ -5,13 +5,13 @@ using Excalibur.Core.Fan;
 namespace Excalibur.FanGuardian;
 
 /// <summary>
-/// Every 2 s: reads the fan service's heartbeat and the fan targets (from the EC every 10 s), asks
+/// Every 2 s: reads the fan service's heartbeat and the firmware's WMI sensors (no EC read), asks
 /// <see cref="GuardianMonitor"/> what to do, and if needed hands both fans back to the
 /// EC (0xFF, the only value the guardian ever writes). When the service looks dead it
 /// also tries to start it again (at most once a minute; the service recovery settings
 /// normally do that first).
 /// </summary>
-public sealed class GuardianWorker(IFanHardware hardware, FanFileLog log, ILogger<GuardianWorker> logger) : BackgroundService
+public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogger<GuardianWorker> logger) : BackgroundService
 {
     public const string FanServiceName = "ExcaliburFan";
     private static readonly TimeSpan Period = TimeSpan.FromSeconds(2);
@@ -41,12 +41,12 @@ public sealed class GuardianWorker(IFanHardware hardware, FanFileLog log, ILogge
         var heartbeat = FanHeartbeat.Read(FanHeartbeat.DefaultPath);
         bool processAlive = heartbeat is { } hb && ProcessExists(hb.ProcessId);
 
-        FanSnapshot? snapshot = null;
-        try { snapshot = hardware.Read(); }
+        FanSensors? sensors = null;
+        try { sensors = hardware.ReadSensors(); }
         catch (FanReadException) { } // the monitor treats null as "unknown"
 
         var now = _clock.Elapsed;
-        var verdict = _monitor.Evaluate(heartbeat, snapshot, processAlive, now);
+        var verdict = _monitor.Evaluate(heartbeat, sensors, processAlive, now);
 
         if (_wasAlive != verdict.ServiceAlive)
         {
@@ -59,6 +59,7 @@ public sealed class GuardianWorker(IFanHardware hardware, FanFileLog log, ILogge
             try
             {
                 hardware.ResetToAuto();
+                _monitor.HandedBack(now);
                 // Say it once per distinct reason, not every 2 s while a target keeps reappearing.
                 if (verdict.Reason != _lastResetReason) Log($"RESET fans to EC automatic: {verdict.Reason}");
                 _lastResetReason = verdict.Reason;

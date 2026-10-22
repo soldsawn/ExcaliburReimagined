@@ -71,15 +71,7 @@ public sealed class EcFanHardware : IFanHardware
 
     public FanSnapshot Read()
     {
-        SmiCommand sensors;
-        try { sensors = wmi.Execute(SmiCommand.Get(0x0200)); }
-        catch (Exception ex) { throw new FanReadException("WMI sensor read failed.", ex); }
-
-        int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
-        if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
-            throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
-        if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)
-            throw new FanReadException($"Implausible RPM CPU={cpuRpm} GPU={gpuRpm}.");
+        var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
 
         if (_ec is null || _sinceEcRead.Elapsed >= _ecRefresh)
         {
@@ -94,6 +86,27 @@ public sealed class EcFanHardware : IFanHardware
         var e = _ec;
         return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget,
             AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent), _boost);
+    }
+
+    /// <summary>Temperatures and applied percents from WMI only: never touches the EC (the guardian's normal read).</summary>
+    public FanSensors ReadSensors()
+    {
+        var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
+        return new FanSensors(cpuC, gpuC, AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent));
+    }
+
+    private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) ReadWmiSensors()
+    {
+        SmiCommand sensors;
+        try { sensors = wmi.Execute(SmiCommand.Get(0x0200)); }
+        catch (Exception ex) { throw new FanReadException("WMI sensor read failed.", ex); }
+
+        int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
+        if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
+            throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
+        if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)
+            throw new FanReadException($"Implausible RPM CPU={cpuRpm} GPU={gpuRpm}.");
+        return (cpuC, gpuC, cpuRpm, gpuRpm);
     }
 
     public void SetTarget(FanId fan, FanTarget target)
