@@ -27,6 +27,9 @@ using Excalibur.Core.Hardware;
 //   fanslow-test      Each asks for EVET and restores the value.
 //   gpuslow-test      fanfloor-test / gpufloor-test step the target down to find the EC's floor.
 //
+//   msr               CPU power limits PL1/PL2 and present package power (IntelMSR module,
+//                     never touches the EC). Saved to analysis/ec/msr-<timestamp>.txt.
+//
 // Every other mode is read-only.
 
 // Candidate registers to track during discovery. Contiguous-ish, known-populated
@@ -104,6 +107,9 @@ if (mode.Equals("fanfloor-test", StringComparison.OrdinalIgnoreCase))
 
 if (mode.Equals("gpufloor-test", StringComparison.OrdinalIgnoreCase))
     return FanFloorTest(modulePath, haveWmi, gpu: true);
+
+if (mode.Equals("msr", StringComparison.OrdinalIgnoreCase))
+    return Msr(Path.Combine(Path.GetDirectoryName(modulePath)!, "IntelMSR.bin"));
 
 return FullDump(mode, modulePath, haveWmi, Sensors(), candidates);
 
@@ -639,6 +645,49 @@ static int Scan(string modulePath)
     string scanFile = $"scan-{Stamp()}.txt";
     Save(scanFile, sb.ToString());
     Console.WriteLine($"Saved: {Path.Combine(OutDir(), scanFile)}");
+    return 0;
+}
+
+// --- msr: the CPU's package power limits (PL1/PL2) and present power, READ-ONLY, through PawnIO's
+//     IntelMSR module. Never touches the EC. Run once per power mode to see what each mode sets. ---
+static int Msr(string intelMsrPath)
+{
+    if (!File.Exists(intelMsrPath))
+    {
+        Console.Error.WriteLine($"IntelMSR module not found at: {intelMsrPath}");
+        return 2;
+    }
+    using var msr = PawnIoSession.Load(File.ReadAllBytes(intelMsrPath));
+    ulong Read(uint index) => msr.Execute("ioctl_read_msr", [index], 1)[0];
+
+    var sb = new StringBuilder();
+    void Say(string s) { Console.WriteLine(s); sb.AppendLine(s); }
+
+    ulong units = Read(0x606);                       // MSR_RAPL_POWER_UNIT
+    double watt = 1.0 / (1 << (int)(units & 0xF));
+    double joule = 1.0 / (1 << (int)((units >> 8) & 0x1F));
+    double second = 1.0 / (1 << (int)((units >> 16) & 0xF));
+    double Window(ulong bits) => Math.Pow(2, bits & 0x1F) * (1 + ((bits >> 5) & 0x3) / 4.0) * second;
+
+    ulong limit = Read(0x610);                       // MSR_PKG_POWER_LIMIT
+    Say($"# CPU power limits  {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+    Say($"0x606 units  = 0x{units:X16}  ({watt} W, {joule:G4} J, {second:G4} s)");
+    Say($"0x610 limit  = 0x{limit:X16}  locked={(limit >> 63) & 1}");
+    Say($"  PL1 {(limit & 0x7FFF) * watt,6:F1} W  enabled={(limit >> 15) & 1}  clamp={(limit >> 16) & 1}  window {Window(limit >> 17):F1} s");
+    Say($"  PL2 {((limit >> 32) & 0x7FFF) * watt,6:F1} W  enabled={(limit >> 47) & 1}  clamp={(limit >> 48) & 1}  window {Window(limit >> 49):F3} s");
+    ulong info = Read(0x614);                        // MSR_PKG_POWER_INFO
+    Say($"0x614 info   = 0x{info:X16}  (design TDP {(info & 0x7FFF) * watt:F1} W)");
+
+    // Present package power from the energy counter over two seconds.
+    uint e0 = (uint)Read(0x611);
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    Thread.Sleep(2000);
+    uint e1 = (uint)Read(0x611);
+    Say($"package power now ~{unchecked(e1 - e0) * joule / sw.Elapsed.TotalSeconds:F1} W");
+
+    string file = $"msr-{Stamp()}.txt";
+    Save(file, sb.ToString());
+    Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
     return 0;
 }
 
