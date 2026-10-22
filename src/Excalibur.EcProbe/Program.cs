@@ -29,6 +29,8 @@ using Excalibur.Core.Hardware;
 //
 //   msr               CPU power limits PL1/PL2 and present package power (IntelMSR module,
 //                     never touches the EC). Saved to analysis/ec/msr-<timestamp>.txt.
+//   msr-test          Writes lower CPU limits (PL1 25 W, PL2 35 W) to MSR 0x610 for 40 s while
+//                     printing the package power, then restores the original. Asks for EVET.
 //
 // Every other mode is read-only.
 
@@ -110,6 +112,9 @@ if (mode.Equals("gpufloor-test", StringComparison.OrdinalIgnoreCase))
 
 if (mode.Equals("msr", StringComparison.OrdinalIgnoreCase))
     return Msr(Path.Combine(Path.GetDirectoryName(modulePath)!, "IntelMSR.bin"));
+
+if (mode.Equals("msr-test", StringComparison.OrdinalIgnoreCase))
+    return MsrTest(Path.Combine(Path.GetDirectoryName(modulePath)!, "IntelMSR.bin"));
 
 return FullDump(mode, modulePath, haveWmi, Sensors(), candidates);
 
@@ -701,6 +706,79 @@ static int Msr(string intelMsrPath)
 
     string file = $"msr-{Stamp()}.txt";
     Save(file, sb.ToString());
+    Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
+    return 0;
+}
+
+// --- msr-test: does lowering the MSR copy of the limits take effect? Only the PL1/PL2 power fields
+//     of 0x610 change (enable, clamp and window bits are kept), only downward, only after EVET, and the
+//     original value is written back even on Ctrl+C or an error. Never touches the EC. ---
+static int MsrTest(string intelMsrPath)
+{
+    const uint Units = 0x606, Limit = 0x610, Energy = 0x611;
+    const int Pl1Watts = 25, Pl2Watts = 35;
+    using var msr = PawnIoSession.Load(File.ReadAllBytes(intelMsrPath));
+    ulong Read(uint index) => msr.Execute("ioctl_read_msr", [index], 1)[0];
+    void Write(uint index, ulong value) => msr.Execute("ioctl_write_msr", [index, value], 0);
+
+    var log = new StringBuilder();
+    void Say(string s) { Console.WriteLine(s); log.AppendLine(s); }
+
+    ulong units = Read(Units);
+    double watt = 1.0 / (1 << (int)(units & 0xF));
+    double joule = 1.0 / (1 << (int)((units >> 8) & 0x1F));
+    ulong original = Read(Limit);
+    ulong lowered = (original & ~0x7FFFUL & ~(0x7FFFUL << 32))
+        | (ulong)(Pl1Watts / watt) | ((ulong)(Pl2Watts / watt) << 32);
+
+    Say($"# MSR limit test  {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+    Say($"original 0x610 = 0x{original:X16}  PL1 {(original & 0x7FFF) * watt} W, PL2 {((original >> 32) & 0x7FFF) * watt} W");
+    Console.WriteLine();
+    Console.WriteLine($"This writes PL1 {Pl1Watts} W / PL2 {Pl2Watts} W to MSR 0x610 for 40 s, then writes the original back.");
+    Console.WriteLine("Start a CPU load now (a game or a stress test) so the effect shows. Lower limits only slow the CPU.");
+    Console.Write("Type EVET to continue: ");
+    if (!string.Equals(Console.ReadLine()?.Trim(), "EVET", StringComparison.Ordinal))
+    {
+        Console.WriteLine("Cancelled. Nothing was written.");
+        return 0;
+    }
+
+    bool cancelled = false;
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancelled = true; };
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    (uint E, double T) last = ((uint)Read(Energy), 0);
+    string Power()
+    {
+        uint e = (uint)Read(Energy);
+        double t = clock.Elapsed.TotalSeconds;
+        string w = $"{unchecked(e - last.E) * joule / (t - last.T),5:F1} W";
+        last = (e, t);
+        return w;
+    }
+
+    for (int i = 0; i < 5 && !cancelled; i++) { Thread.Sleep(1000); Say($"{DateTime.Now:HH:mm:ss}  before   {Power()}"); }
+    try
+    {
+        Write(Limit, lowered);
+        Say($"{DateTime.Now:HH:mm:ss}  wrote 0x{lowered:X16}, readback 0x{Read(Limit):X16}");
+        for (int i = 0; i < 40 && !cancelled; i++) { Thread.Sleep(1000); Say($"{DateTime.Now:HH:mm:ss}  limited  {Power()}"); }
+    }
+    finally
+    {
+        try
+        {
+            Write(Limit, original);
+            Say($"{DateTime.Now:HH:mm:ss}  restored, readback 0x{Read(Limit):X16}");
+        }
+        catch (Exception ex)
+        {
+            Say($"!! RESTORE FAILED ({ex.Message}). A restart puts the BIOS values back.");
+        }
+    }
+    for (int i = 0; i < 10; i++) { Thread.Sleep(1000); Say($"{DateTime.Now:HH:mm:ss}  after    {Power()}"); }
+
+    string file = $"msr-test-{Stamp()}.txt";
+    Save(file, log.ToString());
     Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
     return 0;
 }
