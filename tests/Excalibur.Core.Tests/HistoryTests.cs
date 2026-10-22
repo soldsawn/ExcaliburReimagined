@@ -97,10 +97,12 @@ public sealed class HistoryTests : IDisposable
     [Fact]
     public void A_half_written_record_from_a_crash_is_cut_off()
     {
-        var t0 = Utc(20, 8, 0, 0);
+        // Today: a past day would be compressed by the maintenance the second recorder runs on start.
+        var t0 = DateTime.UtcNow.Date;
+        string file = Path.Combine(_dir, t0.ToString("yyyyMMdd") + ".bin");
         using (var rec = new HistoryRecorder(_dir, HistoryMode.Days7))
             for (int i = 0; i < 5; i++) rec.Record(Sample(t0.AddSeconds(i)));
-        File.AppendAllText(Path.Combine(_dir, "20261020.bin"), "torn");
+        File.AppendAllText(file, "torn");
 
         using var again = new HistoryRecorder(_dir, HistoryMode.Days7);
         again.Record(Sample(t0.AddSeconds(5)));
@@ -108,7 +110,7 @@ public sealed class HistoryTests : IDisposable
         // Memory has only the new sample; ask for a range before it so the file is read.
         var fromDisk = again.Samples(t0, t0.AddSeconds(5));
         Assert.Equal(5, fromDisk.Count);
-        Assert.Equal(0, (new FileInfo(Path.Combine(_dir, "20261020.bin")).Length - 8) % HistorySample.Size);
+        Assert.Equal(0, (new FileInfo(file).Length - 8) % HistorySample.Size);
     }
 
     [Fact]
