@@ -63,6 +63,10 @@ public partial class MainWindow : Window
             MaxButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
             // A maximized chrome window overhangs the screen by the resize border.
             Root.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
+            // The overhang itself is clipped, but Windows 11 still draws its 1 px frame on the real window
+            // edge, which then shows as a thin line on the neighbouring monitor. No frame while maximized.
+            int border = WindowState == WindowState.Maximized ? DwmColorNone : DwmColorDefault;
+            DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DwmaBorderColor, ref border, sizeof(int));
         };
 
         _connection.Changed += RenderStatus;
@@ -156,6 +160,8 @@ public partial class MainWindow : Window
         using var file = File.Create(path);
         png.Save(file);
     }
+
+    private const int DwmaBorderColor = 34, DwmColorNone = unchecked((int)0xFFFFFFFE), DwmColorDefault = unchecked((int)0xFFFFFFFF);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
