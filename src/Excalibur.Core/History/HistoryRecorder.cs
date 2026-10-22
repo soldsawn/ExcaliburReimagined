@@ -201,7 +201,8 @@ public sealed class HistoryRecorder : IDisposable
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        // Any failure: it also runs on a fire-and-forget task, where nothing would observe it.
+        catch (Exception ex)
         {
             _log?.Invoke($"history: maintenance failed ({ex.Message})");
         }

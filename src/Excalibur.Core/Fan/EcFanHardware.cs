@@ -30,6 +30,7 @@ public sealed class EcFanHardware : IFanHardware
     private readonly Stopwatch _sinceEcRead = new();
     private EcBlock? _ec;
     private volatile bool _boost;
+    private ManagementEventWatcher? _boostWatcher; // kept so it is plainly alive as long as this object
 
     private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
 
@@ -51,6 +52,7 @@ public sealed class EcFanHardware : IFanHardware
                 if (e.NewEvent["EventDetail"] is byte[] detail && TryParseBoostEvent(detail, out bool on)) _boost = on;
             };
             watcher.Start();
+            _boostWatcher = watcher;
         }
         catch (ManagementException) { }
     }
