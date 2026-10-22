@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Excalibur.Core.Fan;
 using Excalibur.Core.History;
+using Excalibur.App;
 
 namespace Excalibur.App.Ui.Controls;
 
@@ -11,7 +12,7 @@ namespace Excalibur.App.Ui.Controls;
 /// Temperatures and fan speeds over time: the upper pane the CPU and GPU temperature (line = average
 /// of each bucket, faint band up to the bucket's maximum, so short spikes stay visible over long ranges),
 /// the lower pane both fans' percent. Gaps where nothing was recorded (sleep, service stopped) stay
-/// empty. Hovering shows the moment's values.
+/// empty. Windows' EC errors and sudden shutdowns are marked with thin vertical lines. Hovering shows the moment's values.
 /// </summary>
 internal sealed class HistoryChart : FrameworkElement
 {
@@ -19,6 +20,7 @@ internal sealed class HistoryChart : FrameworkElement
     private const double PaneGap = 26;
 
     private HistorySeries? _series;
+    private IReadOnlyList<SystemEvent> _events = [];
     private Point? _mouse;
     private Rect _temps, _fans;
 
@@ -29,9 +31,10 @@ internal sealed class HistoryChart : FrameworkElement
         MouseLeave += (_, _) => { _mouse = null; InvalidateVisual(); };
     }
 
-    public void Show(HistorySeries? series)
+    public void Show(HistorySeries? series, IReadOnlyList<SystemEvent> events)
     {
         _series = series;
+        _events = events;
         InvalidateVisual();
     }
 
@@ -56,6 +59,7 @@ internal sealed class HistoryChart : FrameworkElement
         Line(dc, s, p => p.CpuTempC, TempY, "Value");
         Line(dc, s, p => p.GpuApplied, FanY, "Ok");
         Line(dc, s, p => p.CpuApplied, FanY, "Value");
+        Events(dc, s);
 
         if (_mouse is { } m && m.X >= _temps.Left && m.X <= _temps.Right) Hover(dc, s, m.X);
     }
@@ -160,6 +164,25 @@ internal sealed class HistoryChart : FrameworkElement
         }
     }
 
+    private double? EventX(HistorySeries s, DateTime atUtc)
+    {
+        double f = (atUtc - s.From.UtcDateTime).TotalSeconds / ((double)s.StepSeconds * s.Points.Count);
+        return f is >= 0 and <= 1 ? _temps.Left + f * _temps.Width : null;
+    }
+
+    private static string EventKey(SystemEventKind kind) => kind == SystemEventKind.Shutdown ? "Bad" : "Warn";
+
+    private void Events(DrawingContext dc, HistorySeries s)
+    {
+        foreach (var e in _events)
+        {
+            if (EventX(s, e.AtUtc) is not { } x) continue;
+            var pen = new Pen(Res(EventKey(e.Kind)), 1.5) { DashStyle = DashStyles.Dot };
+            dc.DrawLine(pen, new Point(x, _temps.Top), new Point(x, _fans.Bottom));
+            dc.DrawEllipse(Res(EventKey(e.Kind)), null, new Point(x, _temps.Top + 3), 3, 3);
+        }
+    }
+
     // ---- hover ------------------------------------------------------------------------------
 
     private void Hover(DrawingContext dc, HistorySeries s, double x)
@@ -178,6 +201,9 @@ internal sealed class HistoryChart : FrameworkElement
             lines.Add(($"{Texts.Chip(FanId.Gpu)}: {p.GpuTempC} °C" + (p.GpuTempMax > p.GpuTempC ? $" (en yüksek {p.GpuTempMax})" : "") + $" · fan %{p.GpuApplied}", Res("Ok")));
         }
         else lines.Add(("Kayıt yok (uyku ya da servis kapalı)", Res("SubText")));
+        // Events within a few pixels of the cursor.
+        foreach (var e in _events.Where(e => EventX(s, e.AtUtc) is { } ex && Math.Abs(ex - at) <= Math.Max(4, _temps.Width / s.Points.Count)))
+            lines.Add(($"{e.AtUtc.ToLocalTime():HH:mm:ss}  {Texts.SystemEvent(e.Kind)}", Res(EventKey(e.Kind))));
         Box(dc, lines, at + 12, _temps.Top + 6, at);
     }
 

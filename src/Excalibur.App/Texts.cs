@@ -34,6 +34,9 @@ internal static class Texts
 
     public static string Chip(FanId fan) => fan == FanId.Cpu ? "İşlemci" : "Ekran kartı";
 
+    /// <summary>A Windows System log entry the history marks.</summary>
+    public static string SystemEvent(SystemEventKind kind) => kind == SystemEventKind.Shutdown ? "Beklenmedik kapanma" : "Donanım iletişim hatası";
+
     /// <summary>Who drives the fans, for status lines.</summary>
     public static string Driver(bool holdsFans) => holdsFans ? "Fanları uygulama yönetiyor" : "Fanları orijinal ayar yönetiyor";
 

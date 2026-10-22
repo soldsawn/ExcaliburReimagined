@@ -23,7 +23,7 @@ internal sealed class HistoryPage : UserControl
 
     private readonly FanConnection _connection;
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(30) };
-    private readonly TextBlock _cpu, _gpu, _note;
+    private readonly TextBlock _cpu, _gpu, _note, _ecErrors, _shutdowns;
     private TimeSpan _span = Ranges[0].Span;
     private bool _busy;
 
@@ -37,6 +37,12 @@ internal sealed class HistoryPage : UserControl
         _gpu = InfoPage.Text("", "Body", top: 4);
         _gpu.SetResourceReference(TextBlock.ForegroundProperty, "Ok");
         _note = InfoPage.Text("", "Caption", top: 8);
+        var ecRow = InfoPage.Labeled("", "Body",
+            "Windows'un fan ve pil denetleyicisiyle konuşurken zaman aşımına düştüğü anlar (sistem günlüğünde ACPI olay 13 ve 15). " +
+            "Çok sık görülürse pil okuması bozulabilir.", top: 10);
+        var shutdownRow = InfoPage.Labeled("", "Body",
+            "Bilgisayarın düzgün kapatılmadan kapandığı anlar: \"kritik pil\" kapanması ya da elektrik kesilir gibi kapanma (sistem günlüğünde Kernel-Power olay 524 ve 41).", top: 4);
+        (_ecErrors, _shutdowns) = ((TextBlock)ecRow.Children[0], (TextBlock)shutdownRow.Children[0]);
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
         string group = "historyrange" + GetHashCode();
@@ -55,8 +61,9 @@ internal sealed class HistoryPage : UserControl
                 InfoPage.Text("Geçmiş", "PageTitle"),
                 InfoPage.Text("Sıcaklıkların ve fan hızlarının zaman içindeki seyri. Kayıt yedi gün saklanır.", "Caption", top: 2, bottom: 18),
                 InfoPage.Card("Sıcaklık ve fan", buttons, Chart,
-                    InfoPage.Text("Çizgi ortalamayı, açık renkli alan o aralıktaki en yüksek sıcaklığı gösterir.", "Caption", top: 6)),
-                InfoPage.Card("Seçilen aralıkta", _cpu, _gpu, _note),
+                    InfoPage.Text("Çizgi ortalamayı, açık renkli alan o aralıktaki en yüksek sıcaklığı gösterir. " +
+                                  "Turuncu noktalı çizgiler donanım iletişim hatalarını, kırmızılar beklenmedik kapanmaları gösterir.", "Caption", top: 6)),
+                InfoPage.Card("Seçilen aralıkta", _cpu, _gpu, ecRow, shutdownRow, _note),
             },
         };
 
@@ -76,8 +83,14 @@ internal sealed class HistoryPage : UserControl
         try
         {
             var series = await _connection.HistoryAsync(_span, MaxPoints);
-            Chart.Show(series);
+            var now = DateTime.UtcNow;
+            var events = await Task.Run(() => SystemEventLog.Read(now - _span, now));
+            Chart.Show(series, events);
             Summarize(series is null ? null : HistorySummary.Of(series), series is null);
+            int ec = events.Count(e => e.Kind == SystemEventKind.EcError), down = events.Count - ec;
+            _ecErrors.Text = $"{Texts.SystemEvent(SystemEventKind.EcError)}: {ec}";
+            _shutdowns.Text = $"{Texts.SystemEvent(SystemEventKind.Shutdown)}: {down}";
+            _shutdowns.SetResourceReference(TextBlock.ForegroundProperty, down > 0 ? "Bad" : "Text");
         }
         finally { _busy = false; }
     }

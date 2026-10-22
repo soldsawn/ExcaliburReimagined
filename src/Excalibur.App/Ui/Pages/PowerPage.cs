@@ -74,7 +74,7 @@ internal sealed class PowerPage : UserControl
         _gpuWatts = InfoPage.Text("–", "BigValue");
         _cpuBar.SetResourceReference(BlockBar.FillProperty, "Value");
         _cpuBar.SetResourceReference(BlockBar.EmptyProperty, "Border");
-        _gpuBar.SetResourceReference(BlockBar.FillProperty, "Ok");
+        _gpuBar.SetResourceReference(BlockBar.FillProperty, "Value");
         _gpuBar.SetResourceReference(BlockBar.EmptyProperty, "Border");
         var (pl1Row, pl1) = Term(Pl1Tip);
         var (pl2Row, pl2) = Term(Pl2Tip);
