@@ -125,6 +125,17 @@ public sealed class PowerTests : IDisposable
     // ---- automation -------------------------------------------------------------------------
 
     [Fact]
+    public void Cpu_power_is_read_on_every_poll_even_when_the_source_stays()
+    {
+        _hw.Cpu = new CpuPower(null, 45, 115);
+        _power.Poll();
+        _hw.Cpu = new CpuPower(23, 45, 115);
+        _power.Poll();
+        Assert.Equal(new CpuPower(23, 45, 115), _power.Status.Cpu);
+        Assert.Equal(23, Excalibur.Core.Fan.Ipc.PowerStatusDto.From(_power.Status).CpuWatts);
+    }
+
+    [Fact]
     public void Automation_off_never_switches_the_fan_profile()
     {
         Poll(Wall);
@@ -256,5 +267,7 @@ public sealed class PowerTests : IDisposable
 
         public PowerSource ReadSource() => Source;
         public int? ReadGpuWatts() => GpuWatts;
+        public CpuPower? Cpu { get; set; }
+        public CpuPower? ReadCpuPower() => Cpu;
     }
 }

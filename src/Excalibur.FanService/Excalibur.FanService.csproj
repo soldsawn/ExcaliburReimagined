@@ -20,6 +20,9 @@
   <ItemGroup>
     <!-- PawnIO module the EC access needs; shipped next to the service. -->
     <None Include="..\..\tools\pawnio-modules\LpcACPIEC.bin" Link="pawnio-modules\LpcACPIEC.bin" CopyToOutputDirectory="PreserveNewest" />
+    <!-- CPU power and limits (read only). -->
+    <None Include="..\..\tools\pawnio-modules\IntelMSR.bin" Link="pawnio-modules\IntelMSR.bin" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\tools\pawnio-modules\IntelMCHBAR.bin" Link="pawnio-modules\IntelMCHBAR.bin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

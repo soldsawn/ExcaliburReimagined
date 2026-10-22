@@ -19,9 +19,10 @@ public static class FanPipe
     /// 4: + setPowerMode(powerMode), status Power, response Code (stable error code), settings PowerMode / PowerAutomation.
     /// 5: + listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names); response Profiles / Slots; any command that takes a
     ///    profile name accepts custom profile names too.
+    /// 6: + status Power CpuWatts / CpuPl1Watts / CpuPl2Watts.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 5;
+    public const int ProtocolVersion = 6;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -77,10 +78,14 @@ public sealed record PowerStatusDto(
     bool UsbCAdapter,
     int? GpuWatts,
     PowerLock Lock,
-    bool AutomationEnabled)
+    bool AutomationEnabled,
+    int? CpuWatts = null,
+    int? CpuPl1Watts = null,
+    int? CpuPl2Watts = null)
 {
     public static PowerStatusDto From(PowerStatus s) =>
-        new(s.Mode, s.Preferred, s.Source.OnBattery, s.Source.BatteryPercent, s.Source.UsbCAdapter, s.GpuWatts, s.Lock, s.AutomationEnabled);
+        new(s.Mode, s.Preferred, s.Source.OnBattery, s.Source.BatteryPercent, s.Source.UsbCAdapter, s.GpuWatts, s.Lock, s.AutomationEnabled,
+            s.Cpu?.Watts, s.Cpu?.Pl1Watts, s.Cpu?.Pl2Watts);
 }
 
 public sealed record FanEventDto(DateTimeOffset At, string Message);

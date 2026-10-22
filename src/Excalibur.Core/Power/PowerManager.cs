@@ -13,6 +13,9 @@ public interface IPowerHardware
 
     /// <summary>The GPU power limit the driver enforces right now, in watts; null when it cannot be read.</summary>
     int? ReadGpuWatts();
+
+    /// <summary>The CPU's power and limits now; null when they cannot be read.</summary>
+    CpuPower? ReadCpuPower() => null;
 }
 
 public sealed class PowerException(string message, Exception? inner = null) : Exception(message, inner);
@@ -31,7 +34,8 @@ public sealed record PowerStatus(
     PowerSource Source,
     int? GpuWatts,
     PowerLock Lock,
-    bool AutomationEnabled);
+    bool AutomationEnabled,
+    CpuPower? Cpu = null);
 
 /// <summary>
 /// The service's power logic (docs/09 A3). It decides, the hardware does:
@@ -58,6 +62,7 @@ public sealed class PowerManager
     private PowerSource? _source;
     private PowerMode? _applied;
     private int? _gpuWatts;
+    private CpuPower? _cpu;
 
     /// <param name="switchProfile">(fan profile name, <c>FanSource</c>) — switches the fan profile the way a user command does.</param>
     public PowerManager(IPowerHardware hardware, ServiceSettingsStore settings, Action<string, string> switchProfile, Action<string>? log = null)
@@ -76,7 +81,7 @@ public sealed class PowerManager
             {
                 var source = _source ?? new PowerSource(false, null, false);
                 return new PowerStatus(Effective(), _settings.Current.PowerMode, source, _gpuWatts, LockOf(source),
-                    _settings.Current.PowerAutomation.Enabled);
+                    _settings.Current.PowerAutomation.Enabled, _cpu);
             }
         }
     }
@@ -94,6 +99,7 @@ public sealed class PowerManager
         lock (_gate)
         {
             _gpuWatts = SafeGpuWatts();
+            _cpu = SafeCpuPower();
             // The battery percent changes all the time; only a change of power source counts.
             bool sameSource = _source is { } known && known.OnBattery == source.OnBattery && known.UsbCAdapter == source.UsbCAdapter;
             if (sameSource) { _source = source; return; }
@@ -202,6 +208,12 @@ public sealed class PowerManager
     private int? SafeGpuWatts()
     {
         try { return _hw.ReadGpuWatts(); }
+        catch (Exception ex) when (ex is PowerException or InvalidOperationException) { return null; }
+    }
+
+    private CpuPower? SafeCpuPower()
+    {
+        try { return _hw.ReadCpuPower(); }
         catch (Exception ex) when (ex is PowerException or InvalidOperationException) { return null; }
     }
 

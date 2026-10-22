@@ -41,6 +41,7 @@ builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSe
 
 FakeFanHardware? fake = simulate ? new FakeFanHardware() : null;
 EmbeddedController? ec = null;
+PawnIoCpuPowerRegisters? cpuRegisters = null;
 IFanHardware hardware;
 IPowerHardware powerHardware;
 if (fake is not null)
@@ -55,7 +56,9 @@ else
     // One gateway for fans and power: the firmware has a single response buffer.
     var gateway = new GmWmiGateway();
     hardware = new EcFanHardware(ec, gateway);
-    powerHardware = new EcPowerHardware(gateway);
+    // CPU power and limits (read only); without the modules the status simply has no CPU watts.
+    cpuRegisters = PawnIoCpuPowerRegisters.TryOpen(Path.Combine(AppContext.BaseDirectory, "pawnio-modules"));
+    powerHardware = new EcPowerHardware(gateway, cpuRegisters is null ? null : new CpuPowerMeter(cpuRegisters));
 }
 
 var runtime = new FanRuntime(simulate, fake, DateTimeOffset.Now, runtimeDir);
@@ -102,6 +105,7 @@ finally
 {
     history.Dispose();
     ec?.Dispose();
+    cpuRegisters?.Dispose();
 }
 return Environment.ExitCode;
 

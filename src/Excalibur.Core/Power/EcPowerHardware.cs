@@ -6,11 +6,16 @@ namespace Excalibur.Core.Power;
 /// <summary>
 /// The real power hardware: the performance mode through the firmware's WMI method (SET 0x0300,
 /// a2 = mode; works without administrator rights, docs/03), the power source from Windows plus the
-/// USB-C adapter flag (GET 0x0206, a4 = 1) and the GPU limit from the NVIDIA driver (NVML).
+/// USB-C adapter flag (GET 0x0206, a4 = 1), the GPU limit from the NVIDIA driver (NVML) and, when given a
+/// <see cref="CpuPowerMeter"/>, the CPU's power and limits.
 /// Shares the <see cref="GmWmiGateway"/> with the fan hardware: the firmware has one response buffer.
 /// </summary>
-public sealed class EcPowerHardware(GmWmiGateway wmi) : IPowerHardware
+public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null) : IPowerHardware
 {
+    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+
+    public CpuPower? ReadCpuPower() => cpu?.Read(_clock.Elapsed);
+
     private const ushort PerformanceModeFunction = 0x0300, AdapterFunction = 0x0206;
     private static readonly TimeSpan AdapterRecheck = TimeSpan.FromSeconds(30);
 

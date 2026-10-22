@@ -20,12 +20,15 @@ internal sealed class PowerPage : UserControl
 
     private readonly FanConnection _connection;
     private readonly Dictionary<PowerMode, RadioButton> _buttons = [];
-    private readonly TextBlock _now, _note, _error;
+    private readonly TextBlock _now, _note, _error, _cpuWatts, _cpuLimits;
     private bool _rendering;
 
     public PowerPage(FanConnection connection)
     {
         _connection = connection;
+        _cpuWatts = InfoPage.Text("–", "BigValue");
+        _cpuWatts.SetResourceReference(TextBlock.ForegroundProperty, "Value");
+        _cpuLimits = InfoPage.Text("", "Caption", top: 4);
         _now = InfoPage.Text("", "Body");
         _note = InfoPage.Text("", "Caption", top: 8);
         _error = InfoPage.Text("", "Caption", top: 6);
@@ -54,7 +57,7 @@ internal sealed class PowerPage : UserControl
         }
 
         var card = InfoPage.Card("Güç modu",
-            InfoPage.Text("Ekran kartına giden güç sınırını belirler. Daha yüksek mod daha hızlı ama daha sıcak ve daha gürültülüdür.", "Caption"),
+            InfoPage.Text("Ekran kartının ve işlemcinin çekebileceği gücü belirler. Daha yüksek mod daha hızlı ama daha sıcak ve daha gürültülüdür.", "Caption"),
             buttons, _now, _note, _error);
         Content = new StackPanel
         {
@@ -63,8 +66,10 @@ internal sealed class PowerPage : UserControl
                 InfoPage.Text("Performans", "PageTitle"),
                 InfoPage.Text("Dizüstünün güç ayarı: Ofis, Oyun ve Yüksek performans.", "Caption", top: 2, bottom: 18),
                 card,
+                InfoPage.Card("İşlemci gücü", _cpuWatts, _cpuLimits,
+                    InfoPage.Text("Güç modu işlemcinin uzun süre çekebileceği gücü de belirler: Ofis 35 W, Oyun 45 W, Yüksek performans 55 W.", "Caption", top: 6)),
                 InfoPage.Card("Yakında",
-                    InfoPage.Text("İşlemcinin çekebileceği gücü sınırlama ve anlık güç (watt) göstergesi.", "Caption")),
+                    InfoPage.Text("İşlemcinin çekebileceği gücü kendiniz sınırlama (daha sessiz ve serin çalışma için).", "Caption")),
             },
         };
 
@@ -97,6 +102,12 @@ internal sealed class PowerPage : UserControl
             button.IsChecked = power?.Mode == mode;
         }
         _rendering = false;
+
+        _cpuWatts.Text = power?.CpuWatts is { } cw ? $"{cw} W" : "–";
+        _cpuLimits.Text = power is null ? ""
+            : power.CpuPl1Watts is { } pl1
+                ? $"Uzun süreli sınır {pl1} W" + (power.CpuPl2Watts is { } pl2 ? $" · kısa süreli en çok {pl2} W" : "")
+                : "İşlemci gücü okunamıyor.";
 
         if (power is null)
         {
