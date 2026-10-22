@@ -678,6 +678,20 @@ static int Msr(string intelMsrPath)
     ulong info = Read(0x614);                        // MSR_PKG_POWER_INFO
     Say($"0x614 info   = 0x{info:X16}  (design TDP {(info & 0x7FFF) * watt:F1} W)");
 
+    // The same limits mirrored in MCHBAR (+0x59A0); the CPU obeys the lower of the two copies.
+    string mchbarPath = Path.Combine(Path.GetDirectoryName(intelMsrPath)!, "IntelMCHBAR.bin");
+    try
+    {
+        using var mchbar = PawnIoSession.Load(File.ReadAllBytes(mchbarPath));
+        ulong mmio = mchbar.Execute("ioctl_read_qword", [0x59A0], 1)[0];
+        Say($"MCHBAR+0x59A0 = 0x{mmio:X16}  locked={(mmio >> 63) & 1}");
+        Say($"  PL1 {(mmio & 0x7FFF) * watt,6:F1} W  enabled={(mmio >> 15) & 1}   PL2 {((mmio >> 32) & 0x7FFF) * watt,6:F1} W  enabled={(mmio >> 47) & 1}");
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or IOException)
+    {
+        Say($"MCHBAR read failed: {ex.Message}");
+    }
+
     // Present package power from the energy counter over two seconds.
     uint e0 = (uint)Read(0x611);
     var sw = System.Diagnostics.Stopwatch.StartNew();
