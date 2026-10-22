@@ -48,7 +48,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private FanStatusDto? _status;
     private int _failures;
-    private bool _busy, _offlineNotified;
+    private bool _busy, _offlineNotified, _rebuildPending;
     private string? _lastProfile;
     private FanLoopMode? _lastMode;
 
@@ -119,8 +119,13 @@ internal sealed class TrayContext : ApplicationContext
         _menu.Padding = new Padding(0, ThemedMenuRenderer.CardPadding + 1, 0, ThemedMenuRenderer.CardPadding + 8);
         _menu.Opening += (_, _) => { TrayLog.Write("menu: opening"); ApplyMenuTheme(); RenderMenu(); _ = RefreshProfilesAsync(); };
         _menu.ItemClicked += (_, e) => TrayLog.Write($"menu: item clicked '{e.ClickedItem?.Text}'");
-        _menu.Closed += (_, e) => TrayLog.Write($"menu: closed ({e.CloseReason})");
-        _catalog.Changed += RebuildProfileItems;
+        _menu.Closed += (_, e) =>
+        {
+            TrayLog.Write($"menu: closed ({e.CloseReason})");
+            if (_rebuildPending) { _rebuildPending = false; RebuildProfileItems(); }
+        };
+        // Rebuilding while the menu is open moves the items under the cursor, so the click misses; wait for it to close.
+        _catalog.Changed += () => { if (_menu.Visible) _rebuildPending = true; else RebuildProfileItems(); };
     }
 
     /// <summary>One menu entry per quick-access slot (built-in or custom), right after the status line and its gap.</summary>
