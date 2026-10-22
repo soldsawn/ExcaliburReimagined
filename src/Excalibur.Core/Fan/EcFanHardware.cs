@@ -16,11 +16,14 @@ namespace Excalibur.Core.Fan;
 /// the RPM (only 0xFF, the safe state, keeps a read-back). Targets we write update the cached EC values at once, and the
 /// Fn+1 Cooling Boost state also arrives at once through the firmware's <c>GMC_WMIEvent</c>
 /// (the watcher lives as long as the process; if it cannot start, the EC refresh still catches the state).
+/// The CPU temperature comes from <c>cpuTemperature</c> when given and readable (the CPU's own sensor, current to the
+/// second), else from the WMI block, which refreshes it only about every 16.5 s.
 /// </summary>
 public sealed class EcFanHardware : IFanHardware
 {
     private readonly EmbeddedController ec;
     private readonly GmWmiGateway wmi;
+    private readonly Func<int?>? cpuTemperature;
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
     // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
@@ -41,10 +44,11 @@ public sealed class EcFanHardware : IFanHardware
 
     private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
 
-    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null)
+    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null)
     {
         this.ec = ec;
         this.wmi = wmi;
+        this.cpuTemperature = cpuTemperature;
         _ecRefresh = ecRefresh ?? DefaultEcRefresh;
         StartBoostWatcher();
     }
@@ -136,6 +140,7 @@ public sealed class EcFanHardware : IFanHardware
         catch (Exception ex) { throw new FanReadException("WMI sensor read failed.", ex); }
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
+        if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
         if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)

@@ -29,6 +29,8 @@ using Excalibur.Core.Hardware;
 //
 //   msr               CPU power limits PL1/PL2 and present package power (IntelMSR module,
 //                     never touches the EC). Saved to analysis/ec/msr-<timestamp>.txt.
+//   cputemp [s]       CPU package temperature from MSR 0x1A2/0x1B1 every 250 ms for s seconds (default 120),
+//                     READ-ONLY, never the EC or WMI (safe beside the running service). Saved to analysis/ec.
 //   msr-test          Writes lower CPU limits (PL1 15 W, PL2 20 W) to MSR 0x610 for 40 s while
 //                     printing the package power, then restores the original. Asks for EVET.
 //
@@ -58,6 +60,11 @@ if (!IsElevated())
     Console.Error.WriteLine("This probe needs an elevated (Run as administrator) shell to reach PawnIO.");
     return 1;
 }
+// Before the EC module check and the WMI gateway: this mode touches neither.
+if (mode.Equals("cputemp", StringComparison.OrdinalIgnoreCase))
+    return CpuTemp(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools", "pawnio-modules", "IntelMSR.bin"),
+        args.Length > 1 && int.TryParse(args[1], out int secs) ? secs : 120);
+
 modulePath = Path.GetFullPath(modulePath);
 if (!File.Exists(modulePath))
 {
@@ -710,6 +717,33 @@ static int Msr(string intelMsrPath)
     return 0;
 }
 
+// --- cputemp: the CPU's own package temperature, to compare with the WMI value the service records
+//     (history) — WMI refreshes it only about every 16.5 s. READ-ONLY. ---
+static int CpuTemp(string intelMsrPath, int seconds)
+{
+    if (!File.Exists(intelMsrPath))
+    {
+        Console.Error.WriteLine($"IntelMSR module not found at: {intelMsrPath}");
+        return 2;
+    }
+    using var msr = PawnIoSession.Load(File.ReadAllBytes(intelMsrPath));
+    var sensor = new Excalibur.Core.Fan.MsrCpuTemperature(new ProbeMsr(msr));
+    var sb = new StringBuilder();
+    void Say(string s) { Console.WriteLine(s); sb.AppendLine(s); }
+
+    Say($"# CPU package temperature (MSR 0x1B1), every 250 ms for {seconds} s");
+    var end = DateTime.Now.AddSeconds(seconds);
+    while (DateTime.Now < end)
+    {
+        Say($"{DateTime.Now:HH:mm:ss.fff}  {sensor.Read()?.ToString() ?? "?"}");
+        Thread.Sleep(250);
+    }
+    string file = $"cputemp-{Stamp()}.txt";
+    Save(file, sb.ToString());
+    Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
+    return 0;
+}
+
 // --- msr-test: does lowering the MSR copy of the limits take effect? Only the PL1/PL2 power fields
 //     of 0x610 change (enable, clamp and window bits are kept), only downward, only after EVET, and the
 //     original value is written back even on Ctrl+C or an error. Never touches the EC. ---
@@ -962,4 +996,11 @@ static bool IsElevated()
 {
     using var id = WindowsIdentity.GetCurrent();
     return new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
+}
+
+sealed class ProbeMsr(PawnIoSession msr) : Excalibur.Core.Power.ICpuPowerRegisters
+{
+    public ulong ReadMsr(uint index) => msr.Execute("ioctl_read_msr", [index], 1)[0];
+    public void WriteMsr(uint index, ulong value) => throw new InvalidOperationException("cputemp is read-only.");
+    public ulong? ReadMchbarLimit() => null;
 }

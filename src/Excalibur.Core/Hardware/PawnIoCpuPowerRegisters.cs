@@ -5,12 +5,14 @@ namespace Excalibur.Core.Hardware;
 /// <summary>
 /// <see cref="ICpuPowerRegisters"/> through PawnIO's official IntelMSR module (written only by
 /// <see cref="CpuLimiter"/>, for the package power limit) and IntelMCHBAR module (which has no write at all).
+/// The power worker and the fan loop (CPU temperature) call it from different threads, so each call is serialized.
 /// </summary>
 public sealed class PawnIoCpuPowerRegisters : ICpuPowerRegisters, IDisposable
 {
     private const ulong MchbarPackageLimit = 0x59A0;
     private readonly PawnIoSession _msr;
     private readonly PawnIoSession? _mchbar;
+    private readonly object _gate = new();
 
     private PawnIoCpuPowerRegisters(PawnIoSession msr, PawnIoSession? mchbar)
     {
@@ -29,14 +31,20 @@ public sealed class PawnIoCpuPowerRegisters : ICpuPowerRegisters, IDisposable
         return Load("IntelMSR.bin") is { } msr ? new PawnIoCpuPowerRegisters(msr, Load("IntelMCHBAR.bin")) : null;
     }
 
-    public ulong ReadMsr(uint index) => _msr.Execute("ioctl_read_msr", [index], 1)[0];
+    public ulong ReadMsr(uint index)
+    {
+        lock (_gate) return _msr.Execute("ioctl_read_msr", [index], 1)[0];
+    }
 
-    public void WriteMsr(uint index, ulong value) => _msr.Execute("ioctl_write_msr", [index, value], 0);
+    public void WriteMsr(uint index, ulong value)
+    {
+        lock (_gate) _msr.Execute("ioctl_write_msr", [index, value], 0);
+    }
 
     public ulong? ReadMchbarLimit()
     {
         if (_mchbar is null) return null;
-        try { return _mchbar.Execute("ioctl_read_qword", [MchbarPackageLimit], 1)[0]; }
+        try { lock (_gate) return _mchbar.Execute("ioctl_read_qword", [MchbarPackageLimit], 1)[0]; }
         catch (InvalidOperationException) { return null; }
     }
 

@@ -55,9 +55,11 @@ else
     ec = EmbeddedController.Open(module);
     // One gateway for fans and power: the firmware has a single response buffer.
     var gateway = new GmWmiGateway();
-    hardware = new EcFanHardware(ec, gateway);
-    // CPU power and limits; without the modules the status has no CPU watts and CPU limits cannot be set.
+    // CPU power, limits and temperature; without the modules the status has no CPU watts, CPU limits cannot be set
+    // and the CPU temperature comes from the slower WMI block.
     cpuRegisters = PawnIoCpuPowerRegisters.TryOpen(Path.Combine(AppContext.BaseDirectory, "pawnio-modules"));
+    var cpuTemperature = cpuRegisters is null ? null : new MsrCpuTemperature(cpuRegisters);
+    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature is null ? null : cpuTemperature.Read);
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
         : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters));
