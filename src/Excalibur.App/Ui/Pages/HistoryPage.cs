@@ -39,10 +39,20 @@ internal sealed class HistoryPage : UserControl
         _note = InfoPage.Text("", "Caption", top: 8);
         var ecRow = InfoPage.Labeled("", "Body",
             "Windows'un fan ve pil denetleyicisiyle konuşurken zaman aşımına düştüğü anlar (sistem günlüğünde ACPI olay 13 ve 15). " +
-            "Çok sık görülürse pil okuması bozulabilir.", top: 10);
+            "Çok sık görülürse pil okuması bozulabilir.");
         var shutdownRow = InfoPage.Labeled("", "Body",
             "Bilgisayarın düzgün kapatılmadan kapandığı anlar: \"kritik pil\" kapanması ya da elektrik kesilir gibi kapanma (sistem günlüğünde Kernel-Power olay 524 ve 41).", top: 4);
         (_ecErrors, _shutdowns) = ((TextBlock)ecRow.Children[0], (TextBlock)shutdownRow.Children[0]);
+
+        // Temperatures on the left, the Windows event counts beside them on the right.
+        var temps = new StackPanel { Children = { _cpu, _gpu } };
+        var counts = new StackPanel { Margin = new Thickness(32, 0, 0, 0), Children = { ecRow, shutdownRow } };
+        Grid.SetColumn(counts, 1);
+        var summary = new Grid
+        {
+            ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition { Width = GridLength.Auto } },
+            Children = { temps, counts },
+        };
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
         string group = "historyrange" + GetHashCode();
@@ -63,7 +73,7 @@ internal sealed class HistoryPage : UserControl
                 InfoPage.Card("Sıcaklık ve fan", buttons, Chart,
                     InfoPage.Text("Çizgi ortalamayı, açık renkli alan o aralıktaki en yüksek sıcaklığı gösterir. " +
                                   "Turuncu noktalı çizgiler donanım iletişim hatalarını, kırmızılar beklenmedik kapanmaları gösterir.", "Caption", top: 6)),
-                InfoPage.Card("Seçilen aralıkta", _cpu, _gpu, ecRow, shutdownRow, _note),
+                InfoPage.Card("Seçilen aralıkta", summary, _note),
             },
         };
 
