@@ -44,6 +44,8 @@ public sealed record FanLoopOptions
     /// own EC driver. A safety raise, a user's change and the hand-over to or from the EC are not held back.
     /// </summary>
     public TimeSpan MinWriteInterval { get; init; } = TimeSpan.FromSeconds(5);
+    /// <summary>A rise this big is written without waiting for <see cref="MinWriteInterval"/> (a load that just started).</summary>
+    public int UrgentRise { get; init; } = 10;
     public TimeSpan MaxManualDuration { get; init; } = TimeSpan.FromMinutes(10);
 }
 
@@ -161,7 +163,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             _profile = profile;
             _beforeManual = null;
             _manualUntil = null;
-            ResetSmoothing();
+            // The fans keep their level: a lower curve eases down like a falling temperature (a charger plugged in
+            // switched Quiet to Balanced and the fans dropped from 95% to 46% on a stale reading, then rose again).
             Changed(now, source);
             Log(now, source is null ? $"profile {profile.Name}" : $"profile {profile.Name} ({source})");
             Publish();
@@ -230,7 +233,6 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                 _profile = _beforeManual ?? FanProfile.Balanced;
                 _beforeManual = null;
                 _manualUntil = null;
-                ResetSmoothing();
                 Changed(now, Ipc.FanSource.Service);
                 Log(now, $"manual mode ended, back to {_profile.Name}");
             }
@@ -335,6 +337,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         if (want.IsAuto || current.IsAuto) return want != current;
         if (want.Percent == 100 && current.Percent != 100) return true;
         if (urgent) return want != current;
+        if (want.Percent - current.Percent >= _options.UrgentRise) return true;
         if (_lastWrite[(int)fan] is { } last && now - last < _options.MinWriteInterval) return false;
         return Math.Abs(want.Percent - current.Percent) >= _options.MinWriteDelta;
     }

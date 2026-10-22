@@ -44,7 +44,7 @@ public class FanControlLoopTests
         var writeTicks = new List<int>();
         for (int i = 2; i <= 40; i++)
         {
-            _hw.CpuTempC = Math.Min(48 + i / 2.0, 66); // a slow climb: the curve wants a little more every tick
+            _hw.CpuTempC = 48 + i / 4.0; // a slow climb: the curve wants a little more every tick, never 10 points in 5 s
             int before = _hw.Writes.Count(w => w.Fan == FanId.Cpu);
             TickAt(i);
             if (_hw.Writes.Count(w => w.Fan == FanId.Cpu) > before) writeTicks.Add(i);
@@ -53,6 +53,33 @@ public class FanControlLoopTests
         Assert.True(writeTicks.Count >= 3);
         Assert.True(writeTicks[0] >= 6, "the first change waits 5 s after the write at second 1");
         Assert.All(writeTicks.Zip(writeTicks.Skip(1)), p => Assert.True(p.Second - p.First >= 5));
+    }
+
+    [Fact]
+    public void A_rise_of_10_points_does_not_wait_for_the_interval()
+    {
+        _hw.CpuTempC = 60;
+        _loop.Start(FanProfile.Balanced, T0);
+        TickAt(1);
+        Assert.Equal(P(60), _hw.CpuTarget);
+        _hw.CpuTempC = 70; // a load starts; the filter lets 3 C through per second: 63 C = 75%
+        TickAt(2);
+        Assert.Equal(P(75), _hw.CpuTarget);
+    }
+
+    [Fact]
+    public void A_profile_switch_eases_the_fans_down_instead_of_dropping_them()
+    {
+        _hw.CpuTempC = _hw.GpuTempC = 58;
+        _loop.Start(FanProfile.Performance, T0);
+        TickAt(1);
+        Assert.Equal(P(72), _hw.CpuTarget);
+
+        _loop.SetProfile(FanProfile.Quiet, T0.AddSeconds(2));
+        TickAt(2);
+        Assert.True(_hw.CpuTarget.Percent >= 69, $"dropped to {_hw.CpuTarget} at once");
+        for (int i = 3; i <= 40; i++) TickAt(i);
+        Assert.Equal(P(50), _hw.CpuTarget); // eased down to Quiet read 3 C hotter (falling hysteresis): 61 C = 50%
     }
 
     [Fact]
