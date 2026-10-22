@@ -67,6 +67,17 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void Trusted_ec_versions_round_trip_and_bad_ones_are_dropped()
+    {
+        var (s, problems) = ServiceSettings.Parse("""{"trustedEcVersions":["P009C0","bad",42,"P009C0"]}""");
+        Assert.Equal(["P009C0"], s.TrustedEcVersions);
+        Assert.Equal(2, problems.Count);
+        var (back, again) = ServiceSettings.Parse(s.ToJson());
+        Assert.Equal(s, back);
+        Assert.Empty(again);
+    }
+
+    [Fact]
     public void A_patch_changes_only_what_it_names()
     {
         var s = new ServiceSettings { Profile = "Quiet", History = HistoryMode.Days7 };

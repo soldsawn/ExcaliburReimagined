@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using Excalibur.App.Tray;
@@ -12,6 +13,8 @@ public partial class OverviewPage : UserControl
 {
     private readonly FanConnection _connection;
     private readonly Dictionary<string, TextBlock> _facts = [];
+    private bool _trialClosed;
+    private string? _trialError;
 
     internal OverviewPage(FanConnection connection)
     {
@@ -24,6 +27,13 @@ public partial class OverviewPage : UserControl
         selector.CommandFailed += error => { ProfileError.Text = error; ProfileError.Visibility = Visibility.Visible; };
         ProfileHost.Content = selector;
         ClearFault.Click += async (_, _) => await _connection.SendAsync(new FanRequest("clearFault"));
+        StartTrial.Click += async (_, _) => await StartTrialAsync();
+        CloseTrial.Click += (_, _) => { _trialClosed = true; Render(); };
+        CopyInfo.Click += (_, _) =>
+        {
+            try { Clipboard.SetText(SupportLine(_connection.Status)); CopyInfo.Content = "Kopyalandı"; }
+            catch (System.Runtime.InteropServices.ExternalException) { } // the clipboard is busy; the user can click again
+        };
 
         foreach (string label in new[] { "Fan kontrolü", "Fanları yöneten", "Fn+1 turbo", "Açık kalma süresi" })
         {
@@ -54,6 +64,7 @@ public partial class OverviewPage : UserControl
         RenderStats(on ? s : null);
 
         FaultBanner.Visibility = on && s!.Mode == FanLoopMode.Faulted ? Visibility.Visible : Visibility.Collapsed;
+        RenderTrial(on ? s : null);
         ProfileHint.Text = on ? Hint(s!) : "";
         if (on) ProfileError.Visibility = Visibility.Collapsed;
 
@@ -67,6 +78,76 @@ public partial class OverviewPage : UserControl
         _facts["Fanları yöneten"].Text = !on ? "–" : s!.HoldsFans ? "Excalibur Reimagined" : "Orijinal ayar";
         _facts["Fn+1 turbo"].Text = !on ? "–" : s!.CoolingBoost ? "Açık (iki fan tam hızda)" : "Kapalı";
         _facts["Açık kalma süresi"].Text = !on ? "–" : Texts.Duration(DateTimeOffset.Now - s!.ServiceStartedAt);
+    }
+
+    /// <summary>The unknown-fan-firmware card: what is known, the trial's progress or result, and the line to send the developer.</summary>
+    private void RenderTrial(FanStatusDto? s)
+    {
+        var t = s?.Trial;
+        bool unknown = s?.Mode == FanLoopMode.MonitorOnly;
+        bool show = s is not null && (unknown || (t?.State == EcTrialState.Passed && !_trialClosed));
+        TrialBanner.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) return;
+
+        string firmware = s!.EcVersion is { } v ? $"Fan yazılımı sürümü: {v}. " : "Fan yazılımı sürümü okunamadı. ";
+        (TrialTitle.Text, TrialText.Text) = t?.State switch
+        {
+            EcTrialState.Running => ("Fan kontrolü deneniyor",
+                $"{(t.Fan == FanId.Gpu ? "Ekran kartı" : "İşlemci")} fanı birkaç saniye farklı hızda dönecek. Deneme bitince fanlar orijinal ayara döner."),
+            EcTrialState.Passed => ("Deneme başarılı",
+                "İki fan da uygulamanın komutlarına uydu; fan kontrolü bu dizüstünde açıldı. \"Bilgileri kopyala\" ile sonucu geliştiriciye " +
+                "gönderebilirsiniz, böylece bu dizüstü sonraki sürümlerde listeye eklenir."),
+            EcTrialState.Failed => ("Deneme başarısız", TrialProblem(t) + " Fanlar orijinal ayarda; uygulama fanları yalnız izlemeye devam ediyor."),
+            _ => ("Bu dizüstünün fan yazılımı tanınmadı", firmware +
+                "Bu sürüm henüz denenmediği için uygulama fanları yalnız izliyor. Kısa bir denemeyle fan kontrolünün burada çalışıp çalışmadığına bakılabilir."),
+        };
+        if (_trialError is not null) TrialText.Text += $" ({_trialError})";
+        StartTrial.Visibility = unknown && s.EcVersion is not null && t?.State != EcTrialState.Running ? Visibility.Visible : Visibility.Collapsed;
+        StartTrial.Content = t?.State == EcTrialState.Failed ? "Tekrar dene" : "Dene";
+        CloseTrial.Visibility = t?.State == EcTrialState.Passed ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task StartTrialAsync()
+    {
+        string firmware = _connection.Status?.EcVersion ?? "?";
+        var answer = MessageBox.Show(
+            $"Bu fan yazılımı sürümü ({firmware}) henüz denenmedi.\n\n" +
+            "Deneme yaklaşık yarım dakika sürer: önce işlemci, sonra ekran kartı fanı birkaç saniye farklı hızda döner ve hızın gerçekten " +
+            "değişip değişmediğine bakılır. Her fan denendikten sonra orijinal ayara döner. Dizüstü 60 °C'nin altındayken başlar, " +
+            "70 °C'yi geçerse durur.\n\nDenemeyi başlatmak istiyor musunuz?",
+            "Fan kontrolünü dene", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+        _trialError = await _connection.SendAsync(new FanRequest("trialEc"));
+        CopyInfo.Content = "Bilgileri kopyala";
+        Render();
+    }
+
+    private static string TrialProblem(EcTrialStatus t) => t.Problem switch
+    {
+        EcTrialProblem.TooHot => "Dizüstü fazla sıcak: deneme 60 °C'nin altında başlar ve 70 °C'yi geçince durur. Biraz bekleyip tekrar deneyin.",
+        EcTrialProblem.NoFollow => $"{(t.CpuFollows == false ? "İşlemci" : "Ekran kartı")} fanının hızı değişmedi; bu sürümde fan ayarları başka bir yerde olabilir.",
+        EcTrialProblem.WriteFailed => "Fan ayarı yazılamadı.",
+        EcTrialProblem.ReadFailed => "Fan bilgileri okunamadı.",
+        EcTrialProblem.Stopped => "Deneme yarıda kaldı (hizmet durdu ya da bilgisayar uyudu).",
+        _ => "Bilinmeyen bir sorun oldu.",
+    };
+
+    /// <summary>One line for the developer: app version, model, BIOS, fan firmware and the trial's result.</summary>
+    private static string SupportLine(FanStatusDto? s)
+    {
+        string app = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
+        var t = s?.Trial;
+        string Fan(bool? follows) => follows switch { true => "uydu", false => "uymadı", null => "denenmedi" };
+        string result = t?.State switch
+        {
+            EcTrialState.Running => "sürüyor",
+            EcTrialState.Passed => "başarılı",
+            EcTrialState.Failed => $"başarısız ({t.Problem})",
+            _ => "yapılmadı",
+        };
+        return $"Excalibur Reimagined {app} · Model: {HardwareNames.Model ?? "?"} · BIOS: {HardwareNames.Bios ?? "?"} · " +
+               $"Fan yazılımı (EC): {s?.EcVersion ?? "?"} · Deneme: {result}" +
+               (t is null ? "" : $" · işlemci fanı {Fan(t.CpuFollows)}, ekran kartı fanı {Fan(t.GpuFollows)}");
     }
 
     private readonly Dictionary<string, (TextBlock Value, TextBlock Caption)> _stats = [];

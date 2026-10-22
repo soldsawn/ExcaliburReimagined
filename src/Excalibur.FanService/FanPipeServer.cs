@@ -177,6 +177,10 @@ public sealed class FanPipeServer(
                 case "shutdown":
                     ScheduleShutdown();
                     return new FanResponse(true, Status: Status());
+                case "trialec":
+                    try { loop.StartEcTrial(now); }
+                    catch (InvalidOperationException ex) { return new FanResponse(false, ex.Message, Status: Status(), Code: "trial_unavailable"); }
+                    break;
                 case "clearfault":
                     loop.ClearFault(now);
                     break;

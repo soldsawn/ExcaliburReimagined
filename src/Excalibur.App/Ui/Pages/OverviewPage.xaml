@@ -18,6 +18,21 @@
             </DockPanel>
         </Border>
 
+        <!-- unknown fan firmware: monitor only, the user may try it -->
+        <Border x:Name="TrialBanner" Style="{StaticResource CardBox}" BorderBrush="{DynamicResource Warn}" Margin="0,0,0,14" Visibility="Collapsed">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="CopyInfo" Style="{StaticResource PlainButton}" Content="Bilgileri kopyala" />
+                    <Button x:Name="StartTrial" Style="{StaticResource AccentButton}" Content="Dene" Margin="8,0,0,0" />
+                    <Button x:Name="CloseTrial" Style="{StaticResource PlainButton}" Content="Kapat" Margin="8,0,0,0" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock x:Name="TrialTitle" Style="{StaticResource CardTitle}" />
+                    <TextBlock x:Name="TrialText" Style="{StaticResource Caption}" Margin="0,4,12,0" TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- CPU / GPU -->
         <Grid>
             <Grid.ColumnDefinitions>

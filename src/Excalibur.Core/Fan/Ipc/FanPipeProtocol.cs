@@ -21,9 +21,11 @@ public static class FanPipe
     ///    profile name accepts custom profile names too.
     /// 6: + status Power CpuWatts / CpuPl1Watts / CpuPl2Watts / GpuPowerWatts / CpuLimit, setCpuLimit(cpuLimit) (none = the power mode decides),
     ///    response Code cpu_limit_invalid / cpu_limit_failed.
+    /// 7: + trialEc (user-approved trial of an unverified EC firmware; response Code trial_unavailable), status Trial,
+    ///    settings TrustedEcVersions.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 6;
+    public const int ProtocolVersion = 7;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -50,7 +52,7 @@ public static class FanSource
 /// Commands: status, events, setProfile(profile), setManual(cpu, gpu, minutes), release, clearFault,
 /// getSettings, updateSettings(settings), history(from, to, maxPoints), setPowerMode(powerMode),
 /// shutdown (stops the guardian and this service; fans go back to the EC),
-/// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit).
+/// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), trialEc.
 /// <see cref="Source"/> is one of <see cref="FanSource"/>.
 /// </summary>
 public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = null, int? Gpu = null, int? Minutes = null,
@@ -121,7 +123,8 @@ public sealed record FanStatusDto(
     FanReason GpuReason = FanReason.Auto,
     int? CpuCurvePercent = null,
     int? GpuCurvePercent = null,
-    PowerStatusDto? Power = null)
+    PowerStatusDto? Power = null,
+    EcTrialStatus? Trial = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {
@@ -134,7 +137,7 @@ public sealed record FanStatusDto(
             snap?.CoolingBoost ?? false,
             s.EcVersion, s.ConsecutiveReadFailures, s.HoldsFans, simulated, startedAt,
             FanPipe.ProtocolVersion, s.ProfileChangedBy, s.ProfileChangedAt,
-            s.CpuReason, s.GpuReason, s.CpuCurvePercent, s.GpuCurvePercent);
+            s.CpuReason, s.GpuReason, s.CpuCurvePercent, s.GpuCurvePercent, Trial: s.Trial);
     }
 
     private static int? ToPercent(FanTarget? t) => t is { IsAuto: false } v ? v.Percent : null;

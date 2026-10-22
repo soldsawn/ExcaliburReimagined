@@ -2,12 +2,16 @@ using Microsoft.Win32;
 
 namespace Excalibur.App.Ui;
 
-/// <summary>Chip names from the registry (instant, no WMI): the CPU brand string and the NVIDIA adapter.</summary>
+/// <summary>Chip names from the registry (instant, no WMI): the CPU brand string, the NVIDIA adapter, the model and BIOS version.</summary>
 internal static class HardwareNames
 {
     public static readonly string? Cpu = Read(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString")?.Trim();
 
     public static readonly string? Gpu = FindGpu();
+
+    private const string BiosKey = @"HARDWARE\DESCRIPTION\System\BIOS";
+    public static readonly string? Model = Read(BiosKey, "SystemProductName")?.Trim();
+    public static readonly string? Bios = Read(BiosKey, "BIOSVersion")?.Trim();
 
     private static string? FindGpu()
     {

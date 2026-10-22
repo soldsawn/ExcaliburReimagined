@@ -40,6 +40,9 @@ if (asService) builder.Services.AddSingleton<IHostLifetime, FanServiceLifetime>(
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(10));
 
 FakeFanHardware? fake = simulate ? new FakeFanHardware() : null;
+// --ec <version> pretends another EC firmware in the simulation (to try the unknown-EC trial).
+if (fake is not null && Array.FindIndex(args, a => a.Equals("--ec", StringComparison.OrdinalIgnoreCase)) is int ecArg and >= 0 && ecArg + 1 < args.Length)
+    fake.EcVersion = args[ecArg + 1];
 EmbeddedController? ec = null;
 PawnIoCpuPowerRegisters? cpuRegisters = null;
 IFanHardware hardware;
@@ -67,8 +70,14 @@ else
 
 var runtime = new FanRuntime(simulate, fake, DateTimeOffset.Now, runtimeDir);
 builder.Services.AddSingleton(runtime);
-builder.Services.AddSingleton(new FanControlLoop(hardware));
 var settingsStore = new ServiceSettingsStore(runtime.SettingsPath);
+var loop = new FanControlLoop(hardware, new FanLoopOptions
+{
+    KnownEcVersions = new HashSet<string>(new FanLoopOptions().KnownEcVersions.Concat(settingsStore.Current.TrustedEcVersions)),
+});
+// A version that passed the user's trial stays trusted after a restart.
+loop.EcTrusted += v => settingsStore.Update(s => s.TrustedEcVersions.Contains(v) ? s : s with { TrustedEcVersions = [.. s.TrustedEcVersions, v] }, out _);
+builder.Services.AddSingleton(loop);
 var fileLog = new FanFileLog(runtime.LogDirectory, "fan");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
 if (hardware is EcFanHardware ecFans) ecFans.Log = m => fileLog.Write(DateTimeOffset.Now, m);

@@ -4,7 +4,7 @@ public enum FanLoopMode
 {
     /// <summary>Applying the selected profile.</summary>
     Running,
-    /// <summary>Unknown EC firmware: reads only, never writes a percent.</summary>
+    /// <summary>Unknown EC firmware: reads only, never writes a percent (except during a user-approved <see cref="EcTrial"/>).</summary>
     MonitorOnly,
     /// <summary>Too many read/write failures: fans handed to the EC until <see cref="FanControlLoop.ClearFault"/>.</summary>
     Faulted,
@@ -28,7 +28,8 @@ public sealed record FanStatus(
     FanReason CpuReason = FanReason.Auto,
     FanReason GpuReason = FanReason.Auto,
     int? CpuCurvePercent = null,
-    int? GpuCurvePercent = null);
+    int? GpuCurvePercent = null,
+    EcTrialStatus? Trial = null);
 
 public sealed record FanLoopOptions
 {
@@ -57,6 +58,9 @@ public sealed record FanLoopOptions
 public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? options = null)
 {
     private readonly FanLoopOptions _options = options ?? new FanLoopOptions();
+    // The verified versions plus any the user's trial passed while running.
+    private readonly HashSet<string> _known = new((options ?? new FanLoopOptions()).KnownEcVersions, StringComparer.Ordinal);
+    private EcTrial? _trial;
     private readonly FanController _controller = new();
     private readonly TemperatureFilter _filter = new();
     private readonly HotTracker _hot = new();
@@ -87,6 +91,9 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
 
     public const int MaxEvents = 50;
 
+    /// <summary>An EC version passed the user's trial; the host saves it so the next start trusts it too. Raised under the loop's lock.</summary>
+    public event Action<string>? EcTrusted;
+
     /// <summary>How many events were ever logged; with <see cref="Events"/> a host can tell which are new.</summary>
     public long TotalEvents
     {
@@ -107,7 +114,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private FanStatus Publish()
     {
         var status = new FanStatus(_mode, _profile.Name, _manualUntil, _snapshot, _applied, _ecVersion, _readFailures, _holdsFans,
-            _profileChangedBy, _profileChangedAt, _cpuReason, _gpuReason, _cpuCurve, _gpuCurve);
+            _profileChangedBy, _profileChangedAt, _cpuReason, _gpuReason, _cpuCurve, _gpuCurve, _trial?.Status);
         _published = status;
         return status;
     }
@@ -124,7 +131,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             _profile = profile;
             _ecVersion = hardware.ReadEcVersion();
             ForceAuto(now, "start");
-            _mode = _ecVersion is not null && _options.KnownEcVersions.Contains(_ecVersion)
+            _mode = _ecVersion is not null && _known.Contains(_ecVersion)
                 ? FanLoopMode.Running
                 : FanLoopMode.MonitorOnly;
             Log(now, _mode == FanLoopMode.Running
@@ -138,6 +145,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     {
         lock (_gate)
         {
+            if (_trial?.Status.State == EcTrialState.Running) Log(now, "EC trial stopped");
+            _trial?.Abort();
             ForceAuto(now, "stop");
             _mode = FanLoopMode.Stopped;
             Publish();
@@ -172,6 +181,26 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             ResetSmoothing();
             Changed(now, source);
             Log(now, $"manual CPU {cpuPercent}% GPU {gpuPercent}% until {_manualUntil:HH:mm:ss}");
+            Publish();
+        }
+    }
+
+    /// <summary>
+    /// Starts the user-approved <see cref="EcTrial"/> of an unverified EC firmware; only in <see cref="FanLoopMode.MonitorOnly"/>
+    /// with a readable version and a reading. Passing it trusts the version and starts the profile.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Not in MonitorOnly, no version or no reading yet.</exception>
+    public void StartEcTrial(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            if (_mode != FanLoopMode.MonitorOnly || _ecVersion is null || _snapshot is null)
+                throw new InvalidOperationException("An EC trial needs an unverified, readable EC firmware and a reading.");
+            if (_trial?.Status.State == EcTrialState.Running) return;
+            _trial = new EcTrial(hardware, _ecVersion, _snapshot, now);
+            Log(now, _trial.Status.State == EcTrialState.Failed
+                ? $"EC trial of {_ecVersion} not started: too hot (CPU {_snapshot.CpuTempC}C, GPU {_snapshot.GpuTempC}C)"
+                : $"EC trial of {_ecVersion} started (user approved)");
             Publish();
         }
     }
@@ -215,13 +244,18 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             }
             catch (FanReadException ex)
             {
+                if (_mode == FanLoopMode.MonitorOnly) AdvanceTrial(null, now);
                 _readFailures++;
                 if (_readFailures == _options.MaxReadFailures && _mode == FanLoopMode.Running)
                     Fault(now, $"{_readFailures} unreadable snapshots ({ex.Message})");
                 return Publish();
             }
 
-            if (_mode != FanLoopMode.Running) return Publish();
+            if (_mode != FanLoopMode.Running)
+            {
+                if (_mode == FanLoopMode.MonitorOnly) AdvanceTrial(s, now);
+                return Publish();
+            }
 
             // Curve and floors see the rise-limited temperature; the hot rule sees the raw one.
             var filtered = _filter.Apply(s, now);
@@ -272,6 +306,27 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             _applied = decision;
             _holdsFans = !decision.Cpu.IsAuto || !decision.Gpu.IsAuto;
             return Publish();
+        }
+    }
+
+    private void AdvanceTrial(FanSnapshot? s, DateTimeOffset now)
+    {
+        if (_trial is null) return;
+        var before = _trial.Status;
+        var after = _trial.Advance(s, now);
+        _holdsFans = _trial.HoldsFan;
+        if (after == before) return;
+        if (after.CpuFollows == true && before.CpuFollows != true) Log(now, "EC trial: the CPU fan follows 0x2C");
+        if (after.State == EcTrialState.Failed)
+            Log(now, $"EC trial of {after.EcVersion} failed ({after.Problem}); fans handed to the EC");
+        else if (after.State == EcTrialState.Passed)
+        {
+            Log(now, $"EC trial: the GPU fan follows 0x2D; {after.EcVersion} trusted, profile {_profile.Name} starts");
+            _known.Add(after.EcVersion);
+            _mode = FanLoopMode.Running;
+            ResetSmoothing();
+            _userChanged = true;
+            EcTrusted?.Invoke(after.EcVersion);
         }
     }
 

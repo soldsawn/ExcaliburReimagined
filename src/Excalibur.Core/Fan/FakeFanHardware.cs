@@ -27,10 +27,13 @@ public sealed class FakeFanHardware : IFanHardware
 
     public List<(FanId Fan, FanTarget Target)> Writes { get; } = [];
 
+    /// <summary>A fan that ignores its target register (an EC firmware with another layout): it stays on the stock curve.</summary>
+    public FanId? DeafFan { get; set; }
+
     public int AppliedPercent(FanId fan)
     {
         var target = fan == FanId.Cpu ? CpuTarget : GpuTarget;
-        if (!target.IsAuto) return target.Percent;
+        if (!target.IsAuto && fan != DeafFan) return target.Percent;
         double t = fan == FanId.Cpu ? CpuTempC : GpuTempC;
         int max = fan == FanId.Cpu ? 94 : 84;
         return t < 58 ? 66 : t < 65 ? 86 : max;

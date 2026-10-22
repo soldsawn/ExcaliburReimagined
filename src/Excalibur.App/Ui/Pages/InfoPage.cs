@@ -39,6 +39,7 @@ internal static class InfoPage
                 Text("Fanları arka planda bir Windows hizmeti yönetir. O hizmet bir sorun yaşarsa ikinci bir koruma hizmeti fanları hemen " +
                      "orijinal ayara bırakır.", "Caption", top: 6),
                 Text($"İşlemci: {HardwareNames.Cpu ?? "?"}   ·   Ekran kartı: {HardwareNames.Gpu ?? "?"}" +
+                     (HardwareNames.Bios is { } bios ? $"   ·   BIOS: {bios}" : "") +
                      (fanFirmware is null ? "" : $"   ·   Fan denetleyici yazılımı: {fanFirmware}"), "Caption", top: 6)));
     }
 

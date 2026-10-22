@@ -65,11 +65,20 @@ public sealed record ServiceSettings
     /// <summary>The user's own CPU power limits; null = the power mode decides (nothing is written).</summary>
     public CpuLimit? CpuLimit { get; init; }
 
+    /// <summary>
+    /// EC firmware versions this machine's user tried and that passed (<see cref="EcTrial"/>), trusted beside the built-in
+    /// list. Only the service adds to it, after a trial.
+    /// </summary>
+    public IReadOnlyList<string> TrustedEcVersions { get; init; } = [];
+
+    /// <summary>The shape of an EC version string (6 ASCII letters or digits, e.g. P008B0).</summary>
+    public static bool IsEcVersion(string? v) => v is { Length: 6 } && v.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z');
+
     // Value equality over the lists (a record would compare them by reference).
     public bool Equals(ServiceSettings? other) =>
         other is not null && Version == other.Version && Profile == other.Profile && History == other.History
         && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit
-        && CustomProfiles.SequenceEqual(other.CustomProfiles)
+        && CustomProfiles.SequenceEqual(other.CustomProfiles) && TrustedEcVersions.SequenceEqual(other.TrustedEcVersions)
         && (Slots is null ? other.Slots is null : other.Slots is not null && Slots.SequenceEqual(other.Slots));
 
     public override int GetHashCode() => HashCode.Combine(Version, Profile, History, PowerMode, CustomProfiles.Count, Slots?.Count);
@@ -109,6 +118,7 @@ public sealed record ServiceSettings
         // Gaming and High performance are never used on battery (the stock software does the same).
         if (PowerAutomation.OnBattery.Mode is { } bm && bm != Power.PowerMode.Office) errors.Add("only Office can be used on battery");
         if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
+        foreach (var v in TrustedEcVersions.Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
         return errors;
     }
 
@@ -145,6 +155,7 @@ public sealed record ServiceSettings
         PowerMode? powerMode = ReadMode(node, "powerMode", problems);
         var automation = ReadAutomation(node, known, problems);
         var cpuLimit = ReadCpuLimit(node, problems);
+        var trusted = ReadTrustedEcVersions(node, problems);
 
         int version = Get(node, "version", 1, problems);
         if (version > CurrentVersion) problems.Add($"settings version {version} is newer than this build ({CurrentVersion}); unknown fields ignored");
@@ -152,8 +163,22 @@ public sealed record ServiceSettings
         return (new ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
-            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit,
+            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted,
         }, problems);
+    }
+
+    private static IReadOnlyList<string> ReadTrustedEcVersions(JsonObject node, List<string> problems)
+    {
+        var array = node.FirstOrDefault(kv => string.Equals(kv.Key, "trustedEcVersions", StringComparison.OrdinalIgnoreCase)).Value as JsonArray;
+        if (array is null) return [];
+        var versions = new List<string>();
+        foreach (var item in array)
+        {
+            string? v = item is JsonValue value && value.TryGetValue(out string? text) ? text : null;
+            if (!IsEcVersion(v)) { problems.Add($"trusted EC version '{v}' is not an EC version; dropped"); continue; }
+            if (!versions.Contains(v!)) versions.Add(v!);
+        }
+        return versions;
     }
 
     private static PowerMode? ReadMode(JsonObject node, string name, List<string> problems)
