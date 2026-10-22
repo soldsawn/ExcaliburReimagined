@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         [
             new("overview", "Panel", "\uE80F", () => new OverviewPage(_connection)),
             new("fan", "Soğutma", "\uE9CA", () => new FanPage(_connection)),
+            new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
             new("display", "Ekran", "", () => new DisplayPage()),
@@ -126,7 +127,7 @@ public partial class MainWindow : Window
         timer.Tick += async (_, _) =>
         {
             timer.Stop();
-            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("profiles", 2), ("power", 3), ("display", 4), ("automation", 7), ("settings", -1) })
+            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("display", 5), ("automation", 8), ("settings", -1) })
             {
                 var button = index >= 0 ? (RadioButton)Nav.Children[index] : (RadioButton)NavBottom.Children[0];
                 button.IsChecked = true;
@@ -142,6 +143,12 @@ public partial class MainWindow : Window
                     fan.Chart.HoverCpuDot();
                     UpdateLayout();
                     Save(Root, Path.ChangeExtension(path, ".fan-dot.png"));
+                }
+                if (_pages.GetValueOrDefault(key) is HistoryPage history)
+                {
+                    history.Chart.HoverAt(0.8);
+                    UpdateLayout();
+                    Save(Root, Path.ChangeExtension(path, ".history-hover.png"));
                 }
             }
             Close();
