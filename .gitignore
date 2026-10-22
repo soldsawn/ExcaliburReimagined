@@ -39,3 +39,6 @@ kapanma/
 
 # local issue tracker / specs (personal, like docs/)
 .scratch/
+
+# test packages built by tools/scripts/make-test-package.ps1
+dist/

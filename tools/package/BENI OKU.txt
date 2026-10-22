@@ -1,0 +1,77 @@
+EXCALIBUR REIMAGINED - DENEME SÜRÜMÜ
+Sürüm {VERSION} ({COMMIT}), {DATE}
+
+Casper Excalibur dizüstüler için fan ve güç kontrolü uygulaması. Bu bir deneme
+sürümü: senin dizüstünde fan kontrolünün çalışıp çalışmadığını öğrenmek için.
+
+
+ÖNCE BİLMEN GEREKENLER
+----------------------
+- Uygulama şimdilik yalnız bir G870 modelinde (fan yazılımı P008B0) doğrulandı.
+- Senin dizüstünün fan yazılımı listede yoksa uygulama fanlara HİÇ dokunmaz,
+  yalnız sıcaklık ve fan hızını gösterir. Fan kontrolü ancak aşağıdaki kısa
+  denemeyi sen onaylarsan ve deneme başarılı olursa açılır.
+- Her durumda fanları geri vermek tek tık: saatin yanındaki simgeye sağ tıkla,
+  "Çıkış" de. Fanlar hemen dizüstünün kendi ayarına döner.
+- Kurulum, PawnIO adlı sürücüyü de kurar (sende yoksa). PawnIO imzalı, açık
+  kaynak bir sürücü; uygulamanın fan denetleyicisiyle konuşmasını sağlar.
+  FanControl, LibreHardwareMonitor gibi programlar da bunu kullanır.
+  İnternetten resmi sayfasından indirilir ve dosyanın doğruluğu kontrol edilir.
+
+
+KURULUM (sırayla)
+-----------------
+1. Zip dosyasını bir klasöre çıkar (ör. masaüstüne). Zip'in içinden çalıştırma.
+
+2. Casper Control Center açıksa fan ayarlarına dokunma; iki program aynı anda
+   fanları yönetmeye çalışmasın. (Kapatman gerekmez.)
+
+3. "1-Kur.cmd" dosyasına çift tıkla.
+   - Windows "Bilgisayarınız korundu" derse: "Ek bilgi" > "Yine de çalıştır".
+   - Yönetici izni sorulunca "Evet".
+
+4. PawnIO kurulu değilse bir kurulum penceresi açılır: "Install" de, bitince
+   o pencereyi kapat. Kurulum kendi kendine devam eder.
+
+5. Kurulum penceresinde "Kurulum bitti" yazınca Enter'a bas. Uygulama penceresi
+   açılır, saatin yanında da uygulamanın simgesi görünür.
+
+
+DENEME (fan kontrolünü açmak için)
+----------------------------------
+6. Dizüstü boşta dursun: oyun, render vb. kapat, 2-3 dakika bekle.
+   Deneme ancak işlemci ve ekran kartı 60 °C'nin altındayken başlar.
+
+7. Uygulamanın "Panel" sayfasında "Bu dizüstünün fan yazılımı tanınmadı"
+   kartı görünür. "Dene"ye bas, gelen soruya "Evet" de.
+
+8. Yaklaşık yarım dakika sürer: önce işlemci fanının, sonra ekran kartı fanının
+   sesi değişir. Bu normal. Her fan denendikten sonra kendi ayarına döner.
+
+9. Sonuç kartta yazar. Başarılı da olsa başarısız da olsa "Bilgileri kopyala"ya
+   bas ve kopyalanan satırı bana gönder (WhatsApp'a yapıştırman yeterli).
+
+10. Başarılıysa fan kontrolü açılır. Panel'deki profilleri dene:
+    Sessiz, Dengeli, Performans, Orijinal (dizüstünün kendi ayarı).
+    Birkaç gün normal kullan; tuhaf bir şey olursa haber ver.
+
+Kart görünmüyorsa (Panel'de "Fan kontrolü: Açık" yazıyorsa) senin dizüstün
+zaten listede demektir, denemeye gerek yok.
+
+
+SORUN OLURSA
+------------
+- Fanlar tuhaf davranırsa: saatin yanındaki simgeye sağ tıkla > "Çıkış".
+- Bilgisayar beklenmedik şekilde kapanırsa ya da donarsa: uygulamayı kaldır
+  (aşağıda) ve haber ver.
+- Bana gönderilecek günlükler: C:\ProgramData\ExcaliburReimagined\logs
+  Bu klasörü zipleyip gönderebilirsin.
+
+
+KALDIRMA
+--------
+"2-Kaldir.cmd" dosyasına çift tıkla, yönetici iznine "Evet" de.
+Fanlar dizüstünün kendi ayarına döner, program silinir.
+- Ayarlar ve günlükler C:\ProgramData\ExcaliburReimagined içinde kalır;
+  istersen bu klasörü elle silebilirsin.
+- PawnIO kalır; istemezsen: Ayarlar > Uygulamalar > PawnIO > Kaldır.
