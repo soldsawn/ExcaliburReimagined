@@ -88,6 +88,7 @@ public sealed class EcFanHardware : IFanHardware
                 _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
                 _sinceEcRead.Restart();
             }
+            catch (EcBusyException) when (_ec is not null) { } // keep the cached values; a later tick tries again
             catch (TimeoutException ex) { throw new FanReadException("EC read timed out.", ex); }
         }
         int cpuPercent = AppliedPercent(cpuRpm, CpuRpmPerPercent), gpuPercent = AppliedPercent(gpuRpm, GpuRpmPerPercent);
@@ -164,6 +165,7 @@ public sealed class EcFanHardware : IFanHardware
                     return;
                 }
             }
+            catch (EcBusyException ex) { throw new FanBusyException($"{fan} fan target {target} not written: the EC is busy.", ex); }
             catch (TimeoutException) { }
         }
         throw new FanWriteException(target.IsAuto
@@ -173,15 +175,21 @@ public sealed class EcFanHardware : IFanHardware
 
     public string? ReadEcVersion()
     {
-        try
+        // Read once at start; a busy bus only delays it (the stale-byte drain frees it within seconds).
+        for (int attempt = 0; attempt < 50; attempt++)
         {
-            var sb = new StringBuilder();
-            for (int i = 0; i < FanRegisters.EcVersionLength; i++)
-                sb.Append((char)ec.ReadStable((byte)(FanRegisters.EcVersionStart + i)));
-            string version = sb.ToString();
-            return version.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z') ? version : null;
+            try
+            {
+                var sb = new StringBuilder();
+                for (int i = 0; i < FanRegisters.EcVersionLength; i++)
+                    sb.Append((char)ec.ReadStable((byte)(FanRegisters.EcVersionStart + i)));
+                string version = sb.ToString();
+                return version.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z') ? version : null;
+            }
+            catch (EcBusyException) { Thread.Sleep(100); }
+            catch (TimeoutException) { return null; }
         }
-        catch (TimeoutException) { return null; }
+        return null;
     }
 
     private FanTarget Target(byte reg)

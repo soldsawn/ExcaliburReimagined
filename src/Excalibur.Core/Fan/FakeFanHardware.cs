@@ -22,6 +22,8 @@ public sealed class FakeFanHardware : IFanHardware
     /// <summary>Fail the next N reads / writes.</summary>
     public int FailNextReads { get; set; }
     public int FailNextWrites { get; set; }
+    /// <summary>Report the EC busy (nothing written) on the next N writes.</summary>
+    public int BusyNextWrites { get; set; }
 
     public List<(FanId Fan, FanTarget Target)> Writes { get; } = [];
 
@@ -54,6 +56,11 @@ public sealed class FakeFanHardware : IFanHardware
         {
             FailNextWrites--;
             throw new FanWriteException("simulated write failure");
+        }
+        if (BusyNextWrites > 0)
+        {
+            BusyNextWrites--;
+            throw new FanBusyException("simulated busy EC");
         }
         if (fan == FanId.Cpu) CpuTarget = target; else GpuTarget = target;
         Writes.Add((fan, target));

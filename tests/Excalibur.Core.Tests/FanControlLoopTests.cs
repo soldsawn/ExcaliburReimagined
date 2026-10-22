@@ -120,6 +120,20 @@ public class FanControlLoopTests
     }
 
     [Fact]
+    public void A_busy_ec_is_not_a_failure_and_the_write_follows_on_the_next_tick()
+    {
+        _loop.Start(FanProfile.Balanced, T0);
+        _hw.BusyNextWrites = 4;
+        TickAt(1);
+        TickAt(2);
+        Assert.Equal(FanLoopMode.Running, _loop.Status.Mode);
+        Assert.True(_hw.CpuTarget.IsAuto);
+        TickAt(3);
+        Assert.Equal(P(30), _hw.CpuTarget);
+        Assert.Equal(P(30), _hw.GpuTarget);
+    }
+
+    [Fact]
     public void Stop_hands_fans_to_the_ec()
     {
         _loop.Start(FanProfile.Balanced, T0);

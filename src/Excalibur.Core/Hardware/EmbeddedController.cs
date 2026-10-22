@@ -33,6 +33,11 @@ public sealed class EmbeddedController : IDisposable
     // that late byte desyncs every read that follows (the whole sweep then times out).
     // So on a timeout we settle the bus and retry the read a few times.
     private const int MaxReadRetries = 3;
+    // A byte left in the output buffer this long is nobody's pending reply (Windows' transactions
+    // take milliseconds); it is a stale one of ours and would block every operation, so drain it.
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(2);
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private TimeSpan? _busySince;
 
     private readonly PawnIoSession _session;
 
@@ -61,7 +66,7 @@ public sealed class EmbeddedController : IDisposable
                     Resync();
                     return ReadByteLocked(address);
                 }
-                catch (TimeoutException ex)
+                catch (TimeoutException ex) when (ex is not EcBusyException)
                 {
                     last = ex;
                     SettleAfterTimeout();
@@ -89,7 +94,7 @@ public sealed class EmbeddedController : IDisposable
                 if (previous == value) return value;
                 previous = value;
             }
-            catch (TimeoutException) { previous = null; }
+            catch (TimeoutException ex) when (ex is not EcBusyException) { previous = null; }
         }
         throw new TimeoutException($"EC register 0x{address:X2} never gave two matching reads.");
     }
@@ -134,7 +139,7 @@ public sealed class EmbeddedController : IDisposable
             WritePort(DataPort, value);
             WaitStatus(StatusIbf, expectSet: false);
         }
-        catch (TimeoutException)
+        catch (TimeoutException ex) when (ex is not EcBusyException)
         {
             // Leave the bus idle for whoever goes next (us retrying, or Windows).
             SettleAfterTimeout();
@@ -203,13 +208,25 @@ public sealed class EmbeddedController : IDisposable
     // Wait for the controller to go idle before a transaction. A pending output byte is
     // most likely the reply Windows' own EC driver is waiting for (e.g. a battery read);
     // taking it makes Windows time out (ACPI event 13) or read garbage, and a garbage
-    // battery charge shuts the machine down as "critical battery". So leave it for Windows
-    // and only drain a byte nobody has collected for a while (a stale one of ours).
+    // battery charge shuts the machine down as "critical battery". So when the bus is not
+    // idle within StatusTimeout, skip this operation (EcBusyException; the caller tries again
+    // later) and only drain a byte that has been sitting there for StaleAfter.
     private void Resync()
     {
         var sw = Stopwatch.StartNew();
         while (sw.Elapsed < StatusTimeout)
-            if ((ReadPort(CommandPort) & (StatusObf | StatusIbf)) == 0) return;
+        {
+            if ((ReadPort(CommandPort) & (StatusObf | StatusIbf)) == 0)
+            {
+                _busySince = null;
+                return;
+            }
+        }
+        var now = _clock.Elapsed;
+        _busySince ??= now;
+        if (now - _busySince < StaleAfter)
+            throw new EcBusyException("The EC bus is busy (another driver's transaction); the operation was skipped.");
+        _busySince = null;
         for (int i = 0; i < 32 && (ReadPort(CommandPort) & StatusObf) != 0; i++)
             _ = ReadPort(DataPort);
     }
@@ -247,3 +264,6 @@ public sealed class EmbeddedController : IDisposable
 
     public void Dispose() => _session.Dispose();
 }
+
+/// <summary>The EC bus was not idle before a transaction, so nothing was sent; try again later.</summary>
+public sealed class EcBusyException(string message) : TimeoutException(message);

@@ -251,6 +251,10 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                     hardware.SetTarget(fan, want);
                     _lastWrite[(int)fan] = now;
                 }
+                catch (FanBusyException)
+                {
+                    // Nothing was sent, so not a failure; the cached target is unchanged and a later tick writes it.
+                }
                 catch (FanWriteException ex)
                 {
                     failedThisTick = true;
