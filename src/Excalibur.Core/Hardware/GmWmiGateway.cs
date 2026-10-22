@@ -28,6 +28,9 @@ public sealed class GmWmiGateway
         lock (_gate)
         {
             // The handler reads the EC through Windows' driver, so a collision stalls this call.
+            // Taking the EC lock keeps our other process's raw EC access out meanwhile; when it is
+            // not free within 2 s the call goes ahead anyway (sensors and fan control must not stop).
+            using var ecLock = EcLock.TryAcquire();
             var sw = Stopwatch.StartNew();
             try
             {

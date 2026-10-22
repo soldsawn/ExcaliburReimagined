@@ -25,7 +25,6 @@ public sealed class EmbeddedController : IDisposable
     private const byte CmdRead = 0x80;   // RD_EC
     private const byte CmdWrite = 0x81;  // WR_EC
 
-    private const string EcMutexName = @"Global\Access_EC"; // -> \BaseNamedObjects\Access_EC
     // A healthy EC completes a read in well under a millisecond; this ceiling only
     // bounds how long we wait on a register that never responds.
     private static readonly TimeSpan StatusTimeout = TimeSpan.FromMilliseconds(100);
@@ -241,34 +240,4 @@ public sealed class EmbeddedController : IDisposable
     }
 
     public void Dispose() => _session.Dispose();
-
-    /// <summary>RAII holder for the global EC mutex.</summary>
-    private readonly struct EcLock : IDisposable
-    {
-        private readonly Mutex _mutex;
-
-        private EcLock(Mutex mutex) => _mutex = mutex;
-
-        public static EcLock Acquire()
-        {
-            var mutex = new Mutex(false, EcMutexName);
-            bool owned;
-            var sw = Stopwatch.StartNew();
-            try { owned = mutex.WaitOne(TimeSpan.FromSeconds(2)); }
-            catch (AbandonedMutexException) { owned = true; } // prior owner crashed; we hold it now
-            SlowOps.Check("ec lock wait", sw.Elapsed);
-            if (!owned)
-            {
-                mutex.Dispose();
-                throw new TimeoutException("Could not acquire the system EC lock (Access_EC) within 2s.");
-            }
-            return new EcLock(mutex);
-        }
-
-        public void Dispose()
-        {
-            _mutex.ReleaseMutex();
-            _mutex.Dispose();
-        }
-    }
 }
