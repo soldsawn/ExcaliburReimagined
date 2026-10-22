@@ -43,7 +43,9 @@ internal static class Program
         if (!first && snapshot is null) return;
 
         ApplicationConfiguration.Initialize();
+        TrayLog.Write("tray: started");
         System.Windows.Forms.Application.Run(new TrayContext(sim, snapshot));
+        TrayLog.Write("tray: message loop ended");
     }
 
     /// <summary>Kept out of <see cref="Main"/> so tray mode never JIT-compiles anything that loads WPF.</summary>

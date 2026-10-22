@@ -105,7 +105,7 @@ internal sealed class TrayContext : ApplicationContext
         _menu.Items.Add(open);
         _menu.Items.Add("Hızlı panel", null, (_, _) => _panel.Popup());
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add(new ToolStripMenuItem("Çıkış", null, (_, _) => _ = ExitAsync())
+        _menu.Items.Add(new ToolStripMenuItem("Çıkış", null, (_, _) => { TrayLog.Write("exit: clicked"); _ = ExitAsync(); })
         {
             ToolTipText = "Simgeyi, açık pencereyi ve arka plandaki fan servisini kapatır; fanları bilgisayarın kendi düzenine bırakır.",
         });
@@ -117,7 +117,9 @@ internal sealed class TrayContext : ApplicationContext
             else if (item is ToolStripSeparator) { item.AutoSize = false; item.Height = 2 * ThemedMenuRenderer.CardPadding + 6; }
         }
         _menu.Padding = new Padding(0, ThemedMenuRenderer.CardPadding + 1, 0, ThemedMenuRenderer.CardPadding + 8);
-        _menu.Opening += (_, _) => { ApplyMenuTheme(); RenderMenu(); _ = RefreshProfilesAsync(); };
+        _menu.Opening += (_, _) => { TrayLog.Write("menu: opening"); ApplyMenuTheme(); RenderMenu(); _ = RefreshProfilesAsync(); };
+        _menu.ItemClicked += (_, e) => TrayLog.Write($"menu: item clicked '{e.ClickedItem?.Text}'");
+        _menu.Closed += (_, e) => TrayLog.Write($"menu: closed ({e.CloseReason})");
         _catalog.Changed += RebuildProfileItems;
     }
 
@@ -204,12 +206,18 @@ internal sealed class TrayContext : ApplicationContext
         try
         {
             var send = _client.SendAsync(new FanRequest("shutdown", Source: FanSource.Tray));
-            await Task.WhenAny(send, Task.Delay(TimeSpan.FromSeconds(3)));
+            var done = await Task.WhenAny(send, Task.Delay(TimeSpan.FromSeconds(3)));
+            TrayLog.Write(done == send ? $"exit: shutdown sent ({send.Status})" : "exit: no answer in 3 s");
         }
-        catch { }
+        catch (Exception ex) { TrayLog.Write($"exit: shutdown failed ({ex.GetType().Name})"); }
         // Whatever goes wrong closing the window, the icon must still go (a lost exception here used to keep it open).
         try { AppInstances.CloseMainWindow(); }
-        finally { ExitThread(); }
+        catch (Exception ex) { TrayLog.Write($"exit: closing the window failed ({ex.GetType().Name}: {ex.Message})"); throw; }
+        finally
+        {
+            TrayLog.Write("exit: ExitThread");
+            ExitThread();
+        }
     }
 
     private async Task SendAsync(FanRequest request)
@@ -380,6 +388,7 @@ internal sealed class TrayContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        TrayLog.Write("exit: ExitThreadCore");
         _timer.Stop();
         _tray.Visible = false;
         _tray.Dispose();
@@ -390,5 +399,6 @@ internal sealed class TrayContext : ApplicationContext
         _refresh.Dispose();
         _userSettings.Dispose();
         base.ExitThreadCore();
+        TrayLog.Write("exit: ExitThreadCore done");
     }
 }
