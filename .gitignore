@@ -36,3 +36,6 @@ CLAUDE.md
 
 # Windows event log dump from the shutdown investigation (personal)
 kapanma/
+
+# local issue tracker / specs (personal, like docs/)
+.scratch/
