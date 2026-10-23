@@ -31,6 +31,9 @@ using Excalibur.Core.Hardware;
 //                     never touches the EC). Saved to analysis/ec/msr-<timestamp>.txt.
 //   cputemp [s]       CPU package temperature from MSR 0x1A2/0x1B1 every 250 ms for s seconds (default 120),
 //                     READ-ONLY, never the EC or WMI (safe beside the running service). Saved to analysis/ec.
+//   led-test          Keyboard light (WMI SET 0x0100, never the EC): steps through colours, zones and
+//                     effects every 4 s so you can note what the keyboard shows, then puts back what
+//                     GET 0x0100 reported at the start. Asks for EVET. Saved to analysis/ec.
 //   msr-test          Writes lower CPU limits (PL1 15 W, PL2 20 W) to MSR 0x610 for 40 s while
 //                     printing the package power, then restores the original. Asks for EVET.
 //
@@ -60,6 +63,8 @@ if (!IsElevated())
     Console.Error.WriteLine("This probe needs an elevated (Run as administrator) shell to reach PawnIO.");
     return 1;
 }
+if (mode.Equals("led-test", StringComparison.OrdinalIgnoreCase))
+    return LedTest();
 // Before the EC module check and the WMI gateway: this mode touches neither.
 if (mode.Equals("cputemp", StringComparison.OrdinalIgnoreCase))
     return CpuTemp(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools", "pawnio-modules", "IntelMSR.bin"),
@@ -812,6 +817,75 @@ static int MsrTest(string intelMsrPath)
     for (int i = 0; i < 10; i++) { Thread.Sleep(1000); Say($"{DateTime.Now:HH:mm:ss}  after    {Power()}"); }
 
     string file = $"msr-test-{Stamp()}.txt";
+    Save(file, log.ToString());
+    Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
+    return 0;
+}
+
+// --- led-test: the keyboard light through WMI 0x0100 only (the firmware's own method; no EC port access). ---
+static int LedTest()
+{
+    var light = new Excalibur.Core.Lighting.KeyboardLight(new GmWmiGateway());
+    var log = new StringBuilder();
+    void Say(string s) { Console.WriteLine(s); log.AppendLine(s); }
+
+    uint before = light.ReadRaw();
+    var start = Excalibur.Core.Lighting.LightSetting.Decode(before);
+    Say($"# keyboard light test  {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+    Say($"GET 0x0100 a2 = 0x{before:X8} ({start}), key brightness (0x0200 a6) = {light.ReadKeyBrightness()}");
+    Console.WriteLine();
+    Console.WriteLine("This changes only the keyboard light, one step every 4 s. Note what the keyboard shows at each step.");
+    Console.Write("Type EVET to continue: ");
+    if (!string.Equals(Console.ReadLine()?.Trim(), "EVET", StringComparison.Ordinal))
+    {
+        Console.WriteLine("Cancelled. Nothing was written.");
+        return 0;
+    }
+
+    bool cancelled = false;
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancelled = true; };
+    static Excalibur.Core.Lighting.LightSetting S(Excalibur.Core.Lighting.LightEffect e, int b, int r, int g, int bl) => new(e, b, r, g, bl);
+    var st = Excalibur.Core.Lighting.LightEffect.Static;
+    var K = Excalibur.Core.Lighting.LightZone.Keyboard;
+    (string Label, (Excalibur.Core.Lighting.LightZone Zone, Excalibur.Core.Lighting.LightSetting Setting)[] Sends)[] steps =
+    [
+        ("1 whole keyboard RED, brightness 2", [(K, S(st, 2, 255, 0, 0))]),
+        ("2 whole keyboard GREEN", [(K, S(st, 2, 0, 255, 0))]),
+        ("3 whole keyboard BLUE", [(K, S(st, 2, 0, 0, 255))]),
+        ("4 zones: zone 5 RED, zone 4 GREEN, zone 3 BLUE (which is left/middle/right?)",
+            [(Excalibur.Core.Lighting.LightZone.KeyboardLeft, S(st, 2, 255, 0, 0)),
+             (Excalibur.Core.Lighting.LightZone.KeyboardMiddle, S(st, 2, 0, 255, 0)),
+             (Excalibur.Core.Lighting.LightZone.KeyboardRight, S(st, 2, 0, 0, 255))]),
+        ("5 whole keyboard WHITE, brightness 1", [(K, S(st, 1, 255, 255, 255))]),
+        ("6 whole keyboard WHITE, brightness 0", [(K, S(st, 0, 255, 255, 255))]),
+        ("7 BREATHING cyan, brightness 2", [(K, S(Excalibur.Core.Lighting.LightEffect.Breathing, 2, 0, 255, 255))]),
+        ("8 COLOUR CYCLE, brightness 2", [(K, S(Excalibur.Core.Lighting.LightEffect.ColorCycle, 2, 255, 0, 128))]),
+        ("9 OFF", [(K, Excalibur.Core.Lighting.LightSetting.Off)]),
+    ];
+    try
+    {
+        foreach (var (label, sends) in steps)
+        {
+            if (cancelled) break;
+            foreach (var (zone, setting) in sends) light.Set(zone, setting);
+            Say($"{DateTime.Now:HH:mm:ss}  {label}  -> GET 0x0100 a2 = 0x{light.ReadRaw():X8}, key brightness {light.ReadKeyBrightness()}");
+            Thread.Sleep(label.StartsWith('7') || label.StartsWith('8') ? 6000 : 4000);
+        }
+    }
+    finally
+    {
+        try
+        {
+            // GET's answer decodes as a setting on the stock software's side (alpha + RGB); fall back to static white.
+            var restore = start.Validate().Count == 0 ? start : S(st, Math.Max(1, light.ReadKeyBrightness()), 255, 255, 255);
+            light.Forget();
+            light.Set(K, restore);
+            Say($"{DateTime.Now:HH:mm:ss}  restored {restore}  -> GET 0x0100 a2 = 0x{light.ReadRaw():X8}");
+        }
+        catch (Exception ex) { Say($"!! RESTORE FAILED ({ex.Message}). The keyboard light key still works."); }
+    }
+
+    string file = $"led-test-{Stamp()}.txt";
     Save(file, log.ToString());
     Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
     return 0;
