@@ -49,6 +49,8 @@ public sealed class LightingManager(KeyboardLight light, ServiceSettingsStore se
         lock (_gate)
         {
             if (settings.Current.Lighting is not { } l) return;
+            // One line per (gathered) key press, to tell light traffic apart in an ACPI 13 investigation.
+            log?.Invoke($"light key: level {brightness}");
             _idle = false;
             if (l.Brightness != brightness) settings.Update(s => s with { Lighting = l with { Brightness = brightness } }, out _);
             Apply();
