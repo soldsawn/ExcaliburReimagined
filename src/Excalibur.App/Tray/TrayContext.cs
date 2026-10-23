@@ -183,7 +183,11 @@ internal sealed class TrayContext : ApplicationContext
         try
         {
             var r = await _client.SendAsync(new FanRequest("status"));
-            if (r.Status is { } s) Apply(s);
+            if (r.Status is { } s)
+            {
+                Apply(s);
+                await LightIdle.SyncAsync(s, _client);
+            }
             // The profile list changes rarely (the window edits it); every tenth poll, and when the menu opens, is plenty.
             if (_polls++ % 10 == 0) await RefreshProfilesAsync();
         }

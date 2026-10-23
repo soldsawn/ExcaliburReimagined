@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Excalibur.Core.Fan;
+using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
 
 namespace Excalibur.Core.Settings;
@@ -71,13 +72,16 @@ public sealed record ServiceSettings
     /// </summary>
     public IReadOnlyList<string> TrustedEcVersions { get; init; } = [];
 
+    /// <summary>The keyboard light (A5); null = never chosen, the service leaves the light alone.</summary>
+    public KeyboardLighting? Lighting { get; init; }
+
     /// <summary>The shape of an EC version string (6 ASCII letters or digits, e.g. P008B0).</summary>
     public static bool IsEcVersion(string? v) => v is { Length: 6 } && v.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z');
 
     // Value equality over the lists (a record would compare them by reference).
     public bool Equals(ServiceSettings? other) =>
         other is not null && Version == other.Version && Profile == other.Profile && History == other.History
-        && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit
+        && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit && Lighting == other.Lighting
         && CustomProfiles.SequenceEqual(other.CustomProfiles) && TrustedEcVersions.SequenceEqual(other.TrustedEcVersions)
         && (Slots is null ? other.Slots is null : other.Slots is not null && Slots.SequenceEqual(other.Slots));
 
@@ -119,6 +123,7 @@ public sealed record ServiceSettings
         if (PowerAutomation.OnBattery.Mode is { } bm && bm != Power.PowerMode.Office) errors.Add("only Office can be used on battery");
         if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
         foreach (var v in TrustedEcVersions.Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
+        if (Lighting is { } lighting) errors.AddRange(lighting.Validate());
         return errors;
     }
 
@@ -156,6 +161,7 @@ public sealed record ServiceSettings
         var automation = ReadAutomation(node, known, problems);
         var cpuLimit = ReadCpuLimit(node, problems);
         var trusted = ReadTrustedEcVersions(node, problems);
+        var lighting = ReadLighting(node, problems);
 
         int version = Get(node, "version", 1, problems);
         if (version > CurrentVersion) problems.Add($"settings version {version} is newer than this build ({CurrentVersion}); unknown fields ignored");
@@ -163,7 +169,7 @@ public sealed record ServiceSettings
         return (new ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
-            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted,
+            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted, Lighting = lighting,
         }, problems);
     }
 
@@ -188,6 +194,18 @@ public sealed record ServiceSettings
         if (Enum.TryParse(text, ignoreCase: true, out PowerMode mode) && Enum.IsDefined(mode)) return mode;
         problems.Add($"unknown power mode '{text}'; ignored");
         return null;
+    }
+
+    private static KeyboardLighting? ReadLighting(JsonObject node, List<string> problems)
+    {
+        var token = node.FirstOrDefault(kv => string.Equals(kv.Key, "lighting", StringComparison.OrdinalIgnoreCase)).Value;
+        if (token is null) return null;
+        KeyboardLighting? lighting = null;
+        try { lighting = token.Deserialize<KeyboardLighting>(Json); }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException) { }
+        // A bad light setting is dropped: the light is left as the firmware has it.
+        if (lighting is null || lighting.Validate().Count > 0) { problems.Add("the keyboard light setting is unusable; the light is left alone"); return null; }
+        return lighting;
     }
 
     private static CpuLimit? ReadCpuLimit(JsonObject node, List<string> problems)

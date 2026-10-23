@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Excalibur.Core.History;
+using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
 using Excalibur.Core.Settings;
 
@@ -23,9 +24,11 @@ public static class FanPipe
     ///    response Code cpu_limit_invalid / cpu_limit_failed.
     /// 7: + trialEc (user-approved trial of an unverified EC firmware; response Code trial_unavailable), status Trial,
     ///    settings TrustedEcVersions.
+    /// 8: + setLighting(lighting) (keyboard light; stored and shown), setLightIdle(idle) (the tray saw no input for the
+    ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 7;
+    public const int ProtocolVersion = 8;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -52,13 +55,15 @@ public static class FanSource
 /// Commands: status, events, setProfile(profile), setManual(cpu, gpu, minutes), release, clearFault,
 /// getSettings, updateSettings(settings), history(from, to, maxPoints), setPowerMode(powerMode),
 /// shutdown (stops the guardian and this service; fans go back to the EC),
-/// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), trialEc.
+/// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), trialEc,
+/// setLighting(lighting), setLightIdle(idle).
 /// <see cref="Source"/> is one of <see cref="FanSource"/>.
 /// </summary>
 public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = null, int? Gpu = null, int? Minutes = null,
     string? Source = null, ServiceSettingsPatch? Settings = null,
     DateTimeOffset? From = null, DateTimeOffset? To = null, int? MaxPoints = null,
-    PowerMode? PowerMode = null, CustomProfile? Definition = null, IReadOnlyList<string>? Names = null, CpuLimit? CpuLimit = null);
+    PowerMode? PowerMode = null, CustomProfile? Definition = null, IReadOnlyList<string>? Names = null, CpuLimit? CpuLimit = null,
+    KeyboardLighting? Lighting = null, bool? Idle = null);
 
 /// <param name="Code">A stable machine-readable reason when <paramref name="Ok"/> is false and the UI should word it itself
 /// (power_battery, power_usbc, power_failed); <paramref name="Error"/> stays an English sentence for logs.</param>
@@ -124,7 +129,9 @@ public sealed record FanStatusDto(
     int? CpuCurvePercent = null,
     int? GpuCurvePercent = null,
     PowerStatusDto? Power = null,
-    EcTrialStatus? Trial = null)
+    EcTrialStatus? Trial = null,
+    int LightIdleOffMinutes = 0,
+    bool LightIdle = false)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {

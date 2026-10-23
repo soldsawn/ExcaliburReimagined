@@ -5,6 +5,7 @@ using System.Text.Json;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
 using Excalibur.Core.History;
+using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
 using Excalibur.Core.Settings;
 
@@ -22,6 +23,7 @@ public sealed class FanPipeServer(
     ServiceSettingsStore settings,
     HistoryRecorder history,
     PowerManager power,
+    LightingManager lighting,
     ProfileSwitcher switcher,
     IHostApplicationLifetime lifetime,
     FanFileLog fileLog,
@@ -181,6 +183,15 @@ public sealed class FanPipeServer(
                     try { loop.StartEcTrial(now); }
                     catch (InvalidOperationException ex) { return new FanResponse(false, ex.Message, Status: Status(), Code: "trial_unavailable"); }
                     break;
+                case "setlighting":
+                    if (req.Lighting is null) return new FanResponse(false, "setLighting needs lighting");
+                    var lightErrors = lighting.Set(req.Lighting);
+                    if (lightErrors.Count > 0) return new FanResponse(false, string.Join("; ", lightErrors));
+                    return new FanResponse(true, Status: Status(), Settings: settings.Current);
+                case "setlightidle":
+                    if (req.Idle is not { } idle) return new FanResponse(false, "setLightIdle needs idle");
+                    lighting.SetIdle(idle);
+                    break;
                 case "clearfault":
                     loop.ClearFault(now);
                     break;
@@ -267,5 +278,10 @@ public sealed class FanPipeServer(
     private void SwitchProfile(FanProfile profile, DateTimeOffset now, string? source) => switcher.Switch(profile, now, source);
 
     private FanStatusDto Status() =>
-        FanStatusDto.From(loop.Status, runtime.Simulated, runtime.StartedAt) with { Power = PowerStatusDto.From(power.Status) };
+        FanStatusDto.From(loop.Status, runtime.Simulated, runtime.StartedAt) with
+        {
+            Power = PowerStatusDto.From(power.Status),
+            LightIdleOffMinutes = settings.Current.Lighting?.IdleOffMinutes ?? 0,
+            LightIdle = lighting.Idle,
+        };
 }

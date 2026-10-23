@@ -2,6 +2,7 @@ using System.Security.Principal;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Hardware;
 using Excalibur.Core.History;
+using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
 using Excalibur.Core.Settings;
 using Excalibur.FanService;
@@ -48,17 +49,20 @@ PawnIoCpuPowerRegisters? cpuRegisters = null;
 Timer? cpuSampler = null;
 IFanHardware hardware;
 IPowerHardware powerHardware;
+ISmiChannel firmware;
 if (fake is not null)
 {
     hardware = fake;
     powerHardware = new SimulatedPowerHardware();
+    firmware = new SimulatedSmiChannel();
 }
 else
 {
     string module = Path.Combine(AppContext.BaseDirectory, "pawnio-modules", "LpcACPIEC.bin");
     ec = EmbeddedController.Open(module);
-    // One gateway for fans and power: the firmware has a single response buffer.
+    // One gateway for fans, power and light: the firmware has a single response buffer.
     var gateway = new GmWmiGateway();
+    firmware = gateway;
     // CPU power, limits and temperature; without the modules the status has no CPU watts, CPU limits cannot be set
     // and the CPU temperature comes from the slower WMI block.
     cpuRegisters = PawnIoCpuPowerRegisters.TryOpen(Path.Combine(AppContext.BaseDirectory, "pawnio-modules"));
@@ -104,9 +108,11 @@ builder.Services.AddSingleton(sp =>
     return new PowerManager(powerHardware, settingsStore, (profile, source) => switcher.Switch(profile, source),
         m => fileLog.Write(DateTimeOffset.Now, m));
 });
+builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
 builder.Services.AddHostedService<PowerWorker>();
 builder.Services.AddHostedService<FanPipeServer>();
+builder.Services.AddHostedService<LightingWorker>();
 
 using var host = builder.Build();
 

@@ -34,6 +34,8 @@ using Excalibur.Core.Hardware;
 //   led-test          Keyboard light (WMI SET 0x0100, never the EC): steps through colours, zones and
 //                     effects every 4 s so you can note what the keyboard shows, then puts back what
 //                     GET 0x0100 reported at the start. Asks for EVET. Saved to analysis/ec.
+//   led-zones         Lights one keyboard zone at a time (5, 4, 3) for 6 s each, the rest off, then turns
+//                     the light off. Tells which zone number is left, middle and right. Asks for EVET.
 //   msr-test          Writes lower CPU limits (PL1 15 W, PL2 20 W) to MSR 0x610 for 40 s while
 //                     printing the package power, then restores the original. Asks for EVET.
 //
@@ -65,6 +67,8 @@ if (!IsElevated())
 }
 if (mode.Equals("led-test", StringComparison.OrdinalIgnoreCase))
     return LedTest();
+if (mode.Equals("led-zones", StringComparison.OrdinalIgnoreCase))
+    return LedZones();
 // Before the EC module check and the WMI gateway: this mode touches neither.
 if (mode.Equals("cputemp", StringComparison.OrdinalIgnoreCase))
     return CpuTemp(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools", "pawnio-modules", "IntelMSR.bin"),
@@ -888,6 +892,37 @@ static int LedTest()
     string file = $"led-test-{Stamp()}.txt";
     Save(file, log.ToString());
     Console.WriteLine($"Saved: {Path.Combine(OutDir(), file)}");
+    return 0;
+}
+
+// --- led-zones: one zone lit at a time, so its place on the keyboard can be named. ---
+static int LedZones()
+{
+    var light = new Excalibur.Core.Lighting.KeyboardLight(new GmWmiGateway());
+    Console.WriteLine("Each step lights ONE keyboard zone white for 6 s; the others are off. Say where it is (left/middle/right).");
+    Console.Write("Type EVET to continue: ");
+    if (!string.Equals(Console.ReadLine()?.Trim(), "EVET", StringComparison.Ordinal))
+    {
+        Console.WriteLine("Cancelled. Nothing was written.");
+        return 0;
+    }
+    var white = new Excalibur.Core.Lighting.LightSetting(Excalibur.Core.Lighting.LightEffect.Static, 2, 255, 255, 255);
+    var zones = new[] { Excalibur.Core.Lighting.LightZone.KeyboardLeft, Excalibur.Core.Lighting.LightZone.KeyboardMiddle, Excalibur.Core.Lighting.LightZone.KeyboardRight };
+    try
+    {
+        for (int i = 0; i < zones.Length; i++)
+        {
+            // Off at brightness 2 and the lit zone last: brightness looks keyboard-wide (last command wins, 2026-10-23).
+            var dark = new Excalibur.Core.Lighting.LightSetting(Excalibur.Core.Lighting.LightEffect.Off, 2, 0, 0, 0);
+            light.Forget();
+            foreach (var z in zones.Where(z => z != zones[i])) light.Set(z, dark);
+            light.Set(zones[i], white);
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss}  STEP {i + 1}: zone {(int)zones[i]} is lit");
+            Thread.Sleep(6000);
+        }
+    }
+    finally { light.Set(Excalibur.Core.Lighting.LightZone.Keyboard, Excalibur.Core.Lighting.LightSetting.Off); }
+    Console.WriteLine("Done; the light is off (the light key turns it back on).");
     return 0;
 }
 

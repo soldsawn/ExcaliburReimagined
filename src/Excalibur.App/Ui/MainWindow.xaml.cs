@@ -37,11 +37,7 @@ public partial class MainWindow : Window
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
             new("display", "Ekran", "", () => new DisplayPage()),
-            new("lighting", "Aydınlatma", "\uE765", () => InfoPage.Planned("Aydınlatma",
-                "Klavyenin üç bölgeli renkli ışığı.",
-                ["Renk, efekt (sabit, nefes, renk döngüsü) ve parlaklık",
-                 "Sıcaklığa göre renk: serinken mavi, ısınınca kırmızı",
-                 "Klavyeye bir süre dokunulmayınca ışığı söndürme"])),
+            new("lighting", "Aydınlatma", "\uE765", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
             new("settings", "Ayarlar", "\uE713", () => InfoPage.Settings(_connection), Bottom: true),
         ];
@@ -124,7 +120,7 @@ public partial class MainWindow : Window
         timer.Tick += async (_, _) =>
         {
             timer.Stop();
-            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("display", 5), ("automation", 7), ("settings", -1) })
+            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("display", 5), ("lighting", 6), ("automation", 7), ("settings", -1) })
             {
                 var button = index >= 0 ? (RadioButton)Nav.Children[index] : (RadioButton)NavBottom.Children[0];
                 button.IsChecked = true;
