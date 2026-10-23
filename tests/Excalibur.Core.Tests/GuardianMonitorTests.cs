@@ -121,6 +121,14 @@ public class GuardianMonitorTests
     }
 
     [Fact]
+    public void A_gpu_fan_following_the_cpu_at_90_is_not_slow()
+    {
+        // 2026-10-23 12:01:06: the hot rule had just ended, GPU fan at 90% read 89% from its RPM, guardian still saw 92 C.
+        for (int t = 0; t <= 20; t += 2)
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat(), Sensors(cpuC: 93, gpuC: 57, cpu: 95, gpu: 89), true, S(t)).Action);
+    }
+
+    [Fact]
     public void Heat_while_the_ec_runs_the_fans_is_not_the_services_fault()
     {
         for (int t = 0; t <= 20; t += 2)

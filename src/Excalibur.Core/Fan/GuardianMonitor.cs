@@ -20,8 +20,12 @@ public sealed record GuardianOptions
     /// from the RPM, which trails a new target by a few seconds, so this spans about 8 s.
     /// </summary>
     public int HotEvaluations { get; init; } = 5;
-    /// <summary>When hot, a fan running below this percent while the service holds the fans counts as the service misbehaving.</summary>
-    public int HotMinPercent { get; init; } = 90;
+    /// <summary>
+    /// When hot, a fan running below this percent while the service holds the fans counts as the service misbehaving.
+    /// Not 90: when the hot rule ends the GPU fan follows the CPU at 90%, which its RPM reads as 89%, while the
+    /// guardian's slower sensor still sees 90+ C (7 false resets on 2026-10-23).
+    /// </summary>
+    public int HotMinPercent { get; init; } = 80;
     /// <summary>The guardian cannot see the targets, so after overriding a live service it waits this long before doing it again.</summary>
     public TimeSpan HotCooldown { get; init; } = TimeSpan.FromSeconds(60);
 }

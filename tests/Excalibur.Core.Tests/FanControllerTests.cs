@@ -61,13 +61,27 @@ public class FanControllerTests
     }
 
     [Fact]
-    public void Large_drop_ramps_down_no_faster_than_the_slew_limit()
+    public void A_dip_shorter_than_the_fall_delay_keeps_the_fan()
+    {
+        // 2026-10-23 11:44, Balanced under load: 72-75 C with 3-5 s dips to 62-64 C took the fan from 97% to 82% and back.
+        _c.Decide(Snap(75, 45), Balanced, T0);
+        int[] temps = [64, 62, 62, 64, 66, 75, 74, 63, 62, 64];
+        for (int t = 0; t < temps.Length; t++)
+            Assert.Equal(P(100), _c.Decide(Snap(temps[t], 45), Balanced, T0.AddSeconds(t + 1)).Cpu);
+    }
+
+    [Fact]
+    public void Large_drop_ramps_down_no_faster_than_the_slew_limit_once_it_has_lasted_the_fall_delay()
     {
         _c.Decide(Snap(75, 45), Balanced, T0);
-        var d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(1));
+        int fall = (int)FanController.FallDelay.TotalSeconds;
+        FanDecision d = default;
+        for (int i = 1; i <= fall; i++)
+            Assert.Equal(P(100), (d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(i))).Cpu);
+        d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(fall + 1));
         Assert.Equal(P(98), d.Cpu); // 100 - 2.5, rounded
 
-        for (int i = 2; i <= 60; i++) d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(i));
+        for (int i = fall + 2; i <= 80; i++) d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(i));
         // Settles at the curve read HysteresisC hotter: Balanced(53) = 36.
         Assert.Equal(P(Balanced.CpuCurve.Evaluate(50 + FanController.HysteresisC)), d.Cpu);
     }

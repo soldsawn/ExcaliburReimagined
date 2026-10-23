@@ -40,9 +40,11 @@ public enum FanReason : byte
 ///   <item>rising demand is applied once it has lasted <see cref="RiseDelay"/>, and then only as far as the
 ///   lowest demand in that time: a 1-2 s burst (Windows waking up, 57 -> 66 C and back every 15-20 s,
 ///   2026-10-23) used to take the fan from 52% to 80% and back. The first decision, Cooling Boost and the
-///   safety policy are not delayed; falling demand is evaluated
-///   <see cref="HysteresisC"/> hotter and may drop at most <see cref="MaxDropPerSecond"/>
-///   per second, so the fan does not hunt around a curve point;</item>
+///   safety policy are not delayed;</item>
+///   <item>falling demand is evaluated <see cref="HysteresisC"/> hotter, starts only once it has lasted
+///   <see cref="FallDelay"/> and may drop at most <see cref="MaxDropPerSecond"/> per second: under load the
+///   CPU dips for 3-5 s between bursts (72-75 -> 62-64 C, 2026-10-23), which took the fan from 97% to 82%
+///   and back every few seconds. Fast up, slow down, as fan control tools usually do;</item>
 ///   <item>Cooling Boost (Fn+1) means both fans at 100% (user decision, docs/07).</item>
 /// </list>
 /// </summary>
@@ -52,12 +54,13 @@ public sealed class FanController
     public const int HysteresisC = 3;
     public const double MaxDropPerSecond = 2.5;
     public static readonly TimeSpan RiseDelay = TimeSpan.FromSeconds(3);
+    public static readonly TimeSpan FallDelay = TimeSpan.FromSeconds(10);
 
     // Smoothed level per fan, null until the first decision (or after EcAuto).
     private readonly double?[] _level = new double?[2];
     private readonly FanReason[] _reason = new FanReason[2];
-    // Each fan's recent demands, newest last, kept for RiseDelay.
-    private readonly Queue<(DateTimeOffset At, int Percent, FanReason Reason)>[] _recent = [new(), new()];
+    // Each fan's recent demands (and the demand read HysteresisC hotter), newest last, kept for FallDelay.
+    private readonly Queue<(DateTimeOffset At, int Percent, FanReason Reason, int Relaxed)>[] _recent = [new(), new()];
 
     /// <summary>Why the last <see cref="Decide"/> chose this fan's percent (before the safety policy).</summary>
     public FanReason ReasonOf(FanId fan) => _reason[(int)fan];
@@ -98,8 +101,8 @@ public sealed class FanController
         var (demand, demandReason) = Demand(fan, s, profile, 0);
         int i = (int)fan;
         var recent = _recent[i];
-        recent.Enqueue((now, demand, demandReason));
-        while (recent.Count > 1 && now - recent.Peek().At > RiseDelay) recent.Dequeue();
+        recent.Enqueue((now, demand, demandReason, Demand(fan, s, profile, HysteresisC).Percent));
+        while (recent.Count > 1 && now - recent.Peek().At > FallDelay) recent.Dequeue();
         if (_level[i] is not { } level)
         {
             _level[i] = demand;
@@ -109,7 +112,7 @@ public sealed class FanController
         if (demand >= level)
         {
             // Rise only to what every demand of the last RiseDelay asked for, once they span it.
-            var lowest = recent.MinBy(r => r.Percent);
+            var lowest = recent.Where(r => now - r.At <= RiseDelay).MinBy(r => r.Percent);
             if (now - recent.Peek().At >= RiseDelay - TimeSpan.FromMilliseconds(500) && lowest.Percent > level)
             {
                 _level[i] = lowest.Percent;
@@ -117,8 +120,9 @@ public sealed class FanController
             }
             return (int)Math.Round(_level[i]!.Value, MidpointRounding.AwayFromZero);
         }
-        // Falling: only as far as the curve says when read HysteresisC hotter, and no faster than the slew limit.
-        int relaxed = Math.Min((int)Math.Round(level), Demand(fan, s, profile, HysteresisC).Percent);
+        // Falling: only as far as the curve read HysteresisC hotter has said for all of FallDelay, and no
+        // faster than the slew limit.
+        int relaxed = Math.Min((int)Math.Round(level), recent.Max(r => r.Relaxed));
         double next = Math.Max(relaxed, level - MaxDropPerSecond * seconds);
         _level[i] = next;
         int percent = (int)Math.Round(next, MidpointRounding.AwayFromZero);

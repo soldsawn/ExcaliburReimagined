@@ -31,7 +31,8 @@ internal sealed class CurveChart : FrameworkElement
     private HistorySeries? _trail;
     private Point? _mouse;
     private Rect _plot;
-    // What the dots show: eased toward the latest reading, so they glide instead of jumping every poll.
+    // What the dots show: eased toward the latest reading, so they glide instead of jumping every poll. The
+    // temperature eases slower: under load the CPU jumps 10 C for a few seconds, and a fast dot darted left and right.
     private (double C, double P)? _shownCpu, _shownGpu;
     private (double C, double P)? _targetCpu, _targetGpu;
     private (double C, double P)[] _cpuTrail = [], _gpuTrail = [];
@@ -54,16 +55,16 @@ internal sealed class CurveChart : FrameworkElement
         double dt = (now - _lastFrame).TotalSeconds;
         if (dt < 0.033) return;
         _lastFrame = now;
-        double k = 1 - Math.Exp(-Math.Min(dt, 0.2) / 0.35);
-        _shownCpu = Ease(_shownCpu, _targetCpu, k);
-        _shownGpu = Ease(_shownGpu, _targetGpu, k);
+        double kc = 1 - Math.Exp(-Math.Min(dt, 0.2) / 1.2), kp = 1 - Math.Exp(-Math.Min(dt, 0.2) / 0.35);
+        _shownCpu = Ease(_shownCpu, _targetCpu, kc, kp);
+        _shownGpu = Ease(_shownGpu, _targetGpu, kc, kp);
         if (IsVisible) InvalidateVisual();
     }
 
-    private static (double C, double P)? Ease((double C, double P)? shown, (double C, double P)? target, double k) =>
+    private static (double C, double P)? Ease((double C, double P)? shown, (double C, double P)? target, double kc, double kp) =>
         target is not { } t ? null
         : shown is not { } s ? t
-        : (s.C + (t.C - s.C) * k, s.P + (t.P - s.P) * k);
+        : (s.C + (t.C - s.C) * kc, s.P + (t.P - s.P) * kp);
 
     public void Show(FanProfile? profile, FanStatusDto? status)
     {
