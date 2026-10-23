@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.ServiceProcess;
 using Excalibur.Core.Fan;
+using Excalibur.Core.Hardware;
 
 namespace Excalibur.FanGuardian;
 
@@ -54,7 +55,8 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
             _wasAlive = verdict.ServiceAlive;
         }
 
-        if (verdict.Action == GuardianAction.ResetToAuto)
+        // Right after Windows starts the fans are on EC automatic anyway; no raw EC write then (EcQuiet.AfterBoot).
+        if (verdict.Action == GuardianAction.ResetToAuto && EcQuiet.BootRemaining == TimeSpan.Zero)
         {
             try
             {

@@ -16,6 +16,24 @@ public static class EcQuiet
 
     private static long _untilMs;
 
+    /// <summary>
+    /// Raw EC access waits this long after Windows starts: from 2026-10-20 (services installed) every start brought five
+    /// ACPI 15 warnings in its first minutes, while in ~55 starts before (26 Sep - 19 Oct) there was none. Windows' own
+    /// EC driver is busy then (battery, thermal zones, NVIDIA platform framework). The fans stay on EC automatic meanwhile,
+    /// as the stock software leaves them. WMI calls go through Windows' driver and are not held.
+    /// </summary>
+    public static readonly TimeSpan AfterBoot = TimeSpan.FromSeconds(60);
+
+    /// <summary>How much of <see cref="AfterBoot"/> is left (zero once Windows has run that long).</summary>
+    public static TimeSpan BootRemaining
+    {
+        get
+        {
+            var left = AfterBoot - TimeSpan.FromMilliseconds(Environment.TickCount64);
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+    }
+
     /// <summary>Where each hold is noted (the service's log); null logs nothing.</summary>
     public static Action<string>? Report { get; set; }
 
