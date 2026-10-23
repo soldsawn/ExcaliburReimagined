@@ -59,13 +59,13 @@ internal sealed class CurveView : Control
         using (var stock = new Pen(Color.DarkGray, 1.5f) { DashStyle = DashStyle.Dash })
             g.DrawLines(stock, Stock.Select(s => At(s.C, s.P)).ToArray());
 
-        // Safety floors: 25% always, 80% from 65 C, 90% from 72 C, 100% when hot (>= 80 C for 3 s).
+        // Safety floors: 25% always, 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
         using (var floor = new Pen(Color.IndianRed, 1f) { DashStyle = DashStyle.Dot })
         {
             g.DrawLines(floor,
             [
-                At(MinC, SafetyPolicy.AbsoluteFloor), At(65, SafetyPolicy.AbsoluteFloor), At(65, 80), At(72, 80),
-                At(72, 90), At(HotTracker.HotC, 90), At(HotTracker.HotC, 100), At(MaxC, 100),
+                At(MinC, SafetyPolicy.AbsoluteFloor), At(70, SafetyPolicy.AbsoluteFloor), At(70, 80), At(78, 80),
+                At(78, 90), At(HotTracker.HotC, 90), At(HotTracker.HotC, 100), At(MaxC, 100),
             ]);
         }
 

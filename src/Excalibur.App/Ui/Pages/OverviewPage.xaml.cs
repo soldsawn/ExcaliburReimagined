@@ -205,7 +205,7 @@ public partial class OverviewPage : UserControl
 
     private static string Hint(FanStatusDto s) => s.Profile switch
     {
-        "Quiet" => "Sessiz: fanlar yavaş başlar, 60 °C'yi geçince hızlanır. Ofis işi ve film için.",
+        "Quiet" => "Sessiz: fanlar yavaş döner, 62 °C'yi geçince hızlanır. Ofis işi ve film için.",
         "Balanced" => "Dengeli: orijinal ayardan daha sessiz, yük altında aynı serinlikte. Günlük kullanım için önerilir.",
         "Performance" => "Performans: fanlar erken ve hızlı döner. Oyun ve uzun süren işler için.",
         "EcAuto" => "Orijinal ayar: fanları dizüstünün kendisi yönetir, uygulama karışmaz.",

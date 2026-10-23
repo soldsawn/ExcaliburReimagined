@@ -12,7 +12,9 @@ namespace Excalibur.Core.Fan;
 public static class SafetyPolicy
 {
     public const int AbsoluteFloor = 25;
-    private static readonly (int TempC, int MinPercent)[] Floors = [(72, 90), (65, 80)];
+    // 70/78 C since 2026-10-23 (were 65/72, chosen with the slow WMI reading): the CPU's own sensor sits at 54-62 C
+    // idle and 94-98 C under full load (TjMax 100), and a floor at 65 C made Quiet hunt between its curve and 80%.
+    private static readonly (int TempC, int MinPercent)[] Floors = [(78, 90), (70, 80)];
 
     public static FanDecision Apply(FanSnapshot s, FanDecision desired, bool hot, out string? reason)
         => Apply(s, desired, hot, out reason, out _, out _);

@@ -160,7 +160,7 @@ public sealed class HistoryTests : IDisposable
     public void A_cool_gpu_fan_follows_the_hot_cpu_as_support()
     {
         var c = new FanController();
-        c.Decide(Snap(65, 45), FanProfile.Balanced, T0);
+        c.Decide(Snap(65, 45), Balanced, T0);
         Assert.Equal(FanReason.Curve, c.ReasonOf(FanId.Cpu));
         Assert.Equal(FanReason.Support, c.ReasonOf(FanId.Gpu));
     }
@@ -169,21 +169,22 @@ public sealed class HistoryTests : IDisposable
     public void A_falling_temperature_is_reported_as_holding()
     {
         var c = new FanController();
-        c.Decide(Snap(65, 65), FanProfile.Balanced, T0);
-        c.Decide(Snap(55, 55), FanProfile.Balanced, T0.AddSeconds(1));
+        c.Decide(Snap(65, 65), Balanced, T0);
+        c.Decide(Snap(55, 55), Balanced, T0.AddSeconds(1));
         Assert.Equal(FanReason.Holding, c.ReasonOf(FanId.Cpu));
     }
 
     [Fact]
     public void The_loop_reports_floors_hot_and_curve_percent()
     {
-        // Quiet asks 74% at 66 C; the floor from 65 C is 85%.
-        var hw = new FakeFanHardware { CpuTempC = 66, GpuTempC = 50 };
+        // A flat 30% curve at 71 C; the floor from 70 C is 80%.
+        var hw = new FakeFanHardware { CpuTempC = 71, GpuTempC = 50 };
         var loop = new FanControlLoop(hw);
-        loop.Start(FanProfile.Quiet, T0);
+        var flat = new FanProfile("Flat", FanCurve.Flat(30), FanCurve.Flat(30));
+        loop.Start(flat, T0);
         var s = loop.Tick(T0.AddSeconds(1));
         Assert.Equal(FanReason.SafetyFloor, s.CpuReason);
-        Assert.Equal(FanProfile.Quiet.CpuCurve.Evaluate(66), s.CpuCurvePercent);
+        Assert.Equal(30, s.CpuCurvePercent);
 
         hw.CpuTempC = 95;
         loop.Tick(T0.AddSeconds(2));

@@ -10,4 +10,10 @@ internal static class FanTestData
         => new(cpuC, gpuC, 3600, 3300, cpuTarget ?? FanTarget.Auto, gpuTarget ?? FanTarget.Auto, 66, 63, boost);
 
     public static FanTarget P(int percent) => FanTarget.FromPercent(percent);
+
+    // The built-in curves as they were until 2026-10-23, so the controller and loop tests do not follow curve tuning.
+    public static readonly FanProfile Quiet = new("Quiet",
+        FanCurve.Of((50, 25), (55, 30), (60, 45), (65, 70), (70, 90), (75, 100)), FanCurve.Of((50, 25), (55, 30), (60, 45), (65, 70), (70, 90), (75, 100)));
+    public static readonly FanProfile Balanced = new("Balanced",
+        FanCurve.Of((50, 30), (55, 40), (60, 60), (65, 85), (70, 95), (75, 100)), FanCurve.Of((50, 30), (55, 40), (60, 60), (65, 85), (70, 95), (75, 100)));
 }

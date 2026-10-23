@@ -40,7 +40,7 @@ public class FanRegistersTests
 
 public class FanCurveTests
 {
-    private static readonly FanCurve Balanced = FanProfile.Balanced.CpuCurve;
+    private static readonly FanCurve Balanced = FanTestData.Balanced.CpuCurve;
 
     [Theory]
     [InlineData(20, 30)]  // flat below the first point

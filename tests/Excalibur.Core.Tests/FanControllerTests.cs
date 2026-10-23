@@ -10,7 +10,7 @@ public class FanControllerTests
     [Fact]
     public void Idle_balanced_runs_both_fans_at_the_curve_floor()
     {
-        var d = _c.Decide(Snap(50, 45), FanProfile.Balanced, T0);
+        var d = _c.Decide(Snap(50, 45), Balanced, T0);
         Assert.Equal(P(30), d.Cpu);
         Assert.Equal(P(30), d.Gpu);
     }
@@ -18,37 +18,58 @@ public class FanControllerTests
     [Fact]
     public void Hot_cpu_drags_the_gpu_fan_up_to_its_curve_minus_the_support_offset()
     {
-        var d = _c.Decide(Snap(75, 45), FanProfile.Balanced, T0);
+        var d = _c.Decide(Snap(75, 45), Balanced, T0);
         Assert.Equal(P(100), d.Cpu);
         Assert.Equal(P(100 - FanController.SupportOffset), d.Gpu);
     }
 
     [Fact]
-    public void Rising_temperature_is_applied_at_once()
+    public void A_rise_is_applied_once_it_has_lasted_the_rise_delay()
     {
-        _c.Decide(Snap(50, 45), FanProfile.Balanced, T0);
-        var d = _c.Decide(Snap(65, 45), FanProfile.Balanced, T0.AddSeconds(1));
-        Assert.Equal(P(85), d.Cpu);
+        _c.Decide(Snap(50, 45), Balanced, T0);
+        for (int t = 1; t <= 3; t++)
+            Assert.Equal(P(30), _c.Decide(Snap(65, 45), Balanced, T0.AddSeconds(t)).Cpu);
+        Assert.Equal(P(85), _c.Decide(Snap(65, 45), Balanced, T0.AddSeconds(4)).Cpu);
+    }
+
+    [Fact]
+    public void A_short_burst_does_not_raise_the_fan()
+    {
+        // 2026-10-23 07:39:53-55, Balanced: 66 C for a second or two between 55-58 C took the fan from 52% to 80%.
+        int start = _c.Decide(Snap(57, 45), Balanced, T0).Cpu.Percent;
+        int[] temps = [66, 66, 55, 57, 62, 58, 56];
+        for (int t = 0; t < temps.Length; t++)
+            Assert.True(_c.Decide(Snap(temps[t], 45), Balanced, T0.AddSeconds(t + 1)).Cpu.Percent <= start);
+    }
+
+    [Fact]
+    public void A_rise_goes_only_as_far_as_the_lowest_demand_of_the_delay()
+    {
+        _c.Decide(Snap(50, 45), Balanced, T0);
+        _c.Decide(Snap(60, 45), Balanced, T0.AddSeconds(1));
+        _c.Decide(Snap(65, 45), Balanced, T0.AddSeconds(2));
+        _c.Decide(Snap(65, 45), Balanced, T0.AddSeconds(3));
+        Assert.Equal(P(60), _c.Decide(Snap(65, 45), Balanced, T0.AddSeconds(4)).Cpu);
     }
 
     [Fact]
     public void Small_drop_inside_the_hysteresis_band_keeps_the_fan()
     {
-        _c.Decide(Snap(65, 45), FanProfile.Balanced, T0);
-        var d = _c.Decide(Snap(63, 45), FanProfile.Balanced, T0.AddSeconds(5));
+        _c.Decide(Snap(65, 45), Balanced, T0);
+        var d = _c.Decide(Snap(63, 45), Balanced, T0.AddSeconds(5));
         Assert.Equal(P(85), d.Cpu);
     }
 
     [Fact]
     public void Large_drop_ramps_down_no_faster_than_the_slew_limit()
     {
-        _c.Decide(Snap(75, 45), FanProfile.Balanced, T0);
-        var d = _c.Decide(Snap(50, 45), FanProfile.Balanced, T0.AddSeconds(1));
+        _c.Decide(Snap(75, 45), Balanced, T0);
+        var d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(1));
         Assert.Equal(P(98), d.Cpu); // 100 - 2.5, rounded
 
-        for (int i = 2; i <= 60; i++) d = _c.Decide(Snap(50, 45), FanProfile.Balanced, T0.AddSeconds(i));
+        for (int i = 2; i <= 60; i++) d = _c.Decide(Snap(50, 45), Balanced, T0.AddSeconds(i));
         // Settles at the curve read HysteresisC hotter: Balanced(53) = 36.
-        Assert.Equal(P(FanProfile.Balanced.CpuCurve.Evaluate(50 + FanController.HysteresisC)), d.Cpu);
+        Assert.Equal(P(Balanced.CpuCurve.Evaluate(50 + FanController.HysteresisC)), d.Cpu);
     }
 
     [Fact]
@@ -62,7 +83,7 @@ public class FanControllerTests
     [Fact]
     public void Cooling_boost_means_both_fans_at_100()
     {
-        var d = _c.Decide(Snap(45, 45, boost: true), FanProfile.Quiet, T0);
+        var d = _c.Decide(Snap(45, 45, boost: true), Quiet, T0);
         Assert.Equal(P(100), d.Cpu);
         Assert.Equal(P(100), d.Gpu);
     }
@@ -84,8 +105,9 @@ public class SafetyPolicyTests
     }
 
     [Theory]
-    [InlineData(66, 80)]
-    [InlineData(73, 90)]
+    [InlineData(69, 30)]
+    [InlineData(71, 80)]
+    [InlineData(79, 90)]
     public void Temperature_floors_raise_a_slow_fan(int cpuC, int expectedMin)
     {
         var d = SafetyPolicy.Apply(Snap(cpuC, 45), new FanDecision(P(30), P(30)), hot: false, out _);
@@ -174,5 +196,21 @@ public class TemperatureFilterTests
         f.Apply(Snap(50, 45), T0);
         f.Reset();
         Assert.Equal(85, f.Apply(Snap(85, 45), T0.AddSeconds(1)).CpuTempC);
+    }
+}
+
+public class BuiltInCurveTests
+{
+    [Fact]
+    public void No_built_in_curve_sits_below_a_safety_floor()
+    {
+        // A curve under a floor makes the fan hunt between the two (Quiet at 65 C until 2026-10-23).
+        foreach (var profile in FanProfile.BuiltIn.Where(p => !p.IsEcAuto))
+            for (int c = 30; c <= 100; c++)
+            {
+                int percent = profile.CpuCurve.Evaluate(c);
+                SafetyPolicy.Apply(Snap(c, c), new FanDecision(P(percent), P(percent)), hot: false, out string? reason);
+                Assert.True(reason is null, $"{profile.Name} at {c} C: {reason}");
+            }
     }
 }

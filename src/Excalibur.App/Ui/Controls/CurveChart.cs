@@ -19,11 +19,11 @@ internal sealed class CurveChart : FrameworkElement
     private const int MinC = 30, MaxC = 100, WarmC = 65;
     // Measured stock EC CPU-fan steps (docs/07 A.2): <58 C 66%, 58-64 C 86%, >=65 C ~94%.
     private static readonly (int C, int P)[] Stock = [(MinC, 66), (58, 66), (58, 86), (65, 86), (65, 94), (MaxC, 94)];
-    // Safety floors: 25% always, 80% from 65 C, 90% from 72 C, 100% when hot (>= 80 C for 3 s).
+    // Safety floors: 25% always, 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
     internal static readonly (int C, int P)[] Floors =
     [
-        (MinC, SafetyPolicy.AbsoluteFloor), (65, SafetyPolicy.AbsoluteFloor), (65, 80), (72, 80),
-        (72, 90), (HotTracker.HotC, 90), (HotTracker.HotC, 100), (MaxC, 100),
+        (MinC, SafetyPolicy.AbsoluteFloor), (70, SafetyPolicy.AbsoluteFloor), (70, 80), (78, 80),
+        (78, 90), (HotTracker.HotC, 90), (HotTracker.HotC, 100), (MaxC, 100),
     ];
 
     private FanProfile? _profile;

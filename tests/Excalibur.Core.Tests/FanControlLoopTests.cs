@@ -21,7 +21,7 @@ public class FanControlLoopTests
     [Fact]
     public void Start_hands_fans_to_the_ec_first_and_runs_on_a_known_ec()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         Assert.Equal([(FanId.Cpu, FanTarget.Auto), (FanId.Gpu, FanTarget.Auto)], _hw.Writes);
         Assert.Equal(FanLoopMode.Running, _loop.Status.Mode);
     }
@@ -29,7 +29,7 @@ public class FanControlLoopTests
     [Fact]
     public void Balanced_tick_writes_the_curve()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         var s = TickAt(1);
         Assert.Equal(P(30), _hw.CpuTarget);
         Assert.Equal(P(30), _hw.GpuTarget);
@@ -39,7 +39,7 @@ public class FanControlLoopTests
     [Fact]
     public void Curve_changes_are_written_at_most_every_5_s_per_fan()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         TickAt(1);
         var writeTicks = new List<int>();
         for (int i = 2; i <= 40; i++)
@@ -59,11 +59,16 @@ public class FanControlLoopTests
     public void A_rise_of_10_points_does_not_wait_for_the_interval()
     {
         _hw.CpuTempC = 60;
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         TickAt(1);
         Assert.Equal(P(60), _hw.CpuTarget);
-        _hw.CpuTempC = 70; // a load starts; the filter lets 3 C through per second: 63 C = 75%
-        TickAt(2);
+        _hw.CpuTempC = 68; // a load starts; the filter lets 3 C through per second: 63 C = 75% at the first tick
+        for (int t = 2; t <= 4; t++)
+        {
+            TickAt(t);
+            Assert.Equal(P(60), _hw.CpuTarget); // the rise delay
+        }
+        TickAt(5); // the lowest demand of the last 3 s (75%), 1 s after the last write, without the 5 s interval
         Assert.Equal(P(75), _hw.CpuTarget);
     }
 
@@ -75,7 +80,7 @@ public class FanControlLoopTests
         TickAt(1);
         Assert.Equal(P(72), _hw.CpuTarget);
 
-        _loop.SetProfile(FanProfile.Quiet, T0.AddSeconds(2));
+        _loop.SetProfile(Quiet, T0.AddSeconds(2));
         TickAt(2);
         Assert.True(_hw.CpuTarget.Percent >= 69, $"dropped to {_hw.CpuTarget} at once");
         for (int i = 3; i <= 40; i++) TickAt(i);
@@ -85,7 +90,7 @@ public class FanControlLoopTests
     [Fact]
     public void A_users_change_is_written_at_once()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         TickAt(1);
         _loop.SetManual(60, 61, TimeSpan.FromMinutes(1), T0.AddSeconds(2));
         TickAt(2);
@@ -97,7 +102,7 @@ public class FanControlLoopTests
     public void Unknown_ec_firmware_is_monitor_only_and_never_writes_a_percent()
     {
         _hw.EcVersion = "P010A0";
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         for (int i = 1; i <= 30; i++) TickAt(i);
         Assert.Equal(FanLoopMode.MonitorOnly, _loop.Status.Mode);
         Assert.All(_hw.Writes, w => Assert.True(w.Target.IsAuto));
@@ -106,7 +111,7 @@ public class FanControlLoopTests
     [Fact]
     public void Repeated_read_failures_fault_and_hand_fans_to_the_ec()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         TickAt(1);
         Assert.Equal(P(30), _hw.CpuTarget);
 
@@ -130,7 +135,7 @@ public class FanControlLoopTests
     [Fact]
     public void Two_read_failures_do_not_fault()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.FailNextReads = 2;
         for (int i = 1; i <= 3; i++) TickAt(i);
         Assert.Equal(FanLoopMode.Running, _loop.Status.Mode);
@@ -139,7 +144,7 @@ public class FanControlLoopTests
     [Fact]
     public void Repeated_write_failures_fault()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.FailNextWrites = 2; // CPU write fails, then GPU write fails, in the same tick
         TickAt(1);
         Assert.Equal(FanLoopMode.Faulted, _loop.Status.Mode);
@@ -149,7 +154,7 @@ public class FanControlLoopTests
     [Fact]
     public void A_busy_ec_is_not_a_failure_and_the_write_follows_on_the_next_tick()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.BusyNextWrites = 4;
         TickAt(1);
         TickAt(2);
@@ -163,7 +168,7 @@ public class FanControlLoopTests
     [Fact]
     public void Stop_hands_fans_to_the_ec()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         TickAt(1);
         _loop.Stop(T0.AddSeconds(2));
         Assert.True(_hw.CpuTarget.IsAuto);
@@ -174,7 +179,7 @@ public class FanControlLoopTests
     [Fact]
     public void Tiny_changes_are_not_written()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         TickAt(1);
         int writes = _hw.Writes.Count;
         _hw.CpuTempC = 50.4; // still 30%
@@ -185,7 +190,7 @@ public class FanControlLoopTests
     [Fact]
     public void Manual_mode_expires_back_to_the_previous_profile()
     {
-        _loop.Start(FanProfile.Quiet, T0);
+        _loop.Start(Quiet, T0);
         _loop.SetManual(70, 60, TimeSpan.FromMinutes(1), T0);
         TickAt(1);
         Assert.Equal(P(70), _hw.CpuTarget);
@@ -199,14 +204,14 @@ public class FanControlLoopTests
     [Fact]
     public void Manual_mode_is_capped_at_ten_minutes()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         Assert.Throws<ArgumentOutOfRangeException>(() => _loop.SetManual(50, 50, TimeSpan.FromMinutes(11), T0));
     }
 
     [Fact]
     public void Manual_mode_is_still_subject_to_the_safety_floors()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.CpuTempC = 85;
         _loop.SetManual(25, 25, TimeSpan.FromMinutes(1), T0);
         TickAt(1);
@@ -219,7 +224,7 @@ public class FanControlLoopTests
     [Fact]
     public void A_held_safety_override_is_logged_once_when_it_engages_and_once_when_it_releases()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.CpuTempC = 89;
         for (int i = 1; i <= 20; i++) TickAt(i);
         _hw.CpuTempC = 50;
@@ -234,7 +239,7 @@ public class FanControlLoopTests
     [Fact]
     public void A_two_second_boost_spike_does_not_slam_the_fans()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.CpuTempC = 55;
         for (int i = 1; i <= 30; i++) TickAt(i);
         int before = _hw.CpuTarget.Percent;
@@ -253,7 +258,7 @@ public class FanControlLoopTests
     [Fact]
     public void Sustained_heat_still_reaches_100_within_a_few_seconds()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         _hw.CpuTempC = 55;
         for (int i = 1; i <= 30; i++) TickAt(i);
         _hw.CpuTempC = 89;
@@ -266,7 +271,7 @@ public class FanControlLoopTests
     public void Balanced_is_quieter_at_idle_and_never_hotter_under_load_than_stock()
     {
         var (stockMax, stockIdleFan) = Simulate(FanProfile.EcAuto);
-        var (ourMax, ourIdleFan) = Simulate(FanProfile.Balanced);
+        var (ourMax, ourIdleFan) = Simulate(Balanced);
         _output.WriteLine($"stock: idle CPU fan {stockIdleFan}%, peak CPU {stockMax:F1}C");
         _output.WriteLine($"Balanced: idle CPU fan {ourIdleFan}%, peak CPU {ourMax:F1}C");
 
@@ -304,7 +309,7 @@ public class FanControlLoopTests
     [Fact]
     public void Start_logs_the_hand_over_to_the_ec()
     {
-        _loop.Start(FanProfile.Balanced, T0);
+        _loop.Start(Balanced, T0);
         Assert.Contains(_loop.Events, e => e.Message == "fans handed to the EC (start)");
     }
 
@@ -313,7 +318,7 @@ public class FanControlLoopTests
     {
         var slow = new SlowReadHardware(_hw);
         var loop = new FanControlLoop(slow);
-        loop.Start(FanProfile.Balanced, T0);
+        loop.Start(Balanced, T0);
         loop.Tick(T0.AddSeconds(1));
 
         slow.Block = new ManualResetEventSlim(false);
