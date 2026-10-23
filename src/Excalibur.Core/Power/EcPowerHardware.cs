@@ -138,7 +138,10 @@ public static class Nvml
 
     public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit);
 
-    public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage);
+    /// <summary>Above this a reading is noise: the card's limit is 100 W. Waking from sleep, the first draw read as 590 W (2026-10-23).</summary>
+    public const int MaxPlausibleWatts = 250;
+
+    public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage) is { } w and <= MaxPlausibleWatts ? w : null;
 
     /// <summary>The GPU's own temperature sensor (NVML_TEMPERATURE_GPU), in C.</summary>
     public static int? TemperatureC() => Raw((IntPtr d, out uint c) => nvmlDeviceGetTemperature(d, 0, out c)) is { } c ? (int)c : null;
