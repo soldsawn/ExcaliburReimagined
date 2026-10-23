@@ -16,6 +16,15 @@ $zip = "$out.zip"
 if (-not (Test-Path (Join-Path $repo 'tools\pawnio-modules\LpcACPIEC.bin'))) { throw 'tools\pawnio-modules is missing: run tools\scripts\get-pawnio-module.ps1 first.' }
 if (& git -C $repo status --porcelain -- src) { Write-Warning 'src has uncommitted changes; the package will not match the commit it names.' }
 
+# A readme edited by hand in the last package would be lost: stop until it is copied into tools\package.
+$package = Join-Path $repo 'tools\package'
+$builtReadme = Join-Path $out 'BENI OKU.txt'
+if (Test-Path $builtReadme) {
+    $norm = { param($t) (($t -replace "`r", '') -split "`n" | Select-Object -Skip 2 | ForEach-Object { $_.TrimEnd() }) -join "`n" }
+    if ((& $norm ([IO.File]::ReadAllText($builtReadme))) -ne (& $norm ([IO.File]::ReadAllText((Join-Path $package 'BENI OKU.txt'))))) {
+        throw "$builtReadme was edited and differs from tools\package\BENI OKU.txt: copy the edits there first (keep the {VERSION} line)."
+    }
+}
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }
 New-Item -ItemType Directory -Force -Path $out | Out-Null
@@ -26,7 +35,6 @@ foreach ($project in 'Excalibur.FanService', 'Excalibur.FanGuardian', 'Excalibur
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project" }
 }
 
-$package = Join-Path $repo 'tools\package'
 Copy-Item (Join-Path $package '1-Kur.cmd'), (Join-Path $package '2-Kaldir.cmd') -Destination $out
 Copy-Item (Join-Path $package 'kurulum') -Destination $out -Recurse
 Copy-Item (Join-Path $repo 'LICENSE') -Destination (Join-Path $out 'program\LICENSE.txt')
