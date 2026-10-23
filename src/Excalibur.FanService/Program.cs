@@ -1,7 +1,6 @@
 using System.Security.Principal;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Hardware;
-using Excalibur.Core.Gpu;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -77,7 +76,7 @@ else
         cpuSampler = new Timer(_ => { if (msr.Read() is { } c) median.Add(c, clock.Elapsed); }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(200));
         cpuTemperature = () => median.Value(clock.Elapsed);
     }
-    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature, gpuTemperature: Nvml.TemperatureC);
+    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature);
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
         : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters));
@@ -115,14 +114,11 @@ builder.Services.AddSingleton(sp =>
     return new PowerManager(powerHardware, settingsStore, (profile, source) => switcher.Switch(profile, source),
         m => fileLog.Write(DateTimeOffset.Now, m), simulate ? TimeSpan.Zero : EcQuiet.AfterCharger);
 });
-builder.Services.AddSingleton(new GpuModeManager(fake is not null ? new SimulatedGpuHardware() : new WmiGpuHardware(firmware), settingsStore,
-    m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
 builder.Services.AddHostedService<PowerWorker>();
 builder.Services.AddHostedService<FanPipeServer>();
 builder.Services.AddHostedService<LightingWorker>();
-builder.Services.AddHostedService<GpuWorker>();
 
 using var host = builder.Build();
 

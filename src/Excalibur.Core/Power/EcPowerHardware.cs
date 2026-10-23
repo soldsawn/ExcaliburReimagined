@@ -99,63 +99,23 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
     private static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
 }
 
-/// <summary>Reads the GPU power limit the driver enforces, the power drawn now and the temperature; every failure is "unknown" (null).
-/// Only the fan service uses it (never the guardian: a second open handle would crash it when the card is turned off).</summary>
-public static class Nvml
+/// <summary>Reads the GPU power limit the driver enforces and the power drawn now; every failure is "unknown" (null).</summary>
+internal static class Nvml
 {
     private static readonly object Gate = new();
     private static bool _tried, _ready;
-    private static volatile bool _released;
-
-    /// <summary>True while the service has closed NVML because the NVIDIA card is being turned off or is off.</summary>
-    public static bool IsReleased => _released;
     private static IntPtr _device;
 
-    /// <summary>
-    /// Closes NVML before the NVIDIA card is turned off, and keeps it closed while it is off: a call on the old device
-    /// handle crashed the service (access violation in nvmlDeviceGetEnforcedPowerLimit, 2026-10-23 20:04), and an open
-    /// handle keeps the driver from unloading (the stock software calls NV.ReleaseDLL() too).
-    /// </summary>
-    public static void Release()
-    {
-        lock (Gate)
-        {
-            if (_ready) { try { nvmlShutdown(); } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { } }
-            _ready = false;
-            _released = true;
-        }
-    }
+    public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit);
 
-    /// <summary>The card is on again: NVML opens anew on the next call.</summary>
-    public static void Allow()
-    {
-        lock (Gate)
-        {
-            _released = false;
-            _tried = false;
-        }
-    }
-
-    // After the card was turned off and on in Windows the driver reports no limit (nvidia-smi N/A) and NVML a wild number.
-    public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit) is { } w and <= MaxPlausibleWatts ? w : null;
-
-    /// <summary>Above this a reading is noise: the card's limit is 100 W. Waking from sleep, the first draw read as 590 W (2026-10-23).</summary>
-    public const int MaxPlausibleWatts = 250;
-
-    public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage) is { } w and <= MaxPlausibleWatts ? w : null;
-
-    /// <summary>The GPU's own temperature sensor (NVML_TEMPERATURE_GPU), in C.</summary>
-    public static int? TemperatureC() => Raw((IntPtr d, out uint c) => nvmlDeviceGetTemperature(d, 0, out c)) is { } c ? (int)c : null;
+    public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage);
 
     private delegate int MilliwattQuery(IntPtr device, out uint milliwatts);
 
-    private static int? Milliwatts(MilliwattQuery query) => Raw(query) is { } mw ? (int)Math.Round(mw / 1000.0) : null;
-
-    private static uint? Raw(MilliwattQuery query)
+    private static int? Milliwatts(MilliwattQuery query)
     {
         lock (Gate)
         {
-            if (_released) return null;
             if (!_tried)
             {
                 _tried = true;
@@ -168,15 +128,13 @@ public static class Nvml
             if (!_ready) return null;
             try
             {
-                return query(_device, out uint value) == 0 ? value : null;
+                return query(_device, out uint milliwatts) == 0 ? (int)Math.Round(milliwatts / 1000.0) : null;
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
         }
     }
 
     [DllImport("nvml.dll")] private static extern int nvmlInit_v2();
-    [DllImport("nvml.dll")] private static extern int nvmlShutdown();
-    [DllImport("nvml.dll")] private static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint celsius);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);

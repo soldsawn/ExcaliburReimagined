@@ -1,4 +1,3 @@
-using Excalibur.Core.Power;
 using System.Diagnostics;
 using System.Management;
 using System.Text;
@@ -24,7 +23,7 @@ public sealed class EcFanHardware : IFanHardware
 {
     private readonly EmbeddedController ec;
     private readonly GmWmiGateway wmi;
-    private readonly Func<int?>? cpuTemperature, gpuTemperature;
+    private readonly Func<int?>? cpuTemperature;
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
     // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
@@ -44,24 +43,14 @@ public sealed class EcFanHardware : IFanHardware
     private readonly Stopwatch _sinceWmi = new();
     private static readonly TimeSpan MaxReuse = TimeSpan.FromSeconds(15);
     private bool _reused;
-    // Integrated graphics mode (0x0203 = 3) turns the NVIDIA card off: its temperature reads 0. Checked at most every 30 s.
-    private readonly Stopwatch _sinceGpuModeRead = new();
-    private bool _gpuOff;
-    /// <summary>What the GPU fan sees while the NVIDIA card is off: cool, so it follows the CPU (support) only.</summary>
-    public const int GpuOffTempC = 30;
 
     /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
     public Action<string>? Log { get; set; }
 
     private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
 
-    /// <param name="gpuTemperature">Where the GPU temperature comes from when the EC reports 0 although the card is on: after
-    /// Integrated -> Hybrid the BIOS leaves EC GFXT (0x43 bit 4) off until the next start or wake (DSDT), and the EC reports
-    /// 0 (2026-10-23 20:05). The service passes NVML; the guardian nothing (it treats the read as unknown).</param>
-    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null,
-        Func<int?>? gpuTemperature = null)
+    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null)
     {
-        this.gpuTemperature = gpuTemperature;
         this.ec = ec;
         this.wmi = wmi;
         this.cpuTemperature = cpuTemperature;
@@ -172,8 +161,6 @@ public sealed class EcFanHardware : IFanHardware
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
-        // NVML closed on purpose = the card is going off or is off (Integrated): 0 C is expected then, not a bad read.
-        if (gpuC < 1) gpuC = Nvml.IsReleased || GpuOff() ? GpuOffTempC : gpuTemperature?.Invoke() ?? gpuC;
         if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)
@@ -181,16 +168,6 @@ public sealed class EcFanHardware : IFanHardware
         _lastWmi = (cpuC, gpuC, cpuRpm, gpuRpm);
         _sinceWmi.Restart();
         return (cpuC, gpuC, cpuRpm, gpuRpm);
-    }
-
-    /// <summary>True when the graphics mode is Integrated (the NVIDIA card is off, so a 0 C reading is no fault).</summary>
-    private bool GpuOff()
-    {
-        if (_sinceGpuModeRead.IsRunning && _sinceGpuModeRead.Elapsed < TimeSpan.FromSeconds(30)) return _gpuOff;
-        try { _gpuOff = wmi.Execute(SmiCommand.Get(0x0203)).A2 == 3; }
-        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException or System.Runtime.InteropServices.COMException) { }
-        _sinceGpuModeRead.Restart();
-        return _gpuOff;
     }
 
     public void SetTarget(FanId fan, FanTarget target)

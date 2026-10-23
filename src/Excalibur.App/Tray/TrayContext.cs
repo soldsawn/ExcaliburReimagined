@@ -51,8 +51,6 @@ internal sealed class TrayContext : ApplicationContext
     private bool _busy, _offlineNotified, _rebuildPending;
     private string? _lastProfile;
     private FanLoopMode? _lastMode;
-    private Excalibur.Core.Gpu.GpuMode? _lastGpu;
-    private bool _gpuTrialNotified;
 
     public TrayContext(bool simulated, string? snapshot)
     {
@@ -278,18 +276,6 @@ internal sealed class TrayContext : ApplicationContext
 
         _lastProfile = s.Profile;
         _lastMode = s.Mode;
-        if (s.Gpu is { } gpu)
-        {
-            if (gpu.Trial == Excalibur.Core.Gpu.GpuTrial.AwaitingConfirm && !_gpuTrialNotified)
-            {
-                _gpuTrialNotified = true;
-                Notify("Yalnız NVIDIA modu", "Bilgisayar yalnız NVIDIA modunda açıldı. Ekran düzgünse uygulamanın Ekran sayfasından onaylayın; " +
-                    "onaylamazsanız sonraki açılış karma modda olur.", ToolTipIcon.Info);
-            }
-            if (_lastGpu == Excalibur.Core.Gpu.GpuMode.Integrated && gpu.Mode == Excalibur.Core.Gpu.GpuMode.Hybrid && gpu.Hdmi)
-                Notify("Karma moda geçildi", "Harici ekran takıldı. HDMI çıkışı NVIDIA kartına bağlı olduğu için ekran kartı karma moda alındı.", ToolTipIcon.Info);
-            _lastGpu = gpu.Mode;
-        }
         Render();
     }
 

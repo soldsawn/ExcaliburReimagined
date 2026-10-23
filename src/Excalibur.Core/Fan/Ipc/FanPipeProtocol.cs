@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Excalibur.Core.Gpu;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -27,12 +26,9 @@ public static class FanPipe
     ///    settings TrustedEcVersions.
     /// 8: + setLighting(lighting) (keyboard light; stored and shown), setLightIdle(idle) (the tray saw no input for the
     ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle / LightBrightness.
-    /// 9: + setGpuMode(gpuMode) (Integrated at once; Discrete and leaving it need a restart; response RestartNeeded, Code
-    ///    gpu_hdmi / gpu_bitlocker / gpu_from_discrete / gpu_unavailable / gpu_failed), confirmGpuMode (keep Discrete after
-    ///    its first start), status Gpu.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 9;
+    public const int ProtocolVersion = 8;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -60,20 +56,20 @@ public static class FanSource
 /// getSettings, updateSettings(settings), history(from, to, maxPoints), setPowerMode(powerMode),
 /// shutdown (stops the guardian and this service; fans go back to the EC),
 /// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), trialEc,
-/// setLighting(lighting), setLightIdle(idle), setGpuMode(gpuMode), confirmGpuMode.
+/// setLighting(lighting), setLightIdle(idle).
 /// <see cref="Source"/> is one of <see cref="FanSource"/>.
 /// </summary>
 public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = null, int? Gpu = null, int? Minutes = null,
     string? Source = null, ServiceSettingsPatch? Settings = null,
     DateTimeOffset? From = null, DateTimeOffset? To = null, int? MaxPoints = null,
     PowerMode? PowerMode = null, CustomProfile? Definition = null, IReadOnlyList<string>? Names = null, CpuLimit? CpuLimit = null,
-    KeyboardLighting? Lighting = null, bool? Idle = null, GpuMode? GpuMode = null);
+    KeyboardLighting? Lighting = null, bool? Idle = null);
 
 /// <param name="Code">A stable machine-readable reason when <paramref name="Ok"/> is false and the UI should word it itself
 /// (power_battery, power_usbc, power_failed); <paramref name="Error"/> stays an English sentence for logs.</param>
 public sealed record FanResponse(bool Ok, string? Error = null, FanStatusDto? Status = null, IReadOnlyList<FanEventDto>? Events = null,
     ServiceSettings? Settings = null, HistorySeries? History = null, string? Code = null,
-    IReadOnlyList<ProfileInfoDto>? Profiles = null, IReadOnlyList<string>? Slots = null, bool RestartNeeded = false);
+    IReadOnlyList<ProfileInfoDto>? Profiles = null, IReadOnlyList<string>? Slots = null);
 
 /// <summary>One profile as the editor needs it. Built-ins carry their curves so a copy can start from them; EcAuto has none.</summary>
 public sealed record ProfileInfoDto(string Name, bool BuiltIn, IReadOnlyList<CurvePoint>? Cpu, IReadOnlyList<CurvePoint>? Gpu);
@@ -136,8 +132,7 @@ public sealed record FanStatusDto(
     EcTrialStatus? Trial = null,
     int LightIdleOffMinutes = 0,
     bool LightIdle = false,
-    int? LightBrightness = null,
-    GpuStatusDto? Gpu = null)
+    int? LightBrightness = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {

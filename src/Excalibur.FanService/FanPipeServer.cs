@@ -4,7 +4,6 @@ using System.Security.Principal;
 using System.Text.Json;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
-using Excalibur.Core.Gpu;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -25,7 +24,6 @@ public sealed class FanPipeServer(
     HistoryRecorder history,
     PowerManager power,
     LightingManager lighting,
-    GpuModeManager graphics,
     ProfileSwitcher switcher,
     IHostApplicationLifetime lifetime,
     FanFileLog fileLog,
@@ -126,11 +124,8 @@ public sealed class FanPipeServer(
             switch (req.Cmd.ToLowerInvariant())
             {
                 case "status":
-                    // The main window polls with its source and shows the power drawn now; the tray does not.
-                    if (req.Source == FanSource.Window) power.WantDetail();
                     break;
                 case "events":
-                    if (req.Source == FanSource.Window) power.WantDetail();
                     return new FanResponse(true, Status: Status(), Events: loop.Events.Select(e => new FanEventDto(e.At, e.Message)).ToList());
                 case "setprofile":
                     if (req.Profile is null || settings.Current.FindProfile(req.Profile) is not { } profile)
@@ -197,13 +192,6 @@ public sealed class FanPipeServer(
                     if (req.Idle is not { } idle) return new FanResponse(false, "setLightIdle needs idle");
                     lighting.SetIdle(idle);
                     break;
-                case "setgpumode":
-                    if (req.GpuMode is not { } gpuMode) return new FanResponse(false, "setGpuMode needs a gpuMode");
-                    var gpuResult = graphics.Set(gpuMode);
-                    return new FanResponse(gpuResult.Ok, gpuResult.Message, Status: Status(), Code: gpuResult.Code, RestartNeeded: gpuResult.RestartNeeded);
-                case "confirmgpumode":
-                    var confirmed = graphics.Confirm();
-                    return new FanResponse(confirmed.Ok, confirmed.Message, Status: Status(), Code: confirmed.Code);
                 case "clearfault":
                     loop.ClearFault(now);
                     break;
@@ -297,6 +285,5 @@ public sealed class FanPipeServer(
             LightIdle = lighting.Idle,
             // The light key changes it behind the page's back; the page follows this.
             LightBrightness = settings.Current.Lighting?.Brightness,
-            Gpu = graphics.Status,
         };
 }

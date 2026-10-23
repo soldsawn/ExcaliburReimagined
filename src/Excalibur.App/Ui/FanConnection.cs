@@ -52,11 +52,11 @@ internal sealed class FanConnection : IDisposable
     }
 
     /// <summary>Sends a command and returns the whole reply (error code included); null when the service cannot be reached.</summary>
-    public async Task<FanResponse?> RequestAsync(FanRequest request, TimeSpan? replyTimeout = null)
+    public async Task<FanResponse?> RequestAsync(FanRequest request)
     {
         try
         {
-            var r = await _client.SendAsync(request with { Source = FanSource.Window }, replyTimeout: replyTimeout);
+            var r = await _client.SendAsync(request with { Source = FanSource.Window });
             if (r.Status is { } s) Apply(s, null);
             if (r.Profiles is not null) Catalog.Update(r);
             if (r.Settings is { } settings) Settings = settings;
@@ -112,7 +112,7 @@ internal sealed class FanConnection : IDisposable
         _busy = true;
         try
         {
-            var r = await _client.SendAsync(new FanRequest(withEvents ? "events" : "status", Source: FanSource.Window));
+            var r = await _client.SendAsync(new FanRequest(withEvents ? "events" : "status"));
             if (r.Status is { } s) Apply(s, r.Events);
         }
         catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException or JsonException)
