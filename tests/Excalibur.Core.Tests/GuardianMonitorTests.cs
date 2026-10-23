@@ -26,10 +26,19 @@ public class GuardianMonitorTests
     {
         var last = Beat();
         _g.Evaluate(last, Sensors(), true, S(0));
-        Assert.Equal(GuardianAction.None, _g.Evaluate(last, Sensors(), true, S(8)).Action);
-        var v = _g.Evaluate(last, Sensors(), true, S(10));
+        Assert.Equal(GuardianAction.None, _g.Evaluate(last, Sensors(), true, S(18)).Action);
+        var v = _g.Evaluate(last, Sensors(), true, S(20));
         Assert.Equal(GuardianAction.ResetToAuto, v.Action);
         Assert.False(v.ServiceAlive);
+    }
+
+    [Fact]
+    public void A_14_second_stall_of_a_live_service_is_not_a_death()
+    {
+        var last = Beat();
+        _g.Evaluate(last, Sensors(), true, S(0));
+        Assert.True(_g.Evaluate(last, Sensors(), true, S(14)).ServiceAlive);
+        Assert.True(_g.Evaluate(Beat(), Sensors(), true, S(16)).ServiceAlive);
     }
 
     [Fact]
@@ -70,11 +79,11 @@ public class GuardianMonitorTests
     {
         var last = Beat();
         _g.Evaluate(last, Sensors(), true, S(0));
-        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(12)).Action);
-        _g.HandedBack(S(12));
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(22)).Action);
+        _g.HandedBack(S(22));
         last = Beat();
-        Assert.True(_g.Evaluate(last, Sensors(), true, S(14)).ServiceAlive);
-        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(26)).Action);
+        Assert.True(_g.Evaluate(last, Sensors(), true, S(24)).ServiceAlive);
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(46)).Action);
     }
 
     [Fact]

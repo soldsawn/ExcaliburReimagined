@@ -6,8 +6,11 @@ public readonly record struct GuardianVerdict(GuardianAction Action, string? Rea
 
 public sealed record GuardianOptions
 {
-    /// <summary>The heartbeat must change at least this often for the service to count as alive.</summary>
-    public TimeSpan StaleAfter { get; init; } = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// The heartbeat must change at least this often for the service to count as alive. A live service can go
+    /// quiet for 14 s when the firmware's WMI sensor call stalls (on battery under load, 2026-10-22), so 10 s was too short.
+    /// </summary>
+    public TimeSpan StaleAfter { get; init; } = TimeSpan.FromSeconds(20);
     /// <summary>Shorter grace when the heartbeat's process no longer exists.</summary>
     public TimeSpan StaleAfterProcessGone { get; init; } = TimeSpan.FromSeconds(3);
     public int CpuHotC { get; init; } = 90;
