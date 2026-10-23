@@ -45,6 +45,7 @@ if (fake is not null && Array.FindIndex(args, a => a.Equals("--ec", StringCompar
     fake.EcVersion = args[ecArg + 1];
 EmbeddedController? ec = null;
 PawnIoCpuPowerRegisters? cpuRegisters = null;
+Timer? cpuSampler = null;
 IFanHardware hardware;
 IPowerHardware powerHardware;
 if (fake is not null)
@@ -61,8 +62,17 @@ else
     // CPU power, limits and temperature; without the modules the status has no CPU watts, CPU limits cannot be set
     // and the CPU temperature comes from the slower WMI block.
     cpuRegisters = PawnIoCpuPowerRegisters.TryOpen(Path.Combine(AppContext.BaseDirectory, "pawnio-modules"));
-    var cpuTemperature = cpuRegisters is null ? null : new MsrCpuTemperature(cpuRegisters);
-    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature is null ? null : cpuTemperature.Read);
+    Func<int?>? cpuTemperature = null;
+    if (cpuRegisters is not null)
+    {
+        // Sampled every 200 ms, used as the median of the last 2 s: single readings jump too much (TemperatureMedian).
+        var msr = new MsrCpuTemperature(cpuRegisters);
+        var median = new TemperatureMedian(TimeSpan.FromSeconds(2));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        cpuSampler = new Timer(_ => { if (msr.Read() is { } c) median.Add(c, clock.Elapsed); }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(200));
+        cpuTemperature = () => median.Value(clock.Elapsed);
+    }
+    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature);
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
         : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters));
@@ -119,6 +129,7 @@ finally
 {
     history.Dispose();
     ec?.Dispose();
+    cpuSampler?.Dispose();
     cpuRegisters?.Dispose();
 }
 return Environment.ExitCode;
