@@ -77,7 +77,7 @@ else
         cpuSampler = new Timer(_ => { if (msr.Read() is { } c) median.Add(c, clock.Elapsed); }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(200));
         cpuTemperature = () => median.Value(clock.Elapsed);
     }
-    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature);
+    hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature, gpuTemperature: Nvml.TemperatureC);
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
         : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters));

@@ -23,7 +23,7 @@ public sealed class EcFanHardware : IFanHardware
 {
     private readonly EmbeddedController ec;
     private readonly GmWmiGateway wmi;
-    private readonly Func<int?>? cpuTemperature;
+    private readonly Func<int?>? cpuTemperature, gpuTemperature;
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
     // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
@@ -54,8 +54,13 @@ public sealed class EcFanHardware : IFanHardware
 
     private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
 
-    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null)
+    /// <param name="gpuTemperature">Where the GPU temperature comes from when the EC reports 0 although the card is on: after
+    /// Integrated -> Hybrid the BIOS leaves EC GFXT (0x43 bit 4) off until the next start or wake (DSDT), and the EC reports
+    /// 0 (2026-10-23 20:05). The service passes NVML; the guardian nothing (it treats the read as unknown).</param>
+    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null,
+        Func<int?>? gpuTemperature = null)
     {
+        this.gpuTemperature = gpuTemperature;
         this.ec = ec;
         this.wmi = wmi;
         this.cpuTemperature = cpuTemperature;
@@ -166,7 +171,7 @@ public sealed class EcFanHardware : IFanHardware
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
-        if (gpuC < 1 && GpuOff()) gpuC = GpuOffTempC;
+        if (gpuC < 1) gpuC = GpuOff() ? GpuOffTempC : gpuTemperature?.Invoke() ?? gpuC;
         if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)

@@ -99,8 +99,9 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
     private static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
 }
 
-/// <summary>Reads the GPU power limit the driver enforces and the power drawn now; every failure is "unknown" (null).</summary>
-internal static class Nvml
+/// <summary>Reads the GPU power limit the driver enforces, the power drawn now and the temperature; every failure is "unknown" (null).
+/// Only the fan service uses it (never the guardian: a second open handle would crash it when the card is turned off).</summary>
+public static class Nvml
 {
     private static readonly object Gate = new();
     private static bool _tried, _ready, _released;
@@ -135,9 +136,14 @@ internal static class Nvml
 
     public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage);
 
+    /// <summary>The GPU's own temperature sensor (NVML_TEMPERATURE_GPU), in C.</summary>
+    public static int? TemperatureC() => Raw((IntPtr d, out uint c) => nvmlDeviceGetTemperature(d, 0, out c)) is { } c ? (int)c : null;
+
     private delegate int MilliwattQuery(IntPtr device, out uint milliwatts);
 
-    private static int? Milliwatts(MilliwattQuery query)
+    private static int? Milliwatts(MilliwattQuery query) => Raw(query) is { } mw ? (int)Math.Round(mw / 1000.0) : null;
+
+    private static uint? Raw(MilliwattQuery query)
     {
         lock (Gate)
         {
@@ -154,7 +160,7 @@ internal static class Nvml
             if (!_ready) return null;
             try
             {
-                return query(_device, out uint milliwatts) == 0 ? (int)Math.Round(milliwatts / 1000.0) : null;
+                return query(_device, out uint value) == 0 ? value : null;
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
         }
@@ -162,6 +168,7 @@ internal static class Nvml
 
     [DllImport("nvml.dll")] private static extern int nvmlInit_v2();
     [DllImport("nvml.dll")] private static extern int nvmlShutdown();
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint celsius);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
