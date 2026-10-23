@@ -10,7 +10,9 @@ namespace Excalibur.Core.Hardware;
 public static class EcQuiet
 {
     public static readonly TimeSpan AfterEvent = TimeSpan.FromSeconds(3);
-    public static readonly TimeSpan AfterCharger = TimeSpan.FromSeconds(8);
+    /// <summary>8 s felt long for the profile to follow the charger (user, 2026-10-23); the 19:20 stall began 1-4 s after
+    /// the plug. The charger raises no firmware event here: the 2-s power poll sees it, so the profile follows in 4-6 s.</summary>
+    public static readonly TimeSpan AfterCharger = TimeSpan.FromSeconds(4);
 
     private static long _untilMs;
 
@@ -22,13 +24,15 @@ public static class EcQuiet
     /// <summary>Keeps the EC quiet for at least <paramref name="span"/> from now (a longer hold already running stays).</summary>
     public static void Hold(TimeSpan span, string why)
     {
-        long until = Environment.TickCount64 + (long)span.TotalMilliseconds, seen;
+        long now = Environment.TickCount64, until = now + (long)span.TotalMilliseconds, seen;
         do
         {
             seen = Interlocked.Read(ref _untilMs);
             if (seen >= until) return;
         }
         while (Interlocked.CompareExchange(ref _untilMs, until, seen) != seen);
+        // A held light key sends ~6 events a second: only the start of a quiet spell is noted, not each extension.
+        if (seen > now) return;
         EcTrace.Record($"quiet {span.TotalSeconds:F0}s ({why})", TimeSpan.Zero);
         Report?.Invoke($"ec quiet {span.TotalSeconds:F0} s ({why})");
     }
