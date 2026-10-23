@@ -50,16 +50,19 @@ public static class SafetyPolicy
 
 /// <summary>
 /// Decides the hot rule from RAW temperatures: either chip at <see cref="HotC"/> or above for
-/// <see cref="SustainSeconds"/> in a row, or at <see cref="ImmediateC"/> at any moment.
-/// A 1-2 s boost spike to ~89 C (measured) therefore does not slam both fans to 100%.
+/// <see cref="SustainSeconds"/> in a row, or at <see cref="ImmediateC"/> on <see cref="ImmediateReadings"/> readings in a row.
+/// A 1-2 s boost spike to ~89 C (measured) therefore does not slam both fans to 100%, nor does a single
+/// MSR reading of 92-100 C: the CPU's own sensor jumps that far for a fraction of a second (2026-10-23).
 /// </summary>
 public sealed class HotTracker
 {
     public const int HotC = 80;
     public const int ImmediateC = 92;
     public const double SustainSeconds = 3;
+    public const int ImmediateReadings = 2;
 
     private DateTimeOffset? _hotSince;
+    private int _immediate;
 
     public bool Update(FanSnapshot raw, DateTimeOffset now)
     {
@@ -67,11 +70,17 @@ public sealed class HotTracker
         if (hottest < HotC)
         {
             _hotSince = null;
+            _immediate = 0;
             return false;
         }
         _hotSince ??= now;
-        return hottest >= ImmediateC || (now - _hotSince.Value).TotalSeconds >= SustainSeconds - 0.5;
+        _immediate = hottest >= ImmediateC ? _immediate + 1 : 0;
+        return _immediate >= ImmediateReadings || (now - _hotSince.Value).TotalSeconds >= SustainSeconds - 0.5;
     }
 
-    public void Reset() => _hotSince = null;
+    public void Reset()
+    {
+        _hotSince = null;
+        _immediate = 0;
+    }
 }

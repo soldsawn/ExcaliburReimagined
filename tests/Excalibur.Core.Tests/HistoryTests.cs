@@ -186,7 +186,8 @@ public sealed class HistoryTests : IDisposable
         Assert.Equal(FanProfile.Quiet.CpuCurve.Evaluate(66), s.CpuCurvePercent);
 
         hw.CpuTempC = 95;
-        s = loop.Tick(T0.AddSeconds(2));
+        loop.Tick(T0.AddSeconds(2));
+        s = loop.Tick(T0.AddSeconds(3));
         Assert.Equal(FanReason.Hot, s.CpuReason);
         Assert.Equal(FanReason.Hot, s.GpuReason);
     }

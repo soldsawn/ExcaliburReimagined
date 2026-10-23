@@ -135,8 +135,24 @@ public class HotTrackerTests
     }
 
     [Fact]
-    public void Immediate_threshold_is_hot_at_once()
-        => Assert.True(new HotTracker().Update(Snap(50, HotTracker.ImmediateC), T0));
+    public void Immediate_threshold_twice_in_a_row_is_hot()
+    {
+        var h = new HotTracker();
+        Assert.False(h.Update(Snap(50, HotTracker.ImmediateC), T0));
+        Assert.True(h.Update(Snap(50, HotTracker.ImmediateC), T0.AddSeconds(1)));
+    }
+
+    [Fact]
+    public void A_single_reading_at_the_immediate_threshold_is_not_hot()
+    {
+        // 2026-10-23 07:24:04-08, MSR package temperature: 78, 55, 100, 82, 51.
+        var h = new HotTracker();
+        Assert.False(h.Update(Snap(78, 49), T0));
+        Assert.False(h.Update(Snap(55, 49), T0.AddSeconds(1)));
+        Assert.False(h.Update(Snap(100, 49), T0.AddSeconds(2)));
+        Assert.False(h.Update(Snap(82, 49), T0.AddSeconds(3)));
+        Assert.False(h.Update(Snap(51, 49), T0.AddSeconds(4)));
+    }
 }
 
 public class TemperatureFilterTests
