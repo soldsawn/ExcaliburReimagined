@@ -8,9 +8,7 @@ namespace Excalibur.Core.Fan;
 /// <summary>
 /// <see cref="IFanHardware"/> on the real machine: temperatures and RPM from the
 /// firmware's WMI sensor block (GET 0x0200) on every read, fan targets / Cooling Boost from
-/// the EC only at start, after a gap in the reads (sleep) and when a fan does not follow its target (or every
-/// <c>ecRefresh</c> when given, or when the event watcher could not start). The once-a-minute check read coincided to the
-/// millisecond with all six ACPI 15 warnings of 2026-10-23 20:39-20:47. The applied percent is worked out from the RPM
+/// the EC only every <c>ecRefresh</c>; the applied percent is worked out from the RPM
 /// (<see cref="AppliedPercent"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
 /// battery read shuts the machine down as "critical battery"; WMI goes through Windows'
@@ -30,11 +28,7 @@ public sealed class EcFanHardware : IFanHardware
     private const int MaxRpm = 7000;
     // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
     private const double CpuRpmPerPercent = 54.5, GpuRpmPerPercent = 52.5;
-    /// <summary>Without the firmware event watcher the Cooling Boost state has no other source, so the block is read this often.</summary>
-    private static readonly TimeSpan NoWatcherEcRefresh = TimeSpan.FromSeconds(60);
-    /// <summary>A gap this long between reads is a sleep (the loop ticks every second): the EC may have reset meanwhile.</summary>
-    private static readonly TimeSpan ReadGap = TimeSpan.FromSeconds(15);
-    private readonly Stopwatch _sinceRead = new();
+    private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(60);
 
     private readonly TimeSpan _ecRefresh;
     private readonly Stopwatch _sinceEcRead = new();
@@ -60,8 +54,8 @@ public sealed class EcFanHardware : IFanHardware
         this.ec = ec;
         this.wmi = wmi;
         this.cpuTemperature = cpuTemperature;
+        _ecRefresh = ecRefresh ?? DefaultEcRefresh;
         StartBoostWatcher();
-        _ecRefresh = ecRefresh ?? (_boostWatcher is null ? NoWatcherEcRefresh : Timeout.InfiniteTimeSpan);
     }
 
     private void StartBoostWatcher()
@@ -98,10 +92,7 @@ public sealed class EcFanHardware : IFanHardware
     {
         var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
 
-        bool afterGap = _sinceRead.IsRunning && _sinceRead.Elapsed >= ReadGap;
-        _sinceRead.Restart();
-        bool due = _ecRefresh != Timeout.InfiniteTimeSpan && _sinceEcRead.Elapsed >= _ecRefresh;
-        if (_ec is null || ((due || afterGap) && !_reused))
+        if (_ec is null || (_sinceEcRead.Elapsed >= _ecRefresh && !_reused))
         {
             try
             {
