@@ -298,9 +298,32 @@ internal sealed class CurveChart : FrameworkElement
     /// <summary>The value of a step polyline (stock EC, floors) at a temperature: the last point at or below it.</summary>
     private static int StepAt((int C, int P)[] steps, int c) => steps.Last(s => s.C <= Math.Max(c, MinC)).P;
 
-    private void Curve(DrawingContext dc, FanCurve curve, Pen pen) =>
-        Polyline(dc, Enumerable.Range(MinC, MaxC - MinC + 1)
-            .Select(c => (c, Math.Max(curve.Evaluate(c), SafetyPolicy.AbsoluteFloor))).ToArray(), pen);
+    // Through the curve's own corners (and where it crosses the absolute floor), not one rounded percent per degree:
+    // a flat stretch (Balanced: 5 points over 12 C) drew as a shaky staircase.
+    private void Curve(DrawingContext dc, FanCurve curve, Pen pen)
+    {
+        var corners = new List<(double C, double P)> { (MinC, curve.Evaluate(MinC)) };
+        corners.AddRange(curve.Points.Where(p => p.TempC > MinC && p.TempC < MaxC).Select(p => ((double)p.TempC, (double)p.Percent)));
+        corners.Add((MaxC, curve.Evaluate(MaxC)));
+        var points = new List<Point>();
+        for (int i = 0; i < corners.Count; i++)
+        {
+            if (i > 0 && (corners[i - 1].P < SafetyPolicy.AbsoluteFloor) != (corners[i].P < SafetyPolicy.AbsoluteFloor))
+            {
+                var (a, b) = (corners[i - 1], corners[i]);
+                points.Add(At(a.C + (SafetyPolicy.AbsoluteFloor - a.P) / (b.P - a.P) * (b.C - a.C), SafetyPolicy.AbsoluteFloor));
+            }
+            points.Add(At(corners[i].C, Math.Max(corners[i].P, SafetyPolicy.AbsoluteFloor)));
+        }
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(points[0], false, false);
+            g.PolyLineTo(points.Skip(1).ToList(), true, true);
+        }
+        geometry.Freeze();
+        dc.DrawGeometry(null, pen, geometry);
+    }
 
     private void Polyline(DrawingContext dc, (int C, int P)[] points, Pen pen)
     {
