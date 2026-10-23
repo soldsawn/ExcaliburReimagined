@@ -283,5 +283,7 @@ public sealed class FanPipeServer(
             Power = PowerStatusDto.From(power.Status),
             LightIdleOffMinutes = settings.Current.Lighting?.IdleOffMinutes ?? 0,
             LightIdle = lighting.Idle,
+            // The light key changes it behind the page's back; the page follows this.
+            LightBrightness = settings.Current.Lighting?.Brightness,
         };
 }

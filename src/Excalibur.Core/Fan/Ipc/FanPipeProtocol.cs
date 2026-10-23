@@ -25,7 +25,7 @@ public static class FanPipe
     /// 7: + trialEc (user-approved trial of an unverified EC firmware; response Code trial_unavailable), status Trial,
     ///    settings TrustedEcVersions.
     /// 8: + setLighting(lighting) (keyboard light; stored and shown), setLightIdle(idle) (the tray saw no input for the
-    ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle.
+    ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle / LightBrightness.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
     public const int ProtocolVersion = 8;
@@ -131,7 +131,8 @@ public sealed record FanStatusDto(
     PowerStatusDto? Power = null,
     EcTrialStatus? Trial = null,
     int LightIdleOffMinutes = 0,
-    bool LightIdle = false)
+    bool LightIdle = false,
+    int? LightBrightness = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {
