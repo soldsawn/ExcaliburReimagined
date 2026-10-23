@@ -32,6 +32,9 @@ builder.Services.AddWindowsService(o => o.ServiceName = "ExcaliburFanGuardian");
 builder.Services.AddSingleton(new EcFanHardware(ec, new GmWmiGateway()));
 var fileLog = new FanFileLog(FanPaths.LogDirectory, "guardian");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+EcTrace.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+EcQuiet.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+EcTrace.WatchAcpi(m => fileLog.Write(DateTimeOffset.Now, m));
 builder.Services.AddSingleton(fileLog);
 builder.Services.AddHostedService<GuardianWorker>();
 

@@ -38,6 +38,11 @@ public sealed class EcFanHardware : IFanHardware
     private readonly FanFollowCheck _follow = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly int[] _lastPercent = new int[2];
+    // The last WMI sensor block and when it was read: reused while the EC is kept quiet (EcQuiet).
+    private (int CpuC, int GpuC, int CpuRpm, int GpuRpm)? _lastWmi;
+    private readonly Stopwatch _sinceWmi = new();
+    private static readonly TimeSpan MaxReuse = TimeSpan.FromSeconds(15);
+    private bool _reused;
 
     /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
     public Action<string>? Log { get; set; }
@@ -60,7 +65,10 @@ public sealed class EcFanHardware : IFanHardware
             var watcher = new ManagementEventWatcher(new ManagementScope(@"root\wmi"), new WqlEventQuery("SELECT * FROM GMC_WMIEvent"));
             watcher.EventArrived += (_, e) =>
             {
-                if (e.NewEvent["EventDetail"] is byte[] detail && TryParseBoostEvent(detail, out bool on)) _boost = on;
+                if (e.NewEvent["EventDetail"] is not byte[] detail) return;
+                // The EC raised it, so it is busy right now: let it finish before we read again (5 = the charger).
+                if (detail.Length > 1) EcQuiet.Hold(detail[1] == 5 ? EcQuiet.AfterCharger : EcQuiet.AfterEvent, $"firmware event {detail[1]}");
+                if (TryParseBoostEvent(detail, out bool on)) _boost = on;
             };
             watcher.Start();
             _boostWatcher = watcher;
@@ -84,7 +92,7 @@ public sealed class EcFanHardware : IFanHardware
     {
         var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
 
-        if (_ec is null || _sinceEcRead.Elapsed >= _ecRefresh)
+        if (_ec is null || (_sinceEcRead.Elapsed >= _ecRefresh && !_reused))
         {
             try
             {
@@ -97,8 +105,12 @@ public sealed class EcFanHardware : IFanHardware
         }
         int cpuPercent = AppliedPercent(cpuRpm, CpuRpmPerPercent), gpuPercent = AppliedPercent(gpuRpm, GpuRpmPerPercent);
         (_lastPercent[0], _lastPercent[1]) = (cpuPercent, gpuPercent);
-        CheckFollow(FanId.Cpu, cpuPercent);
-        CheckFollow(FanId.Gpu, gpuPercent);
+        // Reused RPMs say nothing about a target written since.
+        if (!_reused)
+        {
+            CheckFollow(FanId.Cpu, cpuPercent);
+            CheckFollow(FanId.Gpu, gpuPercent);
+        }
         var e = _ec;
         return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget, cpuPercent, gpuPercent, _boost);
     }
@@ -135,6 +147,14 @@ public sealed class EcFanHardware : IFanHardware
 
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) ReadWmiSensors()
     {
+        _reused = EcQuiet.IsQuiet && _lastWmi is not null && _sinceWmi.Elapsed < MaxReuse;
+        if (_reused)
+        {
+            var last = _lastWmi!.Value;
+            // The CPU temperature does not come from the EC (MSR): it stays live.
+            if (cpuTemperature?.Invoke() is { } live and >= 1 and <= MaxTempC) last = last with { CpuC = live };
+            return last;
+        }
         SmiCommand sensors;
         try { sensors = wmi.Execute(SmiCommand.Get(0x0200)); }
         catch (Exception ex) { throw new FanReadException("WMI sensor read failed.", ex); }
@@ -145,6 +165,8 @@ public sealed class EcFanHardware : IFanHardware
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)
             throw new FanReadException($"Implausible RPM CPU={cpuRpm} GPU={gpuRpm}.");
+        _lastWmi = (cpuC, gpuC, cpuRpm, gpuRpm);
+        _sinceWmi.Restart();
         return (cpuC, gpuC, cpuRpm, gpuRpm);
     }
 

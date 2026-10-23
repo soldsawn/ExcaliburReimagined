@@ -178,6 +178,27 @@ public sealed class PowerTests : IDisposable
     }
 
     [Fact]
+    public void A_change_of_source_waits_for_the_ec_to_settle_before_the_mode_and_profile_follow()
+    {
+        // 2026-10-23 19:20: the charger plugged in, the mode sent at once, the EC timed out (ACPI 13) 5 s later.
+        Automate(new PowerAutomation { OnAc = new PowerRule { Mode = PowerMode.Gaming, FanProfile = "Balanced" } });
+        var power = new PowerManager(_hw, _settings, (p, s) => _profiles.Add((p, s)), _log.Add, settle: TimeSpan.FromMilliseconds(300));
+        _hw.Source = Battery;
+        power.Poll(); // start: acts at once
+        int sent = _hw.Sent.Count;
+
+        _hw.Source = Wall;
+        power.Poll();
+        Assert.Equal(sent, _hw.Sent.Count);
+        Assert.Empty(_profiles);
+
+        Thread.Sleep(400);
+        power.Poll();
+        Assert.Equal(PowerMode.Gaming, _hw.Sent[^1]);
+        Assert.Equal([("Balanced", "automation")], _profiles);
+    }
+
+    [Fact]
     public void Automation_applies_each_sides_mode_and_fan_profile_on_a_real_change()
     {
         Automate(new PowerAutomation

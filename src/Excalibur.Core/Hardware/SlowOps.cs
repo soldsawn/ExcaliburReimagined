@@ -13,6 +13,7 @@ public static class SlowOps
 
     public static void Check(string what, TimeSpan elapsed)
     {
+        EcTrace.Record(what, elapsed);
         if (Describe(what, elapsed) is { } line) Report?.Invoke(line);
     }
 

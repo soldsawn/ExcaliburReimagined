@@ -26,6 +26,7 @@ public sealed class LightingManager(KeyboardLight light, ServiceSettingsStore se
         {
             var errors = settings.Update(s => s with { Lighting = lighting }, out _);
             if (errors.Count > 0) return errors;
+            log?.Invoke($"light: {lighting.Effect} level {lighting.Brightness} {lighting.Left}/{lighting.Middle}/{lighting.Right}");
             _idle = false;
             Apply();
             return [];
@@ -39,6 +40,7 @@ public sealed class LightingManager(KeyboardLight light, ServiceSettingsStore se
         {
             if (settings.Current.Lighting is not { } l || (idle && l.IdleOffMinutes == 0) || idle == _idle) return;
             _idle = idle;
+            log?.Invoke(idle ? "light: idle, off" : "light: input again, on");
             Apply();
         }
     }

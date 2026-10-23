@@ -1,3 +1,4 @@
+using Excalibur.Core.Hardware;
 using Excalibur.Core.Settings;
 
 namespace Excalibur.Core.Power;
@@ -72,12 +73,19 @@ public sealed class PowerManager
     private int? _gpuWatts, _gpuPower;
     private CpuPower? _cpu;
     private int _polls;
+    private readonly TimeSpan _settle;
+    // A change of power source waiting for the EC to settle: (source, first).
+    private PowerSource? _pending;
     // How often the CPU limit is checked again (the firmware may reset it, e.g. after sleep): every 30 polls, about a minute.
     private const int CpuLimitCheckEvery = 30;
 
     /// <param name="switchProfile">(fan profile name, <c>FanSource</c>) — switches the fan profile the way a user command does.</param>
-    public PowerManager(IPowerHardware hardware, ServiceSettingsStore settings, Action<string, string> switchProfile, Action<string>? log = null)
+    /// <param name="settle">How long a change of power source waits before the mode and the profile follow: the EC is busy with
+    /// the charger then (ACPI 13 at 19:20:58 on 2026-10-23, 5 s after the plug and the mode command). Zero acts at once.</param>
+    public PowerManager(IPowerHardware hardware, ServiceSettingsStore settings, Action<string, string> switchProfile, Action<string>? log = null,
+        TimeSpan settle = default)
     {
+        _settle = settle;
         _hw = hardware;
         _settings = settings;
         _switchProfile = switchProfile;
@@ -113,12 +121,24 @@ public sealed class PowerManager
             _gpuPower = SafeGpuPower();
             _cpu = SafeCpuPower();
             if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(_settings.Current.CpuLimit);
+            if (_pending is not null && !EcQuiet.IsQuiet)
+            {
+                _pending = null;
+                // The source may have changed back meanwhile; act on what it is now.
+                Apply(source, first: false);
+            }
             // The battery percent changes all the time; only a change of power source counts.
             bool sameSource = _source is { } known && known.OnBattery == source.OnBattery && known.UsbCAdapter == source.UsbCAdapter;
             if (sameSource) { _source = source; return; }
             bool first = _source is null;
             _source = source;
             _log($"power: {(first ? "now" : "changed to")} {Describe(source)}");
+            if (!first && _settle > TimeSpan.Zero)
+            {
+                EcQuiet.Hold(_settle, "power source");
+                _pending = source;
+                return;
+            }
             Apply(source, first);
         }
     }

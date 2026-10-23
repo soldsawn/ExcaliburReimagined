@@ -94,6 +94,12 @@ loop.EcTrusted += v => settingsStore.Update(s => s.TrustedEcVersions.Contains(v)
 builder.Services.AddSingleton(loop);
 var fileLog = new FanFileLog(runtime.LogDirectory, "fan");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+if (!simulate)
+{
+    EcTrace.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+    EcQuiet.Report = m => fileLog.Write(DateTimeOffset.Now, m);
+    EcTrace.WatchAcpi(m => fileLog.Write(DateTimeOffset.Now, m));
+}
 if (hardware is EcFanHardware ecFans) ecFans.Log = m => fileLog.Write(DateTimeOffset.Now, m);
 var history = new HistoryRecorder(runtime.HistoryDirectory, settingsStore.Current.History, m => fileLog.Write(DateTimeOffset.Now, m));
 settingsStore.Changed += s => history.Mode = s.History;
@@ -106,7 +112,7 @@ builder.Services.AddSingleton(sp =>
 {
     var switcher = sp.GetRequiredService<ProfileSwitcher>();
     return new PowerManager(powerHardware, settingsStore, (profile, source) => switcher.Switch(profile, source),
-        m => fileLog.Write(DateTimeOffset.Now, m));
+        m => fileLog.Write(DateTimeOffset.Now, m), simulate ? TimeSpan.Zero : EcQuiet.AfterCharger);
 });
 builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
