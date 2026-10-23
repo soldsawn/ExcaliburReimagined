@@ -57,7 +57,8 @@ public sealed class GpuModeTests : IDisposable
         Assert.True(_m.Set(GpuMode.Integrated) is { Ok: true, RestartNeeded: false });
         Assert.False(_hw.NvidiaOn);
         Assert.Equal(GpuMode.Integrated, _m.Status.Mode);
-        Assert.True(_m.Set(GpuMode.Hybrid) is { Ok: true, RestartNeeded: false });
+        // The card is back at once; its power management only after a restart.
+        Assert.True(_m.Set(GpuMode.Hybrid) is { Ok: true, RestartNeeded: true });
         Assert.True(_hw.NvidiaOn);
         Assert.Equal(GpuMode.Hybrid, _m.Status.Mode);
     }

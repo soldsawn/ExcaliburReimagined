@@ -193,7 +193,8 @@ internal sealed class DisplayPage : UserControl
         }
         _gpuRendering = false;
         _gpuNow.Text = g?.Mode is not { } now ? "Ekran kartı modu okunamadı (fan servisi bağlı değil ya da bu bilgisayar desteklemiyor)."
-            : g.RestartNeeded ? $"Şu an: {Name(now)}. Yeniden başlatınca: {Name(g.Pending!.Value)}."
+            : g.Pending is { } next && next != now ? $"Şu an: {Name(now)}. Yeniden başlatınca: {Name(next)}."
+            : g.RestartAdvised ? $"Şu an: {Name(now)}. NVIDIA kartı açıldı; güç ayarlarının tam geri gelmesi için bilgisayarı yeniden başlatın."
             : $"Şu an: {Name(now)}." + (g.Hdmi ? " Harici ekran bağlı." : "");
         _restart.Visibility = g?.RestartNeeded == true ? Visibility.Visible : Visibility.Collapsed;
         _trial.Visibility = g?.Trial == GpuTrial.AwaitingConfirm ? Visibility.Visible : Visibility.Collapsed;

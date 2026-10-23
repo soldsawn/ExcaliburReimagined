@@ -54,10 +54,11 @@ public interface IGpuHardware
 public sealed class GpuException(string message, Exception? inner = null) : Exception(message, inner);
 
 /// <summary>The graphics mode as the apps show it. <see cref="Pending"/> is what the next restart brings, null when nothing changes.</summary>
-public sealed record GpuStatusDto(GpuMode? Mode, GpuMode? Pending, bool Hdmi, GpuTrial Trial)
+/// <see cref="RestartAdvised"/>: back from Integrated, the NVIDIA driver restores its power management only at a restart.
+public sealed record GpuStatusDto(GpuMode? Mode, GpuMode? Pending, bool Hdmi, GpuTrial Trial, bool RestartAdvised = false)
 {
     [JsonIgnore]
-    public bool RestartNeeded => Pending is { } p && p != Mode;
+    public bool RestartNeeded => Pending is { } p && p != Mode || RestartAdvised;
 }
 
 /// <summary>What a mode request ended up as; <see cref="Code"/> is stable, for the UI to word.</summary>
@@ -75,6 +76,8 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
     private readonly object _gate = new();
     private GpuMode? _mode;
     private bool _hdmi;
+    // Until this service restarts (with Windows, normally): the card came back from Integrated without a restart.
+    private bool _restartAdvised;
 
     public GpuStatusDto Status
     {
@@ -83,7 +86,7 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
             lock (_gate)
             {
                 var s = settings.Current;
-                return new GpuStatusDto(_mode, s.GpuPending is { } p && p != _mode ? p : null, _hdmi, s.GpuTrial);
+                return new GpuStatusDto(_mode, s.GpuPending is { } p && p != _mode ? p : null, _hdmi, s.GpuTrial, _restartAdvised);
             }
         }
     }
@@ -137,13 +140,17 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
                         if (_hdmi) return GpuResult.Fail("gpu_hdmi", "an external display is connected to the NVIDIA card");
                         if (_mode == GpuMode.Discrete) return GpuResult.Fail("gpu_from_discrete", "switch to Hybrid and restart first");
                         bool later = hw.SetNvidiaEnabled(false);
+                        _restartAdvised = false;
                         hw.Write(GpuMode.Integrated);
                         Store(s with { GpuPending = null, GpuTrial = GpuTrial.None });
                         Refresh();
                         log?.Invoke(later ? "gpu: now Integrated; Windows turns the card off at the next restart" : "gpu: now Integrated");
                         return new GpuResult(true, RestartNeeded: later);
                     case GpuMode.Hybrid:
-                        bool restart = _mode == GpuMode.Integrated && hw.SetNvidiaEnabled(true);
+                        // Back from Integrated the card works at once, but the driver restores its power management (limit,
+                        // idle states) only at a restart: after the first try it ran at P0 2100 MHz with no limit (2026-10-23 20:34).
+                        bool restart = _mode == GpuMode.Integrated;
+                        if (restart) { hw.SetNvidiaEnabled(true); _restartAdvised = true; }
                         restart |= _mode == GpuMode.Discrete;
                         hw.Write(GpuMode.Hybrid);
                         // From Discrete the trial ends here: the user chose Hybrid for the next start.

@@ -136,7 +136,8 @@ public static class Nvml
         }
     }
 
-    public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit);
+    // After the card was turned off and on in Windows the driver reports no limit (nvidia-smi N/A) and NVML a wild number.
+    public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit) is { } w and <= MaxPlausibleWatts ? w : null;
 
     /// <summary>Above this a reading is noise: the card's limit is 100 W. Waking from sleep, the first draw read as 590 W (2026-10-23).</summary>
     public const int MaxPlausibleWatts = 250;
