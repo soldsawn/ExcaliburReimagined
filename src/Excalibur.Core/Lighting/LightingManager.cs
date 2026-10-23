@@ -53,7 +53,9 @@ public sealed class LightingManager(KeyboardLight light, ServiceSettingsStore se
             log?.Invoke($"light key: level {brightness}");
             _idle = false;
             if (l.Brightness != brightness) settings.Update(s => s with { Lighting = l with { Brightness = brightness } }, out _);
-            Apply();
+            // At level 0 the key has already put the light out; a command would only add EC traffic.
+            if (brightness > 0) Apply();
+            else light.Forget();
         }
     }
 

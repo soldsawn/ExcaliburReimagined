@@ -207,6 +207,18 @@ public sealed class LightingManagerTests : IDisposable
     }
 
     [Fact]
+    public void The_key_turning_the_light_off_is_stored_without_a_command()
+    {
+        _m.Set(Cyan);
+        int sent = _smi.Sent.Count;
+        _m.OnKey(0);
+        Assert.Equal(sent, _smi.Sent.Count);
+        Assert.Equal(0, _store.Current.Lighting!.Brightness);
+        _m.OnKey(1);
+        Assert.Equal(new LightSetting(LightEffect.Static, 1, 0, 255, 255), LastSent);
+    }
+
+    [Fact]
     public void Idle_goes_dark_and_input_brings_the_light_back()
     {
         _m.Set(Cyan);
