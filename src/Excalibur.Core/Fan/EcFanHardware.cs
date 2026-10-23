@@ -38,6 +38,9 @@ public sealed class EcFanHardware : IFanHardware
     private readonly FanFollowCheck _follow = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly int[] _lastPercent = new int[2];
+    // Targets learnt while handing the fans to the EC at start, so the first block read need not read them again.
+    private FanTarget? _knownCpu, _knownGpu;
+    private readonly string? _versionCachePath;
     // The last WMI sensor block and when it was read: reused while the EC is kept quiet (EcQuiet).
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm)? _lastWmi;
     private readonly Stopwatch _sinceWmi = new();
@@ -49,8 +52,13 @@ public sealed class EcFanHardware : IFanHardware
 
     private sealed record EcBlock(FanTarget CpuTarget, FanTarget GpuTarget);
 
-    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null)
+    /// <param name="versionCachePath">Where the EC version is kept with the BIOS version it was read under. Reading it costs
+    /// twelve EC transactions at every start and wake, and the start's burst of EC traffic is what Windows answered with
+    /// ACPI 15 warnings (2026-10-23 21:09:50, three within the version read); it changes only with a BIOS update.</param>
+    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null,
+        string? versionCachePath = null)
     {
+        _versionCachePath = versionCachePath;
         this.ec = ec;
         this.wmi = wmi;
         this.cpuTemperature = cpuTemperature;
@@ -96,7 +104,8 @@ public sealed class EcFanHardware : IFanHardware
         {
             try
             {
-                _ec = new EcBlock(Target(FanRegisters.CpuTarget), Target(FanRegisters.GpuTarget));
+                _ec = new EcBlock(_knownCpu ?? Target(FanRegisters.CpuTarget), _knownGpu ?? Target(FanRegisters.GpuTarget));
+                _knownCpu = _knownGpu = null;
                 _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
                 _sinceEcRead.Restart();
             }
@@ -176,6 +185,21 @@ public sealed class EcFanHardware : IFanHardware
         if (!FanRegisters.IsWritable(reg, target.Value))
             throw new InvalidOperationException($"Refusing to write 0x{target.Value:X2} to 0x{reg:X2}.");
 
+        // At start (nothing known yet) the fans are usually on EC automatic already: look before writing.
+        if (target.IsAuto && _ec is null)
+        {
+            try
+            {
+                if (ec.ReadStable(reg) == target.Value)
+                {
+                    Learnt(fan, target);
+                    return;
+                }
+            }
+            catch (EcBusyException ex) { throw new FanBusyException($"{fan} fan target {target} not checked: the EC is busy.", ex); }
+            catch (TimeoutException) { }
+        }
+
         // One retry: a write that timed out may or may not have landed, and for 0xFF a stray byte from
         // Windows' EC driver can spoil the single read-back.
         for (int attempt = 0; attempt < 2; attempt++)
@@ -189,6 +213,8 @@ public sealed class EcFanHardware : IFanHardware
                     _follow.Wrote(fan, target, _lastPercent[(int)fan], _clock.Elapsed);
                     if (_ec is not null)
                         _ec = fan == FanId.Cpu ? _ec with { CpuTarget = target } : _ec with { GpuTarget = target };
+                    else if (target.IsAuto)
+                        Learnt(fan, target);
                     return;
                 }
             }
@@ -200,7 +226,50 @@ public sealed class EcFanHardware : IFanHardware
             : $"{fan} fan target {target} could not be written to 0x{reg:X2}.");
     }
 
+    private void Learnt(FanId fan, FanTarget target)
+    {
+        if (fan == FanId.Cpu) _knownCpu = target;
+        else _knownGpu = target;
+    }
+
     public string? ReadEcVersion()
+    {
+        string? bios = BiosVersion();
+        if (_versionCachePath is not null && bios is not null)
+        {
+            try
+            {
+                var lines = File.ReadAllLines(_versionCachePath);
+                if (lines is [var b, var v] && b == bios && IsEcVersion(v)) return v;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        string? read = ReadEcVersionFromEc();
+        if (read is not null && _versionCachePath is not null && bios is not null)
+        {
+            try { File.WriteAllLines(_versionCachePath, [bios, read]); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        return read;
+    }
+
+    private static bool IsEcVersion(string v) => v.Length == FanRegisters.EcVersionLength && v.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z');
+
+    /// <summary>The BIOS version and date from Windows (SMBIOS, no EC access); an EC update comes with a BIOS update.</summary>
+    private static string? BiosVersion()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS");
+            foreach (ManagementObject o in searcher.Get())
+                using (o)
+                    return $"{o["SMBIOSBIOSVersion"]} {o["ReleaseDate"]}";
+        }
+        catch (ManagementException) { }
+        return null;
+    }
+
+    private string? ReadEcVersionFromEc()
     {
         // Read once at start; a busy bus only delays it (the stale-byte drain frees it within seconds).
         for (int attempt = 0; attempt < 50; attempt++)
