@@ -1,5 +1,4 @@
 using Excalibur.Core.Fan;
-using Excalibur.Core.Hardware;
 using Excalibur.Core.History;
 using Excalibur.Core.Settings;
 
@@ -31,20 +30,6 @@ public sealed class FanWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         power.Changed += OnPower;
-        // Right after Windows starts, leave the EC to Windows (EcQuiet.AfterBoot); the heartbeat keeps the guardian calm.
-        if (!runtime.Simulated && EcQuiet.BootRemaining is { } wait && wait > TimeSpan.Zero)
-        {
-            Log($"windows just started: fans stay on EC automatic for {wait.TotalSeconds:F0} s");
-            try
-            {
-                while (EcQuiet.BootRemaining > TimeSpan.Zero)
-                {
-                    WriteHeartbeat();
-                    await Task.Delay(Period, stoppingToken);
-                }
-            }
-            catch (OperationCanceledException) { return; }
-        }
         var profile = SavedProfile();
         loop.Start(profile, DateTimeOffset.Now);
         Log($"service started ({(runtime.Simulated ? "SIMULATION" : "real EC")}), profile {profile.Name}");
