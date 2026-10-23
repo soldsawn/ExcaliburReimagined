@@ -104,7 +104,11 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
 public static class Nvml
 {
     private static readonly object Gate = new();
-    private static bool _tried, _ready, _released;
+    private static bool _tried, _ready;
+    private static volatile bool _released;
+
+    /// <summary>True while the service has closed NVML because the NVIDIA card is being turned off or is off.</summary>
+    public static bool IsReleased => _released;
     private static IntPtr _device;
 
     /// <summary>

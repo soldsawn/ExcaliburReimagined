@@ -252,6 +252,21 @@ public sealed class PowerTests : IDisposable
     // ---- status and settings ----------------------------------------------------------------
 
     [Fact]
+    public void The_gpu_is_asked_only_after_start_and_a_mode_command_and_its_draw_only_while_a_window_shows_it()
+    {
+        // NVML wakes the NVIDIA card; the stock software asks it only in its open window.
+        for (int i = 0; i < 10; i++) Poll(Wall);
+        Assert.Equal(3, _hw.LimitReads);
+        Assert.Equal(0, _hw.PowerReads);
+        _power.SetMode(PowerMode.Gaming);
+        for (int i = 0; i < 10; i++) Poll(Wall);
+        Assert.Equal(6, _hw.LimitReads);
+        _power.WantDetail();
+        Poll(Wall);
+        Assert.Equal(1, _hw.PowerReads);
+    }
+
+    [Fact]
     public void Status_reads_the_active_mode_from_the_gpu_limit()
     {
         Poll(Wall);
@@ -259,9 +274,10 @@ public sealed class PowerTests : IDisposable
         _power.Poll();
         Assert.Equal(PowerMode.Gaming, _power.Status.Mode);
 
+        // Unreadable (e.g. the NVIDIA card is off in Integrated): the last reading stands.
         _hw.GpuWatts = null;
         _power.Poll();
-        Assert.Null(_power.Status.Mode);
+        Assert.Equal(PowerMode.Gaming, _power.Status.Mode);
 
         Poll(Battery);
         Assert.Equal(PowerLock.OnBattery, _power.Status.Lock);
@@ -319,7 +335,9 @@ public sealed class PowerTests : IDisposable
         }
 
         public PowerSource ReadSource() => Source;
-        public int? ReadGpuWatts() => GpuWatts;
+        public int LimitReads, PowerReads;
+        public int? ReadGpuWatts() { LimitReads++; return GpuWatts; }
+        public int? ReadGpuPowerWatts() { PowerReads++; return 20; }
         public CpuPower? Cpu { get; set; }
         public CpuPower? ReadCpuPower() => Cpu;
         public bool FailCpuLimit { get; set; }

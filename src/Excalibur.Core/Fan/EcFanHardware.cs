@@ -1,3 +1,4 @@
+using Excalibur.Core.Power;
 using System.Diagnostics;
 using System.Management;
 using System.Text;
@@ -171,7 +172,8 @@ public sealed class EcFanHardware : IFanHardware
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
-        if (gpuC < 1) gpuC = GpuOff() ? GpuOffTempC : gpuTemperature?.Invoke() ?? gpuC;
+        // NVML closed on purpose = the card is going off or is off (Integrated): 0 C is expected then, not a bad read.
+        if (gpuC < 1) gpuC = Nvml.IsReleased || GpuOff() ? GpuOffTempC : gpuTemperature?.Invoke() ?? gpuC;
         if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)

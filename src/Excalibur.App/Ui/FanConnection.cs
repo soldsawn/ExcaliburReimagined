@@ -112,7 +112,7 @@ internal sealed class FanConnection : IDisposable
         _busy = true;
         try
         {
-            var r = await _client.SendAsync(new FanRequest(withEvents ? "events" : "status"));
+            var r = await _client.SendAsync(new FanRequest(withEvents ? "events" : "status", Source: FanSource.Window));
             if (r.Status is { } s) Apply(s, r.Events);
         }
         catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException or JsonException)

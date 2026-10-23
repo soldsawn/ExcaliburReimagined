@@ -71,6 +71,12 @@ public sealed class PowerManager
     private PowerSource? _source;
     private PowerMode? _applied;
     private int? _gpuWatts, _gpuPower;
+    // NVML wakes the NVIDIA card, so it is asked only when it matters, as the stock software does (it uses NVML only in
+    // its open window): the limit on the polls after start, wake and a mode command, the draw while a window shows it.
+    private const int GpuLimitReads = 3;
+    private int _gpuLimitReadsLeft = GpuLimitReads;
+    private DateTime _detailUntil = DateTime.MinValue;
+    private static readonly TimeSpan DetailFor = TimeSpan.FromSeconds(5);
     private CpuPower? _cpu;
     private int _polls;
     private readonly TimeSpan _settle;
@@ -117,8 +123,12 @@ public sealed class PowerManager
 
         lock (_gate)
         {
-            _gpuWatts = SafeGpuWatts();
-            _gpuPower = SafeGpuPower();
+            if (_gpuLimitReadsLeft > 0)
+            {
+                _gpuLimitReadsLeft--;
+                if (SafeGpuWatts() is { } limit) _gpuWatts = limit;
+            }
+            _gpuPower = DateTime.UtcNow < _detailUntil ? SafeGpuPower() : null;
             _cpu = SafeCpuPower();
             if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(_settings.Current.CpuLimit);
             if (_pending is not null && !EcQuiet.IsQuiet)
@@ -143,11 +153,18 @@ public sealed class PowerManager
         }
     }
 
+    /// <summary>A window shows the power drawn now: read the GPU's draw for the next few seconds.</summary>
+    public void WantDetail()
+    {
+        lock (_gate) _detailUntil = DateTime.UtcNow + DetailFor;
+    }
+
     /// <summary>After resume from sleep the firmware may have forgotten its mode: apply it again.</summary>
     public void Reapply()
     {
         lock (_gate)
         {
+            _gpuLimitReadsLeft = GpuLimitReads;
             ApplyCpuLimit(_settings.Current.CpuLimit);
             if (_source is not { } source) return;
             _applied = null;
@@ -244,6 +261,7 @@ public sealed class PowerManager
         {
             _hw.SetMode(mode);
             _applied = mode;
+            _gpuLimitReadsLeft = GpuLimitReads;
             _log($"power: mode {mode} sent");
             return PowerResult.Success;
         }

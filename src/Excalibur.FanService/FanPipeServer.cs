@@ -126,8 +126,11 @@ public sealed class FanPipeServer(
             switch (req.Cmd.ToLowerInvariant())
             {
                 case "status":
+                    // The main window polls with its source and shows the power drawn now; the tray does not.
+                    if (req.Source == FanSource.Window) power.WantDetail();
                     break;
                 case "events":
+                    if (req.Source == FanSource.Window) power.WantDetail();
                     return new FanResponse(true, Status: Status(), Events: loop.Events.Select(e => new FanEventDto(e.At, e.Message)).ToList());
                 case "setprofile":
                     if (req.Profile is null || settings.Current.FindProfile(req.Profile) is not { } profile)
