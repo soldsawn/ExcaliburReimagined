@@ -32,8 +32,8 @@ public sealed record EcTrialStatus(
 public sealed class EcTrial
 {
     public const int Step = 30;
-    public const int MaxStartC = 60;
-    public const int AbortC = 70;
+    public const int MaxStartC = 75;
+    public const int AbortC = 80;
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
 
     private readonly IFanHardware _hw;

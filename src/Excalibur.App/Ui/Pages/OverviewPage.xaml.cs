@@ -113,8 +113,8 @@ public partial class OverviewPage : UserControl
         var answer = MessageBox.Show(
             $"Bu fan yazılımı sürümü ({firmware}) henüz denenmedi.\n\n" +
             "Deneme yaklaşık yarım dakika sürer: önce işlemci, sonra ekran kartı fanı birkaç saniye farklı hızda döner ve hızın gerçekten " +
-            "değişip değişmediğine bakılır. Her fan denendikten sonra orijinal ayara döner. Dizüstü 60 °C'nin altındayken başlar, " +
-            "70 °C'yi geçerse durur.\n\nDenemeyi başlatmak istiyor musunuz?",
+            "değişip değişmediğine bakılır. Her fan denendikten sonra orijinal ayara döner. Dizüstü 75 °C'nin altındayken başlar, " +
+            "80 °C'yi geçerse durur.\n\nDenemeyi başlatmak istiyor musunuz?",
             "Fan kontrolünü dene", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
         _trialError = await _connection.SendAsync(new FanRequest("trialEc"));
@@ -124,7 +124,7 @@ public partial class OverviewPage : UserControl
 
     private static string TrialProblem(EcTrialStatus t) => t.Problem switch
     {
-        EcTrialProblem.TooHot => "Dizüstü fazla sıcak: deneme 60 °C'nin altında başlar ve 70 °C'yi geçince durur. Biraz bekleyip tekrar deneyin.",
+        EcTrialProblem.TooHot => "Dizüstü fazla sıcak: deneme 75 °C'nin altında başlar ve 80 °C'yi geçince durur. Biraz bekleyip tekrar deneyin.",
         EcTrialProblem.NoFollow => $"{(t.CpuFollows == false ? "İşlemci" : "Ekran kartı")} fanının hızı değişmedi; bu sürümde fan ayarları başka bir yerde olabilir.",
         EcTrialProblem.WriteFailed => "Fan ayarı yazılamadı.",
         EcTrialProblem.ReadFailed => "Fan bilgileri okunamadı.",

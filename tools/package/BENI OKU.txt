@@ -31,7 +31,7 @@ KURULUM (sırayla)
 
 DENEME (fan kontrolünü açmak için)
 ----------------------------------
-6. Deneme ancak işlemci ve ekran kartı 60 °C'nin altındayken başlar.
+6. Deneme ancak işlemci ve ekran kartı 75 °C'nin altındayken başlar.
 
 7. Uygulamanın "Panel" sayfasında "Bu dizüstünün fan yazılımı tanınmadı"
    kartı görünür. "Dene"ye bas, gelen soruya "Evet" de.

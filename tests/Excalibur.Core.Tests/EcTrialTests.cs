@@ -81,7 +81,7 @@ public class EcTrialTests
     [Fact]
     public void A_warm_machine_does_not_start_a_trial()
     {
-        _hw.CpuTempC = 62;
+        _hw.CpuTempC = 76;
         TickAt(2);
         int writes = _hw.Writes.Count;
         _loop.StartEcTrial(T0.AddSeconds(3));
@@ -97,7 +97,7 @@ public class EcTrialTests
     {
         _loop.StartEcTrial(T0.AddSeconds(2));
         TickAt(2);
-        _hw.CpuTempC = 71;
+        _hw.CpuTempC = 81;
         var s = TickAt(3);
 
         Assert.Equal(EcTrialProblem.TooHot, s.Trial!.Problem);
