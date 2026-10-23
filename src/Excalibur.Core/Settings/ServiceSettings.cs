@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Excalibur.Core.Fan;
+using Excalibur.Core.Gpu;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
 
@@ -75,6 +76,12 @@ public sealed record ServiceSettings
     /// <summary>The keyboard light (A5); null = never chosen, the service leaves the light alone.</summary>
     public KeyboardLighting? Lighting { get; init; }
 
+    /// <summary>The graphics mode the next restart brings (A7); null = no change waiting. Only the service sets it.</summary>
+    public GpuMode? GpuPending { get; init; }
+
+    /// <summary>Where the Discrete safety net stands (<see cref="Gpu.GpuTrial"/>). Only the service sets it.</summary>
+    public GpuTrial GpuTrial { get; init; }
+
     /// <summary>The shape of an EC version string (6 ASCII letters or digits, e.g. P008B0).</summary>
     public static bool IsEcVersion(string? v) => v is { Length: 6 } && v.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z');
 
@@ -82,6 +89,7 @@ public sealed record ServiceSettings
     public bool Equals(ServiceSettings? other) =>
         other is not null && Version == other.Version && Profile == other.Profile && History == other.History
         && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit && Lighting == other.Lighting
+        && GpuPending == other.GpuPending && GpuTrial == other.GpuTrial
         && CustomProfiles.SequenceEqual(other.CustomProfiles) && TrustedEcVersions.SequenceEqual(other.TrustedEcVersions)
         && (Slots is null ? other.Slots is null : other.Slots is not null && Slots.SequenceEqual(other.Slots));
 
@@ -124,6 +132,8 @@ public sealed record ServiceSettings
         if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
         foreach (var v in TrustedEcVersions.Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
         if (Lighting is { } lighting) errors.AddRange(lighting.Validate());
+        if (GpuPending is { } gp && !Enum.IsDefined(gp)) errors.Add($"unknown graphics mode '{gp}'");
+        if (!Enum.IsDefined(GpuTrial)) errors.Add($"unknown graphics trial state '{GpuTrial}'");
         return errors;
     }
 
@@ -162,6 +172,8 @@ public sealed record ServiceSettings
         var cpuLimit = ReadCpuLimit(node, problems);
         var trusted = ReadTrustedEcVersions(node, problems);
         var lighting = ReadLighting(node, problems);
+        GpuMode? gpuPending = ReadEnum<GpuMode>(node, "gpuPending", problems);
+        var gpuTrial = ReadEnum<GpuTrial>(node, "gpuTrial", problems) ?? GpuTrial.None;
 
         int version = Get(node, "version", 1, problems);
         if (version > CurrentVersion) problems.Add($"settings version {version} is newer than this build ({CurrentVersion}); unknown fields ignored");
@@ -170,6 +182,7 @@ public sealed record ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
             CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted, Lighting = lighting,
+            GpuPending = gpuPending, GpuTrial = gpuTrial,
         }, problems);
     }
 
@@ -193,6 +206,15 @@ public sealed record ServiceSettings
         if (text.Length == 0) return null;
         if (Enum.TryParse(text, ignoreCase: true, out PowerMode mode) && Enum.IsDefined(mode)) return mode;
         problems.Add($"unknown power mode '{text}'; ignored");
+        return null;
+    }
+
+    private static T? ReadEnum<T>(JsonObject node, string name, List<string> problems) where T : struct, Enum
+    {
+        string text = Get(node, name, "", problems);
+        if (text.Length == 0) return null;
+        if (Enum.TryParse(text, ignoreCase: true, out T value) && Enum.IsDefined(value)) return value;
+        problems.Add($"unknown {name} '{text}'; ignored");
         return null;
     }
 

@@ -43,6 +43,11 @@ public sealed class EcFanHardware : IFanHardware
     private readonly Stopwatch _sinceWmi = new();
     private static readonly TimeSpan MaxReuse = TimeSpan.FromSeconds(15);
     private bool _reused;
+    // Integrated graphics mode (0x0203 = 3) turns the NVIDIA card off: its temperature reads 0. Checked at most every 30 s.
+    private readonly Stopwatch _sinceGpuModeRead = new();
+    private bool _gpuOff;
+    /// <summary>What the GPU fan sees while the NVIDIA card is off: cool, so it follows the CPU (support) only.</summary>
+    public const int GpuOffTempC = 30;
 
     /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
     public Action<string>? Log { get; set; }
@@ -161,6 +166,7 @@ public sealed class EcFanHardware : IFanHardware
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
+        if (gpuC < 1 && GpuOff()) gpuC = GpuOffTempC;
         if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)
@@ -168,6 +174,16 @@ public sealed class EcFanHardware : IFanHardware
         _lastWmi = (cpuC, gpuC, cpuRpm, gpuRpm);
         _sinceWmi.Restart();
         return (cpuC, gpuC, cpuRpm, gpuRpm);
+    }
+
+    /// <summary>True when the graphics mode is Integrated (the NVIDIA card is off, so a 0 C reading is no fault).</summary>
+    private bool GpuOff()
+    {
+        if (_sinceGpuModeRead.IsRunning && _sinceGpuModeRead.Elapsed < TimeSpan.FromSeconds(30)) return _gpuOff;
+        try { _gpuOff = wmi.Execute(SmiCommand.Get(0x0203)).A2 == 3; }
+        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException or System.Runtime.InteropServices.COMException) { }
+        _sinceGpuModeRead.Restart();
+        return _gpuOff;
     }
 
     public void SetTarget(FanId fan, FanTarget target)
