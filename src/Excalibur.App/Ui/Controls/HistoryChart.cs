@@ -115,7 +115,7 @@ internal sealed class HistoryChart : FrameworkElement
         // About six time labels, on round local times.
         var from = s.From.ToLocalTime();
         var span = TimeSpan.FromSeconds((double)s.StepSeconds * s.Points.Count);
-        var tick = new[] { 10, 15, 30, 60, 120, 180, 360, 720, 1440 }.Select(m => TimeSpan.FromMinutes(m)).FirstOrDefault(t => span / t <= 7, TimeSpan.FromDays(1));
+        var tick = new[] { 1, 2, 3, 5, 10, 15, 30, 60, 120, 180, 360, 720, 1440 }.Select(m => TimeSpan.FromMinutes(m)).FirstOrDefault(t => span / t <= 7, TimeSpan.FromDays(1));
         var first = new DateTimeOffset(from.Ticks / tick.Ticks * tick.Ticks, from.Offset) + tick;
         string format = span > TimeSpan.FromDays(1) ? "ddd HH:mm" : "HH:mm";
         for (var t = first; t < from + span; t += tick)

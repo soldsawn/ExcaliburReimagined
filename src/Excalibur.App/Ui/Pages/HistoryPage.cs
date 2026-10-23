@@ -8,15 +8,18 @@ using Excalibur.Core.History;
 namespace Excalibur.App.Ui.Pages;
 
 /// <summary>
-/// Geçmiş: temperatures and fan speeds over the last hour to week, from the service's history
+/// Geçmiş: temperatures and fan speeds over the last 15 minutes to week, from the service's history
 /// (recorded once a second, kept seven days), with a summary of the chosen range under the chart.
+/// Up to <see cref="ShortSpan"/> every recorded second is drawn and the chart refreshes every few seconds.
 /// </summary>
 internal sealed class HistoryPage : UserControl
 {
     // About one point per two pixels of a wide chart.
     private const int MaxPoints = 720;
+    private static readonly TimeSpan ShortSpan = TimeSpan.FromMinutes(30);
     private static readonly (TimeSpan Span, string Label)[] Ranges =
     [
+        (TimeSpan.FromMinutes(15), "15 dk"), (TimeSpan.FromMinutes(30), "30 dk"),
         (TimeSpan.FromHours(1), "1 saat"), (TimeSpan.FromHours(6), "6 saat"),
         (TimeSpan.FromHours(24), "24 saat"), (TimeSpan.FromDays(7), "7 gün"),
     ];
@@ -24,7 +27,7 @@ internal sealed class HistoryPage : UserControl
     private readonly FanConnection _connection;
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly TextBlock _cpu, _gpu, _note, _ecErrors, _shutdowns;
-    private TimeSpan _span = Ranges[0].Span;
+    private TimeSpan _span = TimeSpan.FromHours(1);
     private bool _busy;
 
     internal HistoryChart Chart { get; } = new() { Height = 420, Margin = new Thickness(0, 4, 0, 0) };
@@ -60,7 +63,12 @@ internal sealed class HistoryPage : UserControl
         {
             var b = new RadioButton { GroupName = group, Content = label, Margin = new Thickness(0, 0, 8, 0), MinWidth = 90, Height = 34, IsChecked = span == _span };
             b.SetResourceReference(StyleProperty, "Segment");
-            b.Checked += async (_, _) => { _span = span; await Refresh(); };
+            b.Checked += async (_, _) =>
+            {
+                _span = span;
+                _refresh.Interval = span <= ShortSpan ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(30);
+                await Refresh();
+            };
             buttons.Children.Add(b);
         }
 
@@ -92,7 +100,7 @@ internal sealed class HistoryPage : UserControl
         _busy = true;
         try
         {
-            var series = await _connection.HistoryAsync(_span, MaxPoints);
+            var series = await _connection.HistoryAsync(_span, _span <= ShortSpan ? (int)_span.TotalSeconds : MaxPoints);
             var now = DateTime.UtcNow;
             var events = await Task.Run(() => SystemEventLog.Read(now - _span, now));
             Chart.Show(series, events);
