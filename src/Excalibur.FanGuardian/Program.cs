@@ -29,7 +29,9 @@ using var ec = EmbeddedController.Open(module);
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(o => o.ServiceName = "ExcaliburFanGuardian");
 // The guardian reads only the WMI sensors (ReadSensors); the EC is touched just to hand the fans back.
-builder.Services.AddSingleton(new EcFanHardware(ec, new GmWmiGateway()));
+// The RPM scale is the one the service learns (FanRpmScale).
+builder.Services.AddSingleton(new EcFanHardware(ec, new GmWmiGateway(),
+    scale: new FanRpmScale(Path.Combine(FanPaths.DataDirectory, FanRpmScale.FileName))));
 var fileLog = new FanFileLog(FanPaths.LogDirectory, "guardian");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);
 EcTrace.Report = m => fileLog.Write(DateTimeOffset.Now, m);

@@ -77,7 +77,7 @@ else
         cpuTemperature = () => median.Value(clock.Elapsed);
     }
     hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature,
-        versionCachePath: Path.Combine(runtimeDir, "ec-version.txt"));
+        versionCachePath: Path.Combine(runtimeDir, "ec-version.txt"), scale: new FanRpmScale(Path.Combine(runtimeDir, FanRpmScale.FileName)));
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
         : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters));
@@ -90,8 +90,12 @@ var loop = new FanControlLoop(hardware, new FanLoopOptions
 {
     KnownEcVersions = new HashSet<string>(new FanLoopOptions().KnownEcVersions.Concat(settingsStore.Current.TrustedEcVersions)),
 });
-// A version that passed the user's trial stays trusted after a restart.
-loop.EcTrusted += v => settingsStore.Update(s => s.TrustedEcVersions.Contains(v) ? s : s with { TrustedEcVersions = [.. s.TrustedEcVersions, v] }, out _);
+// A version that passed the user's trial stays trusted after a restart, with the profile the trial left running.
+loop.EcTrusted += (v, profile) => settingsStore.Update(s => s with
+{
+    TrustedEcVersions = s.TrustedEcVersions.Contains(v) ? s.TrustedEcVersions : [.. s.TrustedEcVersions, v],
+    Profile = profile.Name,
+}, out _);
 builder.Services.AddSingleton(loop);
 var fileLog = new FanFileLog(runtime.LogDirectory, "fan");
 SlowOps.Report = m => fileLog.Write(DateTimeOffset.Now, m);

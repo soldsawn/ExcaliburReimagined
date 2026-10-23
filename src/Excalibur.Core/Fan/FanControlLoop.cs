@@ -29,12 +29,20 @@ public sealed record FanStatus(
     FanReason GpuReason = FanReason.Auto,
     int? CpuCurvePercent = null,
     int? GpuCurvePercent = null,
-    EcTrialStatus? Trial = null);
+    EcTrialStatus? Trial = null,
+    bool EcSeenElsewhere = false);
 
 public sealed record FanLoopOptions
 {
     /// <summary>EC firmware versions whose 0x2C/0x2D semantics were verified on hardware.</summary>
     public IReadOnlySet<string> KnownEcVersions { get; init; } = new HashSet<string> { "P008B0" };
+    /// <summary>
+    /// Unverified versions whose trial passed on someone else's machine (a tester's report): the trial is still run here,
+    /// worded as a short calibration. One that passes on 2-3 different machines moves to <see cref="KnownEcVersions"/>.
+    /// </summary>
+    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0" };
+    /// <summary>EC versions the built-in curves were tuned on; a machine with another one starts on EC automatic after its trial.</summary>
+    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0" };
     public int MaxReadFailures { get; init; } = 3;
     public int MaxWriteFailures { get; init; } = 2;
     /// <summary>Smaller changes than this are not written (the EC ramps anyway).</summary>
@@ -93,8 +101,11 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
 
     public const int MaxEvents = 50;
 
-    /// <summary>An EC version passed the user's trial; the host saves it so the next start trusts it too. Raised under the loop's lock.</summary>
-    public event Action<string>? EcTrusted;
+    /// <summary>
+    /// An EC version passed the user's trial; the host saves it so the next start trusts it too, with the profile the loop
+    /// now runs. Raised under the loop's lock.
+    /// </summary>
+    public event Action<string, FanProfile>? EcTrusted;
 
     /// <summary>How many events were ever logged; with <see cref="Events"/> a host can tell which are new.</summary>
     public long TotalEvents
@@ -116,7 +127,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private FanStatus Publish()
     {
         var status = new FanStatus(_mode, _profile.Name, _manualUntil, _snapshot, _applied, _ecVersion, _readFailures, _holdsFans,
-            _profileChangedBy, _profileChangedAt, _cpuReason, _gpuReason, _cpuCurve, _gpuCurve, _trial?.Status);
+            _profileChangedBy, _profileChangedAt, _cpuReason, _gpuReason, _cpuCurve, _gpuCurve, _trial?.Status,
+            _mode == FanLoopMode.MonitorOnly && _ecVersion is not null && _options.SeenElsewhereEcVersions.Contains(_ecVersion));
         _published = status;
         return status;
     }
@@ -323,12 +335,21 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             Log(now, $"EC trial of {after.EcVersion} failed ({after.Problem}); fans handed to the EC");
         else if (after.State == EcTrialState.Passed)
         {
+            // The built-in curves were tuned on the G870: a model that runs hotter at idle (the G770 at 64-72 C) sat on
+            // their steep part, louder than its own EC. Its user picks a profile or a curve of their own.
+            if (!_options.CurveEcVersions.Contains(after.EcVersion))
+            {
+                _profile = FanProfile.EcAuto;
+                _beforeManual = null;
+                _manualUntil = null;
+                Changed(now, Ipc.FanSource.Service);
+            }
             Log(now, $"EC trial: the GPU fan follows 0x2D; {after.EcVersion} trusted, profile {_profile.Name} starts");
             _known.Add(after.EcVersion);
             _mode = FanLoopMode.Running;
             ResetSmoothing();
             _userChanged = true;
-            EcTrusted?.Invoke(after.EcVersion);
+            EcTrusted?.Invoke(after.EcVersion, _profile);
         }
     }
 

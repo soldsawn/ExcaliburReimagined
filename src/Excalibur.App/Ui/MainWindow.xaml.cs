@@ -88,6 +88,7 @@ public partial class MainWindow : Window
         (string state, string brush) = s.Mode switch
         {
             FanLoopMode.Running => ("Fan kontrolü açık", "Ok"),
+            FanLoopMode.MonitorOnly when s.EcSeenElsewhere => ("Fanlar yalnız izleniyor: fan kontrolü için kısa bir ayar gerekiyor", "Warn"),
             FanLoopMode.MonitorOnly => ("Fanlar yalnız izleniyor: bu dizüstünün fan yazılımı tanınmadı", "Warn"),
             FanLoopMode.Faulted => ("Sorun var: fanlar orijinal ayara bırakıldı", "Bad"),
             _ => ("Fan kontrolü durdu", "Off"),

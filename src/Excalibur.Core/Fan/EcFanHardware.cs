@@ -9,7 +9,7 @@ namespace Excalibur.Core.Fan;
 /// <see cref="IFanHardware"/> on the real machine: temperatures and RPM from the
 /// firmware's WMI sensor block (GET 0x0200) on every read, fan targets / Cooling Boost from
 /// the EC only every <c>ecRefresh</c>; the applied percent is worked out from the RPM
-/// (<see cref="AppliedPercent"/>), so it needs no EC read at all. Every EC transaction can collide
+/// (<see cref="FanRpmScale"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
 /// battery read shuts the machine down as "critical battery"; WMI goes through Windows'
 /// driver and is safe. A target we write is not read back: <see cref="FanFollowCheck"/> checks it by
@@ -26,8 +26,7 @@ public sealed class EcFanHardware : IFanHardware
     private readonly Func<int?>? cpuTemperature;
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
-    // Measured on the G870: the EC drives CPU fan at rpm/54.5 percent and GPU fan at rpm/52.5.
-    private const double CpuRpmPerPercent = 54.5, GpuRpmPerPercent = 52.5;
+    private readonly FanRpmScale _scale;
     private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(60);
 
     private readonly TimeSpan _ecRefresh;
@@ -55,10 +54,12 @@ public sealed class EcFanHardware : IFanHardware
     /// <param name="versionCachePath">Where the EC version is kept with the BIOS version it was read under. Reading it costs
     /// twelve EC transactions at every start and wake, and the start's burst of EC traffic is what Windows answered with
     /// ACPI 15 warnings (2026-10-23 21:09:50, three within the version read); it changes only with a BIOS update.</param>
+    /// <param name="scale">RPM per percent of each fan (<see cref="FanRpmScale"/>); the G870's when null.</param>
     public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null,
-        string? versionCachePath = null)
+        string? versionCachePath = null, FanRpmScale? scale = null)
     {
         _versionCachePath = versionCachePath;
+        _scale = scale ?? new FanRpmScale();
         this.ec = ec;
         this.wmi = wmi;
         this.cpuTemperature = cpuTemperature;
@@ -112,15 +113,20 @@ public sealed class EcFanHardware : IFanHardware
             catch (EcBusyException) when (_ec is not null) { } // keep the cached values; a later tick tries again
             catch (TimeoutException ex) { throw new FanReadException("EC read timed out.", ex); }
         }
-        int cpuPercent = AppliedPercent(cpuRpm, CpuRpmPerPercent), gpuPercent = AppliedPercent(gpuRpm, GpuRpmPerPercent);
-        (_lastPercent[0], _lastPercent[1]) = (cpuPercent, gpuPercent);
+        var e = _ec;
         // Reused RPMs say nothing about a target written since.
+        if (!_reused)
+        {
+            _scale.Observe(FanId.Cpu, e.CpuTarget, cpuRpm, _boost, _clock.Elapsed);
+            _scale.Observe(FanId.Gpu, e.GpuTarget, gpuRpm, _boost, _clock.Elapsed);
+        }
+        int cpuPercent = _scale.PercentOf(FanId.Cpu, cpuRpm), gpuPercent = _scale.PercentOf(FanId.Gpu, gpuRpm);
+        (_lastPercent[0], _lastPercent[1]) = (cpuPercent, gpuPercent);
         if (!_reused)
         {
             CheckFollow(FanId.Cpu, cpuPercent);
             CheckFollow(FanId.Gpu, gpuPercent);
         }
-        var e = _ec;
         return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget, cpuPercent, gpuPercent, _boost);
     }
 
@@ -151,7 +157,8 @@ public sealed class EcFanHardware : IFanHardware
     public FanSensors ReadSensors()
     {
         var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
-        return new FanSensors(cpuC, gpuC, AppliedPercent(cpuRpm, CpuRpmPerPercent), AppliedPercent(gpuRpm, GpuRpmPerPercent));
+        _scale.Refresh(_clock.Elapsed);
+        return new FanSensors(cpuC, gpuC, _scale.PercentOf(FanId.Cpu, cpuRpm), _scale.PercentOf(FanId.Gpu, gpuRpm));
     }
 
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) ReadWmiSensors()
@@ -234,6 +241,13 @@ public sealed class EcFanHardware : IFanHardware
 
     public string? ReadEcVersion()
     {
+        string? version = ReadEcVersionCached();
+        _scale.UseEcVersion(version);
+        return version;
+    }
+
+    private string? ReadEcVersionCached()
+    {
         string? bios = BiosVersion();
         if (_versionCachePath is not null && bios is not null)
         {
@@ -291,8 +305,4 @@ public sealed class EcFanHardware : IFanHardware
     private FanTarget Target(byte reg)
         => FanTarget.FromRaw(ec.ReadStable(reg))
            ?? throw new FanReadException($"Fan target 0x{reg:X2} holds an invalid value.");
-
-    /// <summary>The percent the EC is driving a fan at, from its RPM; clamped to 0..100.</summary>
-    public static int AppliedPercent(int rpm, double rpmPerPercent)
-        => Math.Clamp((int)Math.Round(rpm / rpmPerPercent), 0, 100);
 }

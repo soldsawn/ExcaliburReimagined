@@ -95,22 +95,30 @@ public partial class OverviewPage : UserControl
             EcTrialState.Running => ("Fan kontrolü deneniyor",
                 $"{(t.Fan == FanId.Gpu ? "Ekran kartı" : "İşlemci")} fanı birkaç saniye farklı hızda dönecek. Deneme bitince fanlar orijinal ayara döner."),
             EcTrialState.Passed => ("Deneme başarılı",
-                "İki fan da uygulamanın komutlarına uydu; fan kontrolü bu dizüstünde açıldı. \"Bilgileri kopyala\" ile sonucu geliştiriciye " +
-                "gönderebilirsiniz, böylece bu dizüstü sonraki sürümlerde listeye eklenir."),
+                "İki fan da uygulamanın komutlarına uydu; fan kontrolü bu dizüstünde açıldı. " +
+                (s.Profile == FanProfile.EcAuto.Name
+                    ? "Hazır profiller başka bir modele göre ayarlandığı için fanlar şimdilik orijinal ayarda kalıyor; Soğutma sayfasından bir profil " +
+                      "seçebilir ya da kendi eğrinizi kurabilirsiniz. "
+                    : "") +
+                "\"Bilgileri kopyala\" ile sonucu geliştiriciye gönderebilirsiniz, böylece bu dizüstü sonraki sürümlerde listeye eklenir."),
             EcTrialState.Failed => ("Deneme başarısız", TrialProblem(t) + " Fanlar orijinal ayarda; uygulama fanları yalnız izlemeye devam ediyor."),
+            _ when s.EcSeenElsewhere => ("Fan kontrolü için kısa bir ayar gerekiyor", firmware +
+                "Bu fan yazılımı başka bir Excalibur'da sorunsuz çalıştı. Bu dizüstüne uyması için kısa bir ayar yapılacak (yaklaşık 10 sn): " +
+                "fanlar birkaç saniye farklı hızda döner, sonra orijinal ayara geri döner."),
             _ => ("Bu dizüstünün fan yazılımı tanınmadı", firmware +
                 "Bu sürüm henüz denenmediği için uygulama fanları yalnız izliyor. Kısa bir denemeyle fan kontrolünün burada çalışıp çalışmadığına bakılabilir."),
         };
         if (_trialError is not null) TrialText.Text += $" ({_trialError})";
         StartTrial.Visibility = unknown && s.EcVersion is not null && t?.State != EcTrialState.Running ? Visibility.Visible : Visibility.Collapsed;
-        StartTrial.Content = t?.State == EcTrialState.Failed ? "Tekrar dene" : "Dene";
+        StartTrial.Content = t?.State == EcTrialState.Failed ? "Tekrar dene" : s.EcSeenElsewhere ? "Başlat" : "Dene";
         CloseTrial.Visibility = t?.State == EcTrialState.Passed ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task StartTrialAsync()
     {
         string firmware = _connection.Status?.EcVersion ?? "?";
-        var answer = MessageBox.Show(
+        // A version that already passed elsewhere: the card says what happens and its button is the consent.
+        var answer = _connection.Status?.EcSeenElsewhere == true ? MessageBoxResult.Yes : MessageBox.Show(
             $"Bu fan yazılımı sürümü ({firmware}) henüz denenmedi.\n\n" +
             "Deneme yaklaşık yarım dakika sürer: önce işlemci, sonra ekran kartı fanı birkaç saniye farklı hızda döner ve hızın gerçekten " +
             "değişip değişmediğine bakılır. Her fan denendikten sonra orijinal ayara döner. Dizüstü 75 °C'nin altındayken başlar, " +

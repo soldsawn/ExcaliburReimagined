@@ -9,11 +9,14 @@ public class EcTrialTests
     private readonly FakeFanHardware _hw = new() { EcVersion = "P009C0" };
     private readonly FanControlLoop _loop;
     private readonly List<string> _trusted = [];
+    private FanProfile? _trustedProfile;
 
-    public EcTrialTests()
+    public EcTrialTests() : this(new FanLoopOptions()) { }
+
+    private EcTrialTests(FanLoopOptions options)
     {
-        _loop = new FanControlLoop(_hw);
-        _loop.EcTrusted += _trusted.Add;
+        _loop = new FanControlLoop(_hw, options);
+        _loop.EcTrusted += (v, profile) => { _trusted.Add(v); _trustedProfile = profile; };
         _loop.Start(FanProfile.Balanced, T0);
         TickAt(1);
     }
@@ -28,7 +31,7 @@ public class EcTrialTests
     }
 
     [Fact]
-    public void Both_fans_following_trusts_the_version_and_starts_the_profile()
+    public void Both_fans_following_trusts_the_version_and_hands_another_model_to_the_ec()
     {
         _loop.StartEcTrial(T0.AddSeconds(2));
         var s = RunUntilDone(2);
@@ -45,8 +48,36 @@ public class EcTrialTests
         Assert.True(trial[1].Target.IsAuto);
         Assert.True(trial[3].Target.IsAuto);
 
+        // The built-in curves were tuned on P008B0: another model starts on EC automatic.
+        Assert.Equal(FanProfile.EcAuto.Name, s.Profile);
+        Assert.Equal(FanProfile.EcAuto, _trustedProfile);
         TickAt(80);
-        Assert.False(_hw.CpuTarget.IsAuto); // the profile now runs
+        Assert.True(_hw.CpuTarget.IsAuto);
+        Assert.True(_hw.GpuTarget.IsAuto);
+    }
+
+    [Fact]
+    public void A_version_the_curves_were_tuned_on_keeps_its_profile_after_the_trial()
+    {
+        var t = new EcTrialTests(new FanLoopOptions { CurveEcVersions = new HashSet<string> { "P009C0" } });
+        t._loop.StartEcTrial(T0.AddSeconds(2));
+        var s = t.RunUntilDone(2);
+
+        Assert.Equal(EcTrialState.Passed, s.Trial!.State);
+        Assert.Equal(FanProfile.Balanced.Name, s.Profile);
+        t.TickAt(80);
+        Assert.False(t._hw.CpuTarget.IsAuto); // the profile now runs
+    }
+
+    [Theory]
+    [InlineData("P003K0", true)]
+    [InlineData("P009C0", false)]
+    public void A_version_seen_on_another_machine_is_flagged_while_unverified(string version, bool expected)
+    {
+        var hw = new FakeFanHardware { EcVersion = version };
+        var loop = new FanControlLoop(hw);
+        loop.Start(FanProfile.Balanced, T0);
+        Assert.Equal(expected, loop.Tick(T0.AddSeconds(1)).EcSeenElsewhere);
     }
 
     [Fact]

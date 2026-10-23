@@ -26,9 +26,10 @@ public static class FanPipe
     ///    settings TrustedEcVersions.
     /// 8: + setLighting(lighting) (keyboard light; stored and shown), setLightIdle(idle) (the tray saw no input for the
     ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle / LightBrightness.
+    /// 9: + status EcSeenElsewhere (an unverified EC version whose trial passed on another machine).
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 8;
+    public const int ProtocolVersion = 9;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -132,7 +133,8 @@ public sealed record FanStatusDto(
     EcTrialStatus? Trial = null,
     int LightIdleOffMinutes = 0,
     bool LightIdle = false,
-    int? LightBrightness = null)
+    int? LightBrightness = null,
+    bool EcSeenElsewhere = false)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {
@@ -145,7 +147,7 @@ public sealed record FanStatusDto(
             snap?.CoolingBoost ?? false,
             s.EcVersion, s.ConsecutiveReadFailures, s.HoldsFans, simulated, startedAt,
             FanPipe.ProtocolVersion, s.ProfileChangedBy, s.ProfileChangedAt,
-            s.CpuReason, s.GpuReason, s.CpuCurvePercent, s.GpuCurvePercent, Trial: s.Trial);
+            s.CpuReason, s.GpuReason, s.CpuCurvePercent, s.GpuCurvePercent, Trial: s.Trial, EcSeenElsewhere: s.EcSeenElsewhere);
     }
 
     private static int? ToPercent(FanTarget? t) => t is { IsAuto: false } v ? v.Percent : null;
