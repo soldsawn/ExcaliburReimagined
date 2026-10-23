@@ -23,7 +23,7 @@ public sealed class GpuModeTests : IDisposable
             else if (Running == GpuMode.Integrated && mode == GpuMode.Hybrid) Running = GpuMode.Hybrid;
         }
 
-        public void SetNvidiaEnabled(bool enabled) => NvidiaOn = enabled;
+        public bool SetNvidiaEnabled(bool enabled) { NvidiaOn = enabled; return false; }
         public bool? BitLockerOff() => BitLocker;
 
         public void Restart() => Running = Next == GpuMode.Integrated ? GpuMode.Hybrid : Next;

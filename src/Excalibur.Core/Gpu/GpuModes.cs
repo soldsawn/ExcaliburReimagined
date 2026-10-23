@@ -43,8 +43,9 @@ public interface IGpuHardware
     /// <summary>SET 0x0203: the mode for the next start (Integrated also takes effect now, with the devices turned off).</summary>
     void Write(GpuMode mode);
 
-    /// <summary>Turns the NVIDIA card and its platform framework on or off in Windows; throws <see cref="GpuException"/>.</summary>
-    void SetNvidiaEnabled(bool enabled);
+    /// <summary>Turns the NVIDIA card and its platform framework on or off in Windows; true when Windows finishes it only at
+    /// the next restart. Throws <see cref="GpuException"/>.</summary>
+    bool SetNvidiaEnabled(bool enabled);
 
     /// <summary>True when drive C: is not protected by BitLocker, false when it is, null when that cannot be told.</summary>
     bool? BitLockerOff();
@@ -135,18 +136,20 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
                     case GpuMode.Integrated:
                         if (_hdmi) return GpuResult.Fail("gpu_hdmi", "an external display is connected to the NVIDIA card");
                         if (_mode == GpuMode.Discrete) return GpuResult.Fail("gpu_from_discrete", "switch to Hybrid and restart first");
-                        hw.SetNvidiaEnabled(false);
+                        bool later = hw.SetNvidiaEnabled(false);
                         hw.Write(GpuMode.Integrated);
                         Store(s with { GpuPending = null, GpuTrial = GpuTrial.None });
                         Refresh();
-                        return new GpuResult(true);
+                        log?.Invoke(later ? "gpu: now Integrated; Windows turns the card off at the next restart" : "gpu: now Integrated");
+                        return new GpuResult(true, RestartNeeded: later);
                     case GpuMode.Hybrid:
-                        if (_mode == GpuMode.Integrated) hw.SetNvidiaEnabled(true);
+                        bool restart = _mode == GpuMode.Integrated && hw.SetNvidiaEnabled(true);
+                        restart |= _mode == GpuMode.Discrete;
                         hw.Write(GpuMode.Hybrid);
-                        bool restart = _mode == GpuMode.Discrete;
                         // From Discrete the trial ends here: the user chose Hybrid for the next start.
                         Store(s with { GpuPending = restart ? GpuMode.Hybrid : null, GpuTrial = GpuTrial.None });
                         Refresh();
+                        log?.Invoke(restart ? "gpu: Hybrid at the next restart" : "gpu: now Hybrid");
                         return new GpuResult(true, RestartNeeded: restart);
                     default:
                         if (_mode == GpuMode.Discrete && s.GpuTrial == GpuTrial.AwaitingConfirm) return Confirm();
@@ -155,10 +158,11 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
                         if (_mode == GpuMode.Integrated) hw.SetNvidiaEnabled(true);
                         hw.Write(GpuMode.Discrete);
                         Store(s with { GpuPending = GpuMode.Discrete, GpuTrial = GpuTrial.AwaitingRestart });
+                        log?.Invoke("gpu: Discrete at the next restart");
                         return new GpuResult(true, RestartNeeded: true);
                 }
             }
-            catch (Exception ex) when (ex is GpuException or InvalidOperationException or System.Management.ManagementException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 log?.Invoke($"gpu: {mode} failed ({ex.Message})");
                 return GpuResult.Fail("gpu_failed", ex.Message);
@@ -198,7 +202,7 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
             (_mode, _hdmi) = hw.Read();
             return _mode is not null;
         }
-        catch (Exception ex) when (ex is GpuException or InvalidOperationException or System.Management.ManagementException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             log?.Invoke($"gpu: mode unreadable ({ex.Message})");
             return false;
@@ -208,7 +212,7 @@ public sealed class GpuModeManager(IGpuHardware hw, ServiceSettingsStore setting
     private bool TryWrite(GpuMode mode)
     {
         try { hw.Write(mode); return true; }
-        catch (Exception ex) when (ex is GpuException or InvalidOperationException or System.Management.ManagementException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             log?.Invoke($"gpu: writing {mode} failed ({ex.Message})");
             return false;
@@ -224,6 +228,6 @@ public sealed class SimulatedGpuHardware : IGpuHardware
     private GpuMode _mode = GpuMode.Hybrid;
     public (GpuMode? Mode, bool Hdmi) Read() => (_mode, false);
     public void Write(GpuMode mode) { if (mode == GpuMode.Integrated || _mode == GpuMode.Integrated) _mode = mode; }
-    public void SetNvidiaEnabled(bool enabled) { }
+    public bool SetNvidiaEnabled(bool enabled) => false;
     public bool? BitLockerOff() => true;
 }

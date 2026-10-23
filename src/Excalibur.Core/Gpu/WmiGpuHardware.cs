@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Management;
 using Excalibur.Core.Hardware;
+using Excalibur.Core.Power;
 
 namespace Excalibur.Core.Gpu;
 
@@ -19,6 +20,8 @@ public sealed class WmiGpuHardware(ISmiChannel wmi) : IGpuHardware
     {
         var r = wmi.Execute(SmiCommand.Get(DisplayFunction));
         GpuMode? mode = Enum.IsDefined(typeof(GpuMode), (int)r.A2) ? (GpuMode)r.A2 : null;
+        // Started in Integrated: the card is off, NVML must stay closed.
+        if (mode == GpuMode.Integrated) Nvml.Release();
         return (mode, r.A3 == 1);
     }
 
@@ -29,15 +32,19 @@ public sealed class WmiGpuHardware(ISmiChannel wmi) : IGpuHardware
         wmi.Execute(c);
     }
 
-    public void SetNvidiaEnabled(bool enabled)
+    public bool SetNvidiaEnabled(bool enabled)
     {
         var ids = NvidiaDevices();
         if (ids.Count == 0) throw new GpuException("no NVIDIA graphics device found");
+        if (!enabled) Nvml.Release();
+        bool restart = false;
         foreach (var id in ids)
         {
-            Pnputil(enabled ? "/enable-device" : "/disable-device", id);
+            restart |= Pnputil(enabled ? "/enable-device" : "/disable-device", id);
             Thread.Sleep(1000); // the stock software waits between the two as well
         }
+        if (enabled) Nvml.Allow();
+        return restart;
     }
 
     /// <summary>The display adapter first, then the framework (the stock order); present devices only.</summary>
@@ -57,17 +64,21 @@ public sealed class WmiGpuHardware(ISmiChannel wmi) : IGpuHardware
         return [.. gpus, .. framework];
     }
 
-    private static void Pnputil(string verb, string id)
+    /// <summary>True when Windows finishes it only at the next restart (exit code 3010: something still uses the card).</summary>
+    private static bool Pnputil(string verb, string id)
     {
         var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "pnputil.exe"), $"{verb} \"{id}\"")
         {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
         };
         using var p = Process.Start(psi) ?? throw new GpuException("pnputil could not be started");
-        string output = p.StandardOutput.ReadToEnd();
+        // Read while waiting: a blocking read first would never let the timeout fire if pnputil hangs on the driver.
+        var read = p.StandardOutput.ReadToEndAsync();
         if (!p.WaitForExit(PnpTimeout)) { try { p.Kill(); } catch (InvalidOperationException) { } throw new GpuException($"pnputil {verb} timed out"); }
+        string output = read.Wait(TimeSpan.FromSeconds(2)) ? read.Result : "";
         // 3010 = done, a restart completes it.
         if (p.ExitCode is not (0 or 3010)) throw new GpuException($"pnputil {verb} {id} failed ({p.ExitCode}): {output.Trim()}");
+        return p.ExitCode == 3010;
     }
 
     public bool? BitLockerOff()

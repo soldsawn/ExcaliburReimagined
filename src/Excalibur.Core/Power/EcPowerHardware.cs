@@ -103,8 +103,33 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
 internal static class Nvml
 {
     private static readonly object Gate = new();
-    private static bool _tried, _ready;
+    private static bool _tried, _ready, _released;
     private static IntPtr _device;
+
+    /// <summary>
+    /// Closes NVML before the NVIDIA card is turned off, and keeps it closed while it is off: a call on the old device
+    /// handle crashed the service (access violation in nvmlDeviceGetEnforcedPowerLimit, 2026-10-23 20:04), and an open
+    /// handle keeps the driver from unloading (the stock software calls NV.ReleaseDLL() too).
+    /// </summary>
+    public static void Release()
+    {
+        lock (Gate)
+        {
+            if (_ready) { try { nvmlShutdown(); } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { } }
+            _ready = false;
+            _released = true;
+        }
+    }
+
+    /// <summary>The card is on again: NVML opens anew on the next call.</summary>
+    public static void Allow()
+    {
+        lock (Gate)
+        {
+            _released = false;
+            _tried = false;
+        }
+    }
 
     public static int? EnforcedPowerLimitWatts() => Milliwatts(nvmlDeviceGetEnforcedPowerLimit);
 
@@ -116,6 +141,7 @@ internal static class Nvml
     {
         lock (Gate)
         {
+            if (_released) return null;
             if (!_tried)
             {
                 _tried = true;
@@ -135,6 +161,7 @@ internal static class Nvml
     }
 
     [DllImport("nvml.dll")] private static extern int nvmlInit_v2();
+    [DllImport("nvml.dll")] private static extern int nvmlShutdown();
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);

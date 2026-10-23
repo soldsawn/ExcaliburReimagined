@@ -223,7 +223,8 @@ internal sealed class DisplayPage : UserControl
     {
         _gpuBusy = true;
         RenderGpu();
-        var r = await _connection.RequestAsync(request);
+        // Turning the NVIDIA card off or on takes seconds (pnputil, twice).
+        var r = await _connection.RequestAsync(request, TimeSpan.FromSeconds(90));
         _gpuBusy = false;
         _gpuError.Text = r is null ? "Fan servisine ulaşılamadı." : r.Ok ? "" : r.Code switch
         {
