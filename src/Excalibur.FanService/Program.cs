@@ -1,4 +1,5 @@
 using System.Security.Principal;
+using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Hardware;
 using Excalibur.Core.History;
@@ -119,11 +120,14 @@ builder.Services.AddSingleton(sp =>
     return new PowerManager(powerHardware, settingsStore, (profile, source) => switcher.Switch(profile, source),
         m => fileLog.Write(DateTimeOffset.Now, m), simulate ? TimeSpan.Zero : EcQuiet.AfterCharger);
 });
+builder.Services.AddSingleton(new BatteryMonitor(simulate ? new SimulatedBatteryHardware() : new WmiBatteryHardware(),
+    m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
 builder.Services.AddHostedService<PowerWorker>();
 builder.Services.AddHostedService<FanPipeServer>();
 builder.Services.AddHostedService<LightingWorker>();
+builder.Services.AddHostedService<BatteryWorker>();
 
 using var host = builder.Build();
 

@@ -31,7 +31,7 @@ public sealed class EcFanHardware : IFanHardware
     // No refresh read while Windows has run less than this: its EC driver is busy then, and the ACPI 15 warnings after
     // each start fell on our minute read (2026-10-24: 2, 8, 9, 10 and 18 min after start). The targets are ours and
     // Fn+1 arrives as an event, so the block read at start is enough meanwhile.
-    private static readonly TimeSpan NoRefreshAfterBoot = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan NoRefreshAfterBoot = TimeSpan.FromMinutes(10);
 
     private readonly TimeSpan _ecRefresh;
     private readonly Stopwatch _sinceEcRead = new();

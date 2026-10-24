@@ -36,6 +36,7 @@ public partial class MainWindow : Window
             new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
+            new("battery", "Pil", "", () => new BatteryPage(_connection)),
             new("display", "Ekran", "", () => new DisplayPage()),
             new("lighting", "Aydınlatma", "\uE765", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
@@ -121,7 +122,7 @@ public partial class MainWindow : Window
         timer.Tick += async (_, _) =>
         {
             timer.Stop();
-            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("display", 5), ("lighting", 6), ("automation", 7), ("settings", -1) })
+            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("battery", 5), ("display", 6), ("lighting", 7), ("automation", 8), ("settings", -1) })
             {
                 var button = index >= 0 ? (RadioButton)Nav.Children[index] : (RadioButton)NavBottom.Children[0];
                 button.IsChecked = true;

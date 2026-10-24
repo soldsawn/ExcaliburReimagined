@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Excalibur.Core.Battery;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -27,9 +28,10 @@ public static class FanPipe
     /// 8: + setLighting(lighting) (keyboard light; stored and shown), setLightIdle(idle) (the tray saw no input for the
     ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle / LightBrightness.
     /// 9: + status EcSeenElsewhere (an unverified EC version whose trial passed on another machine).
+    /// 10: + status Battery (charge, state, Windows' time left; health once read).
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 9;
+    public const int ProtocolVersion = 10;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -99,6 +101,26 @@ public sealed record PowerStatusDto(
             s.Cpu?.Watts, s.Cpu?.Pl1Watts, s.Cpu?.Pl2Watts, s.GpuPowerWatts, s.CpuLimit);
 }
 
+/// <summary>
+/// The battery: charge and state from Windows (always current), health from the battery itself (null until the service
+/// has read it, at the earliest 10 minutes after Windows started). Null as a whole when there is no battery.
+/// </summary>
+public sealed record BatteryStatusDto(
+    int? Percent,
+    BatteryState State,
+    int? RemainingMinutes,
+    int? DesignedMWh = null,
+    int? FullMWh = null,
+    int? HealthPercent = null,
+    string? Chemistry = null,
+    int? Cycles = null,
+    DateTimeOffset? HealthReadAt = null)
+{
+    public static BatteryStatusDto? From(BatteryLive? live, BatteryHealth? health) => live is not { } l ? null
+        : new(l.Percent, l.State, l.RemainingMinutes,
+            health?.DesignedMWh, health?.FullMWh, health?.Percent, health?.Chemistry, health?.Cycles, health?.ReadAt);
+}
+
 public sealed record FanEventDto(DateTimeOffset At, string Message);
 
 /// <summary>
@@ -134,7 +156,8 @@ public sealed record FanStatusDto(
     int LightIdleOffMinutes = 0,
     bool LightIdle = false,
     int? LightBrightness = null,
-    bool EcSeenElsewhere = false)
+    bool EcSeenElsewhere = false,
+    BatteryStatusDto? Battery = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {

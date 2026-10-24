@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
+using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
 using Excalibur.Core.History;
@@ -24,6 +25,7 @@ public sealed class FanPipeServer(
     HistoryRecorder history,
     PowerManager power,
     LightingManager lighting,
+    BatteryMonitor battery,
     ProfileSwitcher switcher,
     IHostApplicationLifetime lifetime,
     FanFileLog fileLog,
@@ -285,5 +287,6 @@ public sealed class FanPipeServer(
             LightIdle = lighting.Idle,
             // The light key changes it behind the page's back; the page follows this.
             LightBrightness = settings.Current.Lighting?.Brightness,
+            Battery = BatteryStatusDto.From(battery.Live(), battery.Health),
         };
 }
