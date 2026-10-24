@@ -33,6 +33,7 @@ internal static class InfoPage
             Card("Görünüm",
                 Text("Tema Windows'un açık/koyu ayarını izliyor, vurgu rengi kırmızı.", "Body"),
                 Text("Yakında: vurgu rengi ve tema seçimi, tepsi simgesindeki rakamların yazı tipi, hızlı panelde görünecek profiller.", "Caption", top: 6)),
+            BatteryPage.IntervalCard(connection),
             Card("Hakkında",
                 Text($"Excalibur Reimagined {version}", "Body"),
                 Text("Casper Excalibur G870 için, Control Center'ın yerine geçen hafif bir uygulama. İnternete bağlanmaz, veri göndermez.", "Caption", top: 6),

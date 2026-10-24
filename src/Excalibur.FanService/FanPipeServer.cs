@@ -26,6 +26,7 @@ public sealed class FanPipeServer(
     PowerManager power,
     LightingManager lighting,
     BatteryMonitor battery,
+    BatteryRecorder batteryRecorder,
     ProfileSwitcher switcher,
     IHostApplicationLifetime lifetime,
     FanFileLog fileLog,
@@ -287,6 +288,6 @@ public sealed class FanPipeServer(
             LightIdle = lighting.Idle,
             // The light key changes it behind the page's back; the page follows this.
             LightBrightness = settings.Current.Lighting?.Brightness,
-            Battery = BatteryStatusDto.From(battery.Live(), battery.Health),
+            Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last),
         };
 }

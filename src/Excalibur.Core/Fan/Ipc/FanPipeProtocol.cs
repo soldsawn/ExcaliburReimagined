@@ -28,7 +28,8 @@ public static class FanPipe
     /// 8: + setLighting(lighting) (keyboard light; stored and shown), setLightIdle(idle) (the tray saw no input for the
     ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle / LightBrightness.
     /// 9: + status EcSeenElsewhere (an unverified EC version whose trial passed on another machine).
-    /// 10: + status Battery (charge, state, Windows' time left; health once read).
+    /// 10: + status Battery (charge, state, Windows' time left; health once read; the last average on battery),
+    ///     settings BatteryReadMinutes.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
     public const int ProtocolVersion = 10;
@@ -103,7 +104,8 @@ public sealed record PowerStatusDto(
 
 /// <summary>
 /// The battery: charge and state from Windows (always current), health from the battery itself (null until the service
-/// has read it, at the earliest 10 minutes after Windows started). Null as a whole when there is no battery.
+/// has read it, at the earliest 10 minutes after Windows started). <see cref="AverageWatts"/> is the last finished interval of
+/// this time on battery (<see cref="BatteryRecorder"/>), null on the wall and until one finishes. Null as a whole without a battery.
 /// </summary>
 public sealed record BatteryStatusDto(
     int? Percent,
@@ -114,11 +116,14 @@ public sealed record BatteryStatusDto(
     int? HealthPercent = null,
     string? Chemistry = null,
     int? Cycles = null,
-    DateTimeOffset? HealthReadAt = null)
+    DateTimeOffset? HealthReadAt = null,
+    double? AverageWatts = null,
+    int? AverageMinutes = null)
 {
-    public static BatteryStatusDto? From(BatteryLive? live, BatteryHealth? health) => live is not { } l ? null
+    public static BatteryStatusDto? From(BatteryLive? live, BatteryHealth? health, BatteryAverage? average = null) => live is not { } l ? null
         : new(l.Percent, l.State, l.RemainingMinutes,
-            health?.DesignedMWh, health?.FullMWh, health?.Percent, health?.Chemistry, health?.Cycles, health?.ReadAt);
+            health?.DesignedMWh, health?.FullMWh, health?.Percent, health?.Chemistry, health?.Cycles, health?.ReadAt,
+            average?.Watts, average is null ? null : (int)Math.Round(average.Span.TotalMinutes));
 }
 
 public sealed record FanEventDto(DateTimeOffset At, string Message);

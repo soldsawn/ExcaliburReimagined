@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -75,6 +76,12 @@ public sealed record ServiceSettings
     /// <summary>The keyboard light (A5); null = never chosen, the service leaves the light alone.</summary>
     public KeyboardLighting? Lighting { get; init; }
 
+    /// <summary>
+    /// Minutes between the battery reads on battery (one of <see cref="BatteryRecorder.IntervalChoices"/>): each read asks the
+    /// battery through the EC, so the default is sparse.
+    /// </summary>
+    public int BatteryReadMinutes { get; init; } = BatteryRecorder.DefaultMinutes;
+
     /// <summary>The shape of an EC version string (6 ASCII letters or digits, e.g. P008B0).</summary>
     public static bool IsEcVersion(string? v) => v is { Length: 6 } && v.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z');
 
@@ -82,6 +89,7 @@ public sealed record ServiceSettings
     public bool Equals(ServiceSettings? other) =>
         other is not null && Version == other.Version && Profile == other.Profile && History == other.History
         && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit && Lighting == other.Lighting
+        && BatteryReadMinutes == other.BatteryReadMinutes
         && CustomProfiles.SequenceEqual(other.CustomProfiles) && TrustedEcVersions.SequenceEqual(other.TrustedEcVersions)
         && (Slots is null ? other.Slots is null : other.Slots is not null && Slots.SequenceEqual(other.Slots));
 
@@ -124,6 +132,7 @@ public sealed record ServiceSettings
         if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
         foreach (var v in TrustedEcVersions.Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
         if (Lighting is { } lighting) errors.AddRange(lighting.Validate());
+        if (!BatteryRecorder.IntervalChoices.Contains(BatteryReadMinutes)) errors.Add($"battery read interval {BatteryReadMinutes} min is not offered");
         return errors;
     }
 
@@ -162,6 +171,12 @@ public sealed record ServiceSettings
         var cpuLimit = ReadCpuLimit(node, problems);
         var trusted = ReadTrustedEcVersions(node, problems);
         var lighting = ReadLighting(node, problems);
+        int batteryMinutes = Get(node, "batteryReadMinutes", d.BatteryReadMinutes, problems);
+        if (!BatteryRecorder.IntervalChoices.Contains(batteryMinutes))
+        {
+            problems.Add($"battery read interval {batteryMinutes} min is not offered; using {d.BatteryReadMinutes}");
+            batteryMinutes = d.BatteryReadMinutes;
+        }
 
         int version = Get(node, "version", 1, problems);
         if (version > CurrentVersion) problems.Add($"settings version {version} is newer than this build ({CurrentVersion}); unknown fields ignored");
@@ -170,6 +185,7 @@ public sealed record ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
             CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted, Lighting = lighting,
+            BatteryReadMinutes = batteryMinutes,
         }, problems);
     }
 
@@ -317,11 +333,12 @@ public sealed record ServiceSettings
 /// A partial update sent with <c>updateSettings</c>: only the non-null fields change. Profile
 /// changes go through <c>setProfile</c> instead (they also switch the running loop).
 /// </summary>
-public sealed record ServiceSettingsPatch(HistoryMode? History = null, PowerAutomation? PowerAutomation = null)
+public sealed record ServiceSettingsPatch(HistoryMode? History = null, PowerAutomation? PowerAutomation = null, int? BatteryReadMinutes = null)
 {
     public ServiceSettings ApplyTo(ServiceSettings s) => s with
     {
         History = History ?? s.History,
         PowerAutomation = PowerAutomation ?? s.PowerAutomation,
+        BatteryReadMinutes = BatteryReadMinutes ?? s.BatteryReadMinutes,
     };
 }

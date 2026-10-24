@@ -50,11 +50,17 @@ PawnIoCpuPowerRegisters? cpuRegisters = null;
 Timer? cpuSampler = null;
 IFanHardware hardware;
 IPowerHardware powerHardware;
+IBatteryHardware batteryHardware;
+IBatteryMeter batteryMeter;
 ISmiChannel firmware;
 if (fake is not null)
 {
     hardware = fake;
-    powerHardware = new SimulatedPowerHardware();
+    // --on-battery pretends the charger is unplugged (to see the battery page measure).
+    bool simOnBattery = args.Contains("--on-battery", StringComparer.OrdinalIgnoreCase);
+    powerHardware = new SimulatedPowerHardware { OnBattery = simOnBattery };
+    var simBattery = new SimulatedBatteryHardware { OnBattery = simOnBattery };
+    (batteryHardware, batteryMeter) = (simBattery, simBattery);
     firmware = new SimulatedSmiChannel();
 }
 else
@@ -79,6 +85,8 @@ else
     }
     hardware = new EcFanHardware(ec, gateway, cpuTemperature: cpuTemperature,
         versionCachePath: Path.Combine(runtimeDir, "ec-version.txt"), scale: new FanRpmScale(Path.Combine(runtimeDir, FanRpmScale.FileName)));
+    var wmiBattery = new WmiBatteryHardware();
+    (batteryHardware, batteryMeter) = (wmiBattery, wmiBattery);
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
         : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters));
@@ -120,8 +128,9 @@ builder.Services.AddSingleton(sp =>
     return new PowerManager(powerHardware, settingsStore, (profile, source) => switcher.Switch(profile, source),
         m => fileLog.Write(DateTimeOffset.Now, m), simulate ? TimeSpan.Zero : EcQuiet.AfterCharger);
 });
-builder.Services.AddSingleton(new BatteryMonitor(simulate ? new SimulatedBatteryHardware() : new WmiBatteryHardware(),
-    m => fileLog.Write(DateTimeOffset.Now, m)));
+builder.Services.AddSingleton(new BatteryMonitor(batteryHardware, m => fileLog.Write(DateTimeOffset.Now, m)));
+builder.Services.AddSingleton(new BatteryRecorder(batteryMeter));
+builder.Services.AddSingleton(new BatteryCsvLog(Path.Combine(runtimeDir, "battery"), m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
 builder.Services.AddHostedService<PowerWorker>();

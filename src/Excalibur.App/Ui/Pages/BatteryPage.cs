@@ -1,14 +1,17 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using Excalibur.Core.Battery;
+using Excalibur.Core.Settings;
 using Excalibur.Core.Fan.Ipc;
 
 namespace Excalibur.App.Ui.Pages;
 
 /// <summary>
 /// Pil: the charge and state as Windows knows them, and the battery's health as the service last read it
-/// (at start and once a day; never in Windows' first minutes). The app itself reads nothing from the battery.
+/// (at start and once a day; never in Windows' first minutes), and on battery the average power over the last read interval.
+/// The app itself reads nothing from the battery.
 /// </summary>
 internal sealed class BatteryPage : UserControl
 {
@@ -18,14 +21,24 @@ internal sealed class BatteryPage : UserControl
         "Pil yaşlandıkça ilk sayı azalır.";
 
     private readonly FanConnection _connection;
-    private readonly TextBlock _percent, _state, _remaining;
+    private readonly TextBlock _percent, _state, _remaining, _average, _interval;
     private readonly TextBlock _health, _capacity, _kind, _healthNote;
     private readonly StackPanel _healthValues, _pages;
     private readonly TextBlock _missing;
 
-    public BatteryPage(FanConnection connection)
+    /// <param name="openSettings">Shows the Settings page, where the read interval is changed.</param>
+    public BatteryPage(FanConnection connection, Action openSettings)
     {
         _connection = connection;
+        _average = InfoPage.Text("", "Body", top: 8);
+        _interval = InfoPage.Text("", "Caption", top: 4);
+        var change = new Hyperlink(new Run("değiştir"));
+        change.Click += (_, _) => openSettings();
+        change.SetResourceReference(TextElement.ForegroundProperty, "Accent");
+        _intervalText = new Run();
+        _interval.Inlines.Add(_intervalText);
+        _interval.Inlines.Add(new Run("   ·   "));
+        _interval.Inlines.Add(change);
         _percent = InfoPage.Text("–", "BigValue");
         _state = InfoPage.Text("", "Body", top: 2);
         _remaining = InfoPage.Text("", "Caption", top: 6);
@@ -52,11 +65,10 @@ internal sealed class BatteryPage : UserControl
         {
             Children =
             {
-                InfoPage.Card("Şu an", _percent, _state, _remaining),
+                InfoPage.Card("Şu an", _percent, _state, _remaining, _average, _interval),
                 InfoPage.Card("Pil sağlığı", _healthValues, _healthNote),
                 InfoPage.Card("Yakında",
-                    InfoPage.Text("• Son dakikalardaki ortalama güç tüketimi", "Caption"),
-                    InfoPage.Text("• Güç modu ve fan profiline göre tam pille ne kadar gidileceği", "Caption", top: 4)),
+                    InfoPage.Text("• Güç modu ve fan profiline göre tam pille ne kadar gidileceği", "Caption")),
             },
         };
 
@@ -73,7 +85,10 @@ internal sealed class BatteryPage : UserControl
 
         _connection.Changed += Render;
         Render();
+        Loaded += async (_, _) => { await _connection.RefreshSettingsAsync(); Render(); };
     }
+
+    private readonly Run _intervalText;
 
     private void Render()
     {
@@ -99,6 +114,13 @@ internal sealed class BatteryPage : UserControl
         };
         _remaining.Text = b.RemainingMinutes is { } m ? $"Kalan süre: {Texts.Duration(TimeSpan.FromMinutes(m))} (Windows'un tahmini)" : "";
         _remaining.Visibility = b.RemainingMinutes is null ? Visibility.Collapsed : Visibility.Visible;
+        bool onBattery = b.State == BatteryState.OnBattery;
+        _average.Visibility = _interval.Visibility = onBattery ? Visibility.Visible : Visibility.Collapsed;
+        _average.Text = b.AverageWatts is { } w && b.AverageMinutes is { } am
+            ? $"Son {am} dk ortalama: {w.ToString("0.0", Tr)} W"
+            : "Ortalama güç ölçülüyor…";
+        int minutes = _connection.Settings?.BatteryReadMinutes ?? BatteryRecorder.DefaultMinutes;
+        _intervalText.Text = $"Okuma sıklığı: {minutes} dk";
 
         bool read = b.FullMWh is not null && b.DesignedMWh is not null;
         _healthValues.Visibility = read ? Visibility.Visible : Visibility.Collapsed;
@@ -116,6 +138,38 @@ internal sealed class BatteryPage : UserControl
             ? "Pil şu an yeniyken tutması gerekenden biraz fazlasını tutuyor; yeni pillerde olağandır."
             : "";
         _healthNote.Visibility = _healthNote.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>The Settings card that sets how often the battery is read on battery.</summary>
+    internal static Border IntervalCard(FanConnection connection)
+    {
+        var combo = new ComboBox { Margin = new Thickness(0, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 140 };
+        combo.SetResourceReference(StyleProperty, "ThemedCombo");
+        combo.ItemsSource = BatteryRecorder.IntervalChoices.Select(m => $"{m} dakika").ToList();
+        var error = InfoPage.Text("", "Caption", top: 6);
+        error.SetResourceReference(TextBlock.ForegroundProperty, "Bad");
+        error.Visibility = Visibility.Collapsed;
+        bool loading = true;
+        void Load()
+        {
+            loading = true;
+            int current = connection.Settings?.BatteryReadMinutes ?? BatteryRecorder.DefaultMinutes;
+            combo.SelectedIndex = Math.Max(0, BatteryRecorder.IntervalChoices.ToList().IndexOf(current));
+            loading = false;
+        }
+        Load();
+        combo.Loaded += async (_, _) => { await connection.RefreshSettingsAsync(); Load(); };
+        combo.SelectionChanged += async (_, _) =>
+        {
+            if (loading || combo.SelectedIndex < 0) return;
+            int minutes = BatteryRecorder.IntervalChoices[combo.SelectedIndex];
+            var r = await connection.RequestAsync(new FanRequest("updateSettings", Settings: new ServiceSettingsPatch(BatteryReadMinutes: minutes)));
+            error.Text = r is null ? "Arka plan hizmetine ulaşılamadı." : r.Ok ? "" : "Ayar kaydedilemedi.";
+            error.Visibility = error.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        };
+        return InfoPage.Card("Pil",
+            InfoPage.Text("Pildeyken ortalama gücü ölçmek için pil ne sıklıkla okunsun. Seyrek okuma yeterlidir ve dizüstüne daha az iş yükler.", "Caption"),
+            combo, error);
     }
 
     private static string Wh(int mWh) => (mWh / 1000.0).ToString("0.0", Tr) + " Wh";

@@ -36,7 +36,7 @@ public partial class MainWindow : Window
             new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
-            new("battery", "Pil", "", () => new BatteryPage(_connection)),
+            new("battery", "Pil", "", () => new BatteryPage(_connection, () => Open("settings"))),
             new("display", "Ekran", "", () => new DisplayPage()),
             new("lighting", "Aydınlatma", "\uE765", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         {
             var button = new RadioButton { Content = def.Title, Tag = def.Icon, Style = (Style)FindResource("NavButton") };
             button.Checked += (_, _) => ShowPage(def);
+            _buttons[def.Key] = button;
             (def.Bottom ? NavBottom : Nav).Children.Add(button);
         }
         ((RadioButton)Nav.Children[0]).IsChecked = true;
@@ -68,6 +69,10 @@ public partial class MainWindow : Window
         Loaded += (_, _) => _connection.Start();
         RenderStatus();
     }
+
+    private readonly Dictionary<string, RadioButton> _buttons = [];
+
+    private void Open(string key) => _buttons[key].IsChecked = true;
 
     private void ShowPage(PageDef def)
     {

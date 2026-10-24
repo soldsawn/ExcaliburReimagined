@@ -1,5 +1,7 @@
 using Excalibur.Core.Battery;
 using Excalibur.Core.Fan.Ipc;
+using Excalibur.Core.Power;
+using Excalibur.Core.Settings;
 
 namespace Excalibur.Core.Tests;
 
@@ -66,5 +68,151 @@ public class BatteryTests
         public BatteryHealth? ReadHealth() => Fail ? throw new System.Management.ManagementException("Generic failure") : Health;
 
         public BatteryLive? ReadLive() => null;
+    }
+
+    private static readonly DateTimeOffset T0 = new(2026, 10, 24, 12, 0, 0, TimeSpan.FromHours(3));
+    private static readonly BatteryLive Discharging = new(60, BatteryState.OnBattery, 120);
+    private static readonly BatteryLive Charging = new(60, BatteryState.Charging, null);
+
+    /// <summary>Ticks every 5 s from <paramref name="from"/> for <paramref name="span"/>.</summary>
+    private static DateTimeOffset Run(BatteryRecorder r, DateTimeOffset from, TimeSpan span, BatteryLive live,
+        string profile = "Balanced", bool ecBusy = false)
+    {
+        var t = from;
+        for (; t <= from + span; t += TimeSpan.FromSeconds(5)) r.Tick(t, live, PowerMode.Office, profile, ecBusy);
+        return t;
+    }
+
+    [Fact]
+    public void Average_is_the_energy_drop_over_the_interval_with_two_reads()
+    {
+        var meter = new FakeMeter(40000);
+        var r = new BatteryRecorder(meter);
+        var kept = new List<BatteryInterval>();
+        r.Recorded += kept.Add;
+        meter.Drop = 2500; // per read: 2.5 Wh in 10 min = 15 W
+        var t = Run(r, T0, TimeSpan.FromSeconds(55), Discharging);
+        Assert.Equal(0, meter.Reads); // the first read waits a minute after the charger comes out
+        t = Run(r, t, TimeSpan.FromMinutes(11), Discharging);
+        Assert.Equal(2, meter.Reads);
+        var i = Assert.Single(kept);
+        Assert.Equal(15, i.Average.Watts, 1);
+        Assert.Equal(("Balanced", 60), (i.Profile, i.Percent));
+        Assert.Same(i.Average, r.Last);
+    }
+
+    [Fact]
+    public void No_reads_on_the_wall_and_the_average_is_forgotten()
+    {
+        var meter = new FakeMeter(40000) { Drop = 2500 };
+        var r = new BatteryRecorder(meter);
+        var t = Run(r, T0, TimeSpan.FromMinutes(12), Discharging);
+        Assert.NotNull(r.Last);
+        int reads = meter.Reads;
+        Run(r, t, TimeSpan.FromHours(1), Charging);
+        Assert.Equal(reads, meter.Reads);
+        Assert.Null(r.Last);
+    }
+
+    [Fact]
+    public void A_profile_change_drops_the_interval_without_an_extra_read()
+    {
+        var meter = new FakeMeter(40000) { Drop = 2500 };
+        var r = new BatteryRecorder(meter);
+        var kept = new List<BatteryInterval>();
+        r.Recorded += kept.Add;
+        var t = Run(r, T0, TimeSpan.FromMinutes(5), Discharging);
+        Assert.Equal(1, meter.Reads);
+        t = Run(r, t, TimeSpan.FromMinutes(6), Discharging, profile: "Quiet");
+        Assert.Equal(2, meter.Reads);
+        Assert.Empty(kept);
+        // The next interval runs on Quiet throughout and is kept.
+        Run(r, t, TimeSpan.FromMinutes(10), Discharging, profile: "Quiet");
+        Assert.Equal("Quiet", Assert.Single(kept).Profile);
+    }
+
+    [Fact]
+    public void A_brightness_change_of_10_drops_the_interval()
+    {
+        var meter = new FakeMeter(40000) { Drop = 2500 };
+        var r = new BatteryRecorder(meter);
+        var kept = new List<BatteryInterval>();
+        r.Recorded += kept.Add;
+        var t = Run(r, T0, TimeSpan.FromMinutes(5), Discharging);
+        meter.Brightness = 60;
+        Run(r, t, TimeSpan.FromMinutes(6), Discharging);
+        Assert.Empty(kept);
+    }
+
+    [Fact]
+    public void Sleep_drops_the_interval_and_waits_a_minute_after_waking()
+    {
+        var meter = new FakeMeter(40000) { Drop = 2500 };
+        var r = new BatteryRecorder(meter);
+        var kept = new List<BatteryInterval>();
+        r.Recorded += kept.Add;
+        var t = Run(r, T0, TimeSpan.FromMinutes(5), Discharging);
+        Assert.Equal(1, meter.Reads);
+        t += TimeSpan.FromMinutes(30); // asleep
+        t = Run(r, t, TimeSpan.FromSeconds(55), Discharging);
+        Assert.Equal(1, meter.Reads);
+        Run(r, t, TimeSpan.FromSeconds(10), Discharging);
+        Assert.Equal(2, meter.Reads);
+        Assert.Empty(kept);
+    }
+
+    [Fact]
+    public void A_busy_ec_postpones_the_read()
+    {
+        var meter = new FakeMeter(40000);
+        var r = new BatteryRecorder(meter);
+        var t = Run(r, T0, TimeSpan.FromMinutes(3), Discharging, ecBusy: true);
+        Assert.Equal(0, meter.Reads);
+        Run(r, t, TimeSpan.FromSeconds(5), Discharging);
+        Assert.Equal(1, meter.Reads);
+    }
+
+    [Fact]
+    public void Csv_has_a_header_and_old_days_are_deleted()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "battery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "20260901.csv"), "old");
+            File.WriteAllText(Path.Combine(dir, "20261001.csv"), "recent");
+            var log = new BatteryCsvLog(dir);
+            log.Append(new BatteryInterval(new BatteryAverage(T0, TimeSpan.FromMinutes(10), 14.25), 55, PowerMode.Office, "Quiet", 50));
+            var lines = File.ReadAllLines(Path.Combine(dir, "20261024.csv"));
+            Assert.Equal([BatteryCsvLog.Header, "2026-10-24 12:00:00,10.0,14.25,55,Office,Quiet,50"], lines);
+            Assert.False(File.Exists(Path.Combine(dir, "20260901.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, "20261001.csv")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Read_interval_setting_falls_back_to_10_minutes()
+    {
+        Assert.Equal(10, new ServiceSettings().BatteryReadMinutes);
+        var (s, problems) = ServiceSettings.Parse("""{"version":2,"batteryReadMinutes":7}""");
+        Assert.Equal(10, s.BatteryReadMinutes);
+        Assert.NotEmpty(problems);
+        Assert.Equal(30, ServiceSettings.Parse("""{"version":2,"batteryReadMinutes":30}""").Settings.BatteryReadMinutes);
+        Assert.NotEmpty((new ServiceSettings() with { BatteryReadMinutes = 3 }).Validate());
+    }
+
+    private sealed class FakeMeter(int start) : IBatteryMeter
+    {
+        private int _left = start;
+        public int Drop { get; set; }
+        public int Brightness { get; set; } = 50;
+        public int Reads { get; private set; }
+
+        public BatteryReading? Read()
+        {
+            if (Reads++ > 0) _left -= Drop;
+            return new BatteryReading(_left, Brightness);
+        }
     }
 }
