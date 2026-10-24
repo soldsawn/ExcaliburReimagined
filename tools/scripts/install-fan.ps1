@@ -78,6 +78,9 @@ $all = @($services[0], $services[1], $app)
 foreach ($a in $all) {
     $dest = Join-Path $installDir (Split-Path $a.Project -Leaf)
     Step "publish $($a.Project) -> $dest" {
+        # Start clean: the test package installs self-contained copies here, and a leftover hostfxr.dll makes this
+        # framework-dependent build look for .NET inside the folder ("No frameworks were found", 2026-10-24).
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         & dotnet publish (Join-Path $repo $a.Project) -c Release -r win-x64 --self-contained false -o $dest --nologo -v q
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $($a.Project)" }
     }
