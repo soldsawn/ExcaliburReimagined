@@ -80,7 +80,11 @@ foreach ($a in $all) {
     Step "publish $($a.Project) -> $dest" {
         # Start clean: the test package installs self-contained copies here, and a leftover hostfxr.dll makes this
         # framework-dependent build look for .NET inside the folder ("No frameworks were found", 2026-10-24).
-        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        # A process closed a moment ago (or a virus scan) can hold a file for a few seconds more.
+        for ($try = 1; Test-Path $dest; $try++) {
+            try { Remove-Item $dest -Recurse -Force -ErrorAction Stop }
+            catch { if ($try -ge 10) { throw }; Start-Sleep -Seconds 1 }
+        }
         & dotnet publish (Join-Path $repo $a.Project) -c Release -r win-x64 --self-contained false -o $dest --nologo -v q
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $($a.Project)" }
     }
