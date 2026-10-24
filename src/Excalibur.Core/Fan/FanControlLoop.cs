@@ -74,6 +74,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private readonly FanController _controller = new();
     private readonly TemperatureFilter _filter = new();
     private readonly HotTracker _hot = new();
+    private readonly FloorTracker _floors = new();
     private readonly LinkedList<FanEvent> _events = new();
     private readonly object _gate = new();
     // Events and the published status have their own cheap guards so a pipe request never waits
@@ -275,7 +276,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             var filtered = _filter.Apply(s, now);
             bool hot = _hot.Update(s, now);
             var desired = _controller.Decide(filtered, _profile, now);
-            var decision = SafetyPolicy.Apply(filtered, desired, hot, out string? reason, out var cpuRaised, out var gpuRaised);
+            var decision = SafetyPolicy.Apply(_floors.Apply(filtered, now), desired, hot, out string? reason, out var cpuRaised, out var gpuRaised);
             _cpuReason = decision.Cpu.IsAuto ? FanReason.Auto : cpuRaised ?? _controller.ReasonOf(FanId.Cpu);
             _gpuReason = decision.Gpu.IsAuto ? FanReason.Auto : gpuRaised ?? _controller.ReasonOf(FanId.Gpu);
             // What each curve alone asks for, at the temperature the curve sees.
@@ -401,6 +402,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         _controller.Reset();
         _filter.Reset();
         _hot.Reset();
+        _floors.Reset();
     }
 
     private void Log(DateTimeOffset now, string message)

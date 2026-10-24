@@ -86,3 +86,25 @@ public sealed class HotTracker
         _immediate = 0;
     }
 }
+
+/// <summary>
+/// The temperature the floors look at: the lowest filtered reading of the last <see cref="SustainSeconds"/>, so a
+/// floor engages only once its threshold has held that long. A 1-2 s boost spike crossing 70 C sent the CPU fan from
+/// its curve to 80% and back ~300 times a day (G870 and G770, 2026-10-23/24); a real load still reaches the floor
+/// within seconds, and the hot rule keeps watching the raw value.
+/// </summary>
+public sealed class FloorTracker
+{
+    public const double SustainSeconds = 3;
+
+    private readonly Queue<(DateTimeOffset At, int CpuC, int GpuC)> _recent = new();
+
+    public FanSnapshot Apply(FanSnapshot filtered, DateTimeOffset now)
+    {
+        _recent.Enqueue((now, filtered.CpuTempC, filtered.GpuTempC));
+        while (now - _recent.Peek().At > TimeSpan.FromSeconds(SustainSeconds)) _recent.Dequeue();
+        return filtered with { CpuTempC = _recent.Min(r => r.CpuC), GpuTempC = _recent.Min(r => r.GpuC) };
+    }
+
+    public void Reset() => _recent.Clear();
+}

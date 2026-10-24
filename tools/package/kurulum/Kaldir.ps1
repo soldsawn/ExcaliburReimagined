@@ -32,7 +32,7 @@ try {
     foreach ($proc in @(Get-Process -Name 'ExcaliburReimagined' -ErrorAction SilentlyContinue)) {
         $proc.Kill(); $proc.WaitForExit(5000) | Out-Null
     }
-    foreach ($dir in (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'), [Environment]::GetFolderPath('Startup')) {
+    foreach ($dir in (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'), [Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup')) {
         $lnk = Join-Path $dir $linkName
         if (Test-Path $lnk) { Remove-Item $lnk -Force }
     }

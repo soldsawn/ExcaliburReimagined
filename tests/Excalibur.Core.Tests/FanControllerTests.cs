@@ -191,6 +191,49 @@ public class HotTrackerTests
     }
 }
 
+public class FloorTrackerTests
+{
+    private static int FloorFor(FloorTracker f, int cpuC, double second)
+    {
+        var d = SafetyPolicy.Apply(f.Apply(Snap(cpuC, 50), T0.AddSeconds(second)), new FanDecision(P(60), P(60)), hot: false, out _);
+        return d.Cpu.Percent;
+    }
+
+    [Fact]
+    public void A_two_second_spike_over_70C_leaves_the_fan_on_its_curve()
+    {
+        // 2026-10-24 18:30:23: 60 C, a 2 s boost spike, 60 C again.
+        var f = new FloorTracker();
+        Assert.Equal(60, FloorFor(f, 60, 0));
+        Assert.Equal(60, FloorFor(f, 71, 1));
+        Assert.Equal(60, FloorFor(f, 72, 2));
+        Assert.Equal(60, FloorFor(f, 60, 3));
+    }
+
+    [Fact]
+    public void Three_seconds_over_70C_raises_the_floor_and_a_fall_releases_it()
+    {
+        var f = new FloorTracker();
+        FloorFor(f, 60, 0);
+        Assert.Equal(60, FloorFor(f, 71, 1));
+        Assert.Equal(60, FloorFor(f, 71, 2));
+        Assert.Equal(60, FloorFor(f, 72, 3));
+        Assert.Equal(80, FloorFor(f, 72, 4));
+        Assert.Equal(60, FloorFor(f, 62, 5));
+    }
+
+    [Fact]
+    public void The_78C_floor_waits_the_same_way()
+    {
+        var f = new FloorTracker();
+        FloorFor(f, 72, 0);
+        Assert.Equal(80, FloorFor(f, 79, 1));
+        Assert.Equal(80, FloorFor(f, 79, 2));
+        Assert.Equal(80, FloorFor(f, 79, 3));
+        Assert.Equal(90, FloorFor(f, 79, 4));
+    }
+}
+
 public class TemperatureFilterTests
 {
     [Fact]

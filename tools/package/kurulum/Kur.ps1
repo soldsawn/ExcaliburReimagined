@@ -122,7 +122,11 @@ try {
     # --- 7. kısayollar: Başlat menüsü (pencere) ve oturum açılışı (saat yanındaki simge) -----------
     $startMenuLink = Join-Path (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs') $linkName
     $shell = New-Object -ComObject WScript.Shell
-    foreach ($link in @(@{ Path = $startMenuLink; Args = '--window' }, @{ Path = (Join-Path ([Environment]::GetFolderPath('Startup')) $linkName); Args = '' })) {
+    # Açılış kısayolu tüm kullanıcıların Başlangıç klasörüne: yönetici izni başka bir hesapla verilince kendi
+    # Başlangıç klasörü o hesabınki olur ve simge kullanıcının oturumunda hiç açılmaz. Eski sürümün kısayolu silinir.
+    $oldStartupLink = Join-Path ([Environment]::GetFolderPath('Startup')) $linkName
+    if (Test-Path $oldStartupLink) { Remove-Item $oldStartupLink -Force }
+    foreach ($link in @(@{ Path = $startMenuLink; Args = '--window' }, @{ Path = (Join-Path ([Environment]::GetFolderPath('CommonStartup')) $linkName); Args = '' })) {
         $sc = $shell.CreateShortcut($link.Path)
         $sc.TargetPath = $appExe
         $sc.Arguments = $link.Args
