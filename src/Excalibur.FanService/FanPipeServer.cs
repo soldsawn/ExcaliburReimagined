@@ -289,6 +289,6 @@ public sealed class FanPipeServer(
             LightIdle = lighting.Idle,
             // The light key changes it behind the page's back; the page follows this.
             LightBrightness = settings.Current.Lighting?.Brightness,
-            Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last, batteryEstimates.All),
+            Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last, batteryEstimates.All, batteryEstimates.Idle),
         };
 }

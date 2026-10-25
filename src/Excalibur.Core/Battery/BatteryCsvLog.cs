@@ -4,17 +4,17 @@ namespace Excalibur.Core.Battery;
 
 /// <summary>
 /// The kept battery intervals, one csv file a day (battery\YYYYMMDD.csv): end time, minutes, average watts, battery percent,
-/// power mode, fan profile, screen brightness. Files older than <see cref="KeepDays"/> are deleted when a new day starts.
+/// power mode, fan profile, screen brightness, CPU watts (added 2026-10-25; older lines have one field less). Files older than <see cref="KeepDays"/> are deleted when a new day starts.
 /// </summary>
 public sealed class BatteryCsvLog(string directory, Action<string>? log = null)
 {
     public const int KeepDays = 30;
-    public const string Header = "time,minutes,watts,percent,power_mode,fan_profile,brightness";
+    public const string Header = "time,minutes,watts,percent,power_mode,fan_profile,brightness,cpu_watts";
     private DateOnly? _prunedOn;
 
     public void Append(BatteryInterval interval)
     {
-        var (average, percent, mode, profile, brightness) = interval;
+        var (average, percent, mode, profile, brightness, cpuWatts) = interval;
         try
         {
             Directory.CreateDirectory(directory);
@@ -29,7 +29,8 @@ public sealed class BatteryCsvLog(string directory, Action<string>? log = null)
                 percent?.ToString(c) ?? "",
                 mode?.ToString() ?? "",
                 profile.Replace(",", " "),
-                brightness?.ToString(c) ?? "");
+                brightness?.ToString(c) ?? "",
+                cpuWatts?.ToString("0.0", c) ?? "");
             File.AppendAllText(path, (File.Exists(path) ? "" : Header + Environment.NewLine) + line + Environment.NewLine);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

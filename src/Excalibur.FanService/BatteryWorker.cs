@@ -58,13 +58,14 @@ public sealed class BatteryWorker(
         if (!ecBusy && now >= _healthAt)
             _healthAt = now + (battery.ReadHealth() ? Every : Retry);
         recorder.Interval = TimeSpan.FromMinutes(settings.Current.BatteryReadMinutes);
-        recorder.Tick(now, battery.Live(), power.Status.Mode, loop.Status.Profile, ecBusy);
+        var status = power.Status;
+        recorder.Tick(now, battery.Live(), status.Mode, loop.Status.Profile, ecBusy, status.Cpu?.Watts);
     }
 
     private void OnRecorded(BatteryInterval i)
     {
         csv.Append(i);
         estimates.Add(i);
-        fileLog.Write(DateTimeOffset.Now, $"battery: {i.Average.Watts:F1} W over {i.Average.Span.TotalMinutes:F0} min ({i.Mode}, {i.Profile}, brightness {i.Brightness?.ToString() ?? "-"})");
+        fileLog.Write(DateTimeOffset.Now, $"battery: {i.Average.Watts:F1} W over {i.Average.Span.TotalMinutes:F0} min ({i.Mode}, {i.Profile}, brightness {i.Brightness?.ToString() ?? "-"}, CPU {i.CpuWatts?.ToString("F1") ?? "-"} W)");
     }
 }

@@ -144,6 +144,12 @@ public partial class MainWindow : Window
                     UpdateLayout();
                     Save(Root, Path.ChangeExtension(path, ".fan-dot.png"));
                 }
+                if (_pages.GetValueOrDefault(key) is BatteryPage)
+                {
+                    PageScroll.ScrollToEnd();
+                    UpdateLayout();
+                    Save(Root, Path.ChangeExtension(path, ".battery-end.png"));
+                }
                 if (_pages.GetValueOrDefault(key) is HistoryPage history)
                 {
                     history.Chart.HoverAt(0.8);

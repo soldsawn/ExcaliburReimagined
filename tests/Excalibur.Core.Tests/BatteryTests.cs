@@ -184,7 +184,7 @@ public class BatteryTests
             var log = new BatteryCsvLog(dir);
             log.Append(new BatteryInterval(new BatteryAverage(T0, TimeSpan.FromMinutes(10), 14.25), 55, PowerMode.Office, "Quiet", 50));
             var lines = File.ReadAllLines(Path.Combine(dir, "20261024.csv"));
-            Assert.Equal([BatteryCsvLog.Header, "2026-10-24 12:00:00,10.0,14.25,55,Office,Quiet,50"], lines);
+            Assert.Equal([BatteryCsvLog.Header, "2026-10-24 12:00:00,10.0,14.25,55,Office,Quiet,50,"], lines);
             Assert.False(File.Exists(Path.Combine(dir, "20260901.csv")));
             Assert.True(File.Exists(Path.Combine(dir, "20261001.csv")));
         }
@@ -233,6 +233,38 @@ public class BatteryTests
             Assert.Equal((20.0, 15.0), (e.Minutes, e.Watts));
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void The_cpu_average_marks_idle_intervals_per_profile()
+    {
+        var meter = new FakeMeter(40000) { Drop = 2500 };
+        var r = new BatteryRecorder(meter);
+        var kept = new List<BatteryInterval>();
+        r.Recorded += kept.Add;
+        var t = T0;
+        for (; t <= T0 + TimeSpan.FromMinutes(12); t += TimeSpan.FromSeconds(5)) r.Tick(t, Discharging, PowerMode.Office, "EcAuto", false, 8);
+        Assert.Equal(8, Assert.Single(kept).CpuWatts);
+
+        var e = new BatteryEstimates();
+        e.Add(kept[0]);
+        e.Add(kept[0] with { CpuWatts = 20, Profile = "Quiet" });
+        Assert.True(e.TryAddLine("2026-10-25 18:31:40,10.0,40.00,87,Office,Quiet,100,9.5"));
+        Assert.True(e.TryAddLine("2026-10-25 18:41:40,10.0,40.00,87,Office,Quiet,100"));
+        var idle = e.Idle;
+        Assert.Equal([("EcAuto", 10.0), ("Quiet", 10.0)], idle.Select(i => (i.Profile, i.Minutes)).OrderBy(x => x.Profile).ToList());
+        Assert.Equal(40.0, idle.Single(i => i.Profile == "Quiet").Watts);
+    }
+
+    [Fact]
+    public void Without_cpu_readings_an_interval_is_not_marked()
+    {
+        var meter = new FakeMeter(40000) { Drop = 2500 };
+        var r = new BatteryRecorder(meter);
+        var kept = new List<BatteryInterval>();
+        r.Recorded += kept.Add;
+        Run(r, T0, TimeSpan.FromMinutes(12), Discharging);
+        Assert.Null(Assert.Single(kept).CpuWatts);
     }
 
     private sealed class FakeMeter(int start) : IBatteryMeter

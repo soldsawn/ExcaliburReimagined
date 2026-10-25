@@ -27,7 +27,7 @@ internal sealed class BatteryPage : UserControl
     private readonly StackPanel _healthValues, _pages;
     private readonly TextBlock _missing;
     private readonly Grid _table = new() { Margin = new Thickness(0, 10, 0, 0) };
-    private readonly TextBlock _tableEmpty, _tableNote;
+    private readonly TextBlock _tableEmpty, _tableNote, _fanEffect;
     private string _tableKey = "";
 
     /// <param name="openSettings">Shows the Settings page, where the read interval is changed.</param>
@@ -67,6 +67,7 @@ internal sealed class BatteryPage : UserControl
         _tableEmpty = InfoPage.Text("Pilde kullandıkça burada her güç modu ve fan profili için ortalama tüketim ve tam pille ne kadar " +
                                     "gidileceği görünür. Bir tahmin için o ayarla en az 30 dakika pil verisi gerekir.", "Caption");
         _tableNote = InfoPage.Text("", "Caption", top: 10);
+        _fanEffect = InfoPage.Text("", "Body");
         for (int c = 0; c < 4; c++)
             _table.ColumnDefinitions.Add(new ColumnDefinition { Width = c == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(150) });
 
@@ -77,6 +78,10 @@ internal sealed class BatteryPage : UserControl
                 InfoPage.Card("Şu an", _percent, _state, _remaining, _average, _interval),
                 InfoPage.Card("Pil sağlığı", _healthValues, _healthNote),
                 InfoPage.Card("Pil süresi tahmini", _tableEmpty, _table, _tableNote),
+                InfoPage.Card("Fan ayarının pile etkisi",
+                    InfoPage.Text("Bilgisayar boştayken (işlemci az çalışırken) fanları uygulamanın yönetmesi, fanların orijinal ayarına göre pilden " +
+                                  "ne kadar fazla ya da az harcıyor.", "Caption", bottom: 8),
+                    _fanEffect),
             },
         };
 
@@ -131,6 +136,7 @@ internal sealed class BatteryPage : UserControl
         _intervalText.Text = $"Okuma sıklığı: {minutes} dk";
 
         RenderTable(b);
+        _fanEffect.Text = FanEffect(b);
 
         bool read = b.FullMWh is not null && b.DesignedMWh is not null;
         _healthValues.Visibility = read ? Visibility.Visible : Visibility.Collapsed;
@@ -188,6 +194,32 @@ internal sealed class BatteryPage : UserControl
             Grid.SetColumn(t, c);
             _table.Children.Add(t);
         }
+    }
+
+    /// <summary>Each profile's idle average against the EC's automatic control, once both have enough data.</summary>
+    private static string FanEffect(BatteryStatusDto b)
+    {
+        var idle = b.IdleEstimates ?? [];
+        var ec = idle.FirstOrDefault(e => e.Profile == "EcAuto");
+        var profiles = idle.Where(e => e.Profile != "EcAuto").ToList();
+        bool Enough(BatteryEstimate? e) => e is not null && e.Minutes >= BatteryEstimates.NeededMinutes;
+
+        var ready = profiles.Where(Enough).ToList();
+        if (Enough(ec) && ready.Count > 0)
+            return string.Join(Environment.NewLine, ready.Select(p =>
+            {
+                double diff = p.Watts - ec!.Watts;
+                if (Math.Abs(diff) < 0.3) return $"{ProfileNames.Label(p.Profile)}: fark yok denecek kadar az";
+                string line = $"{ProfileNames.Label(p.Profile)}: orijinal ayara göre {Math.Abs(diff).ToString("0.0", Tr)} W daha {(diff > 0 ? "fazla" : "az")}";
+                if (b.FullMWh is { } f && p.Hours(f) is { } hp && ec.Hours(f) is { } he)
+                    line += $" · tam pille {Short(TimeSpan.FromHours(Math.Abs(hp - he)))} daha {(hp < he ? "kısa" : "uzun")}";
+                return line;
+            }));
+
+        var progress = new[] { ec ?? new BatteryEstimate(null, "EcAuto", 0, 0) }.Concat(profiles)
+            .Select(e => $"{ProfileNames.Label(e.Profile)} {Math.Min((int)e.Minutes, (int)BatteryEstimates.NeededMinutes)}/{(int)BatteryEstimates.NeededMinutes} dk");
+        return "Karşılaştırma için pilde, boştayken orijinal ayarla ve bir profille en az 30'ar dakika veri gerekir." +
+               Environment.NewLine + "Şu an: " + string.Join("   ·   ", progress);
     }
 
     /// <summary>"4 sa 15 dk", "45 dk".</summary>

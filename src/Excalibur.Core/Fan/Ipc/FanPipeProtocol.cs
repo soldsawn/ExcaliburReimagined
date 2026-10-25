@@ -29,7 +29,7 @@ public static class FanPipe
     ///    idle-off time / input again), settings Lighting, status LightIdleOffMinutes / LightIdle / LightBrightness.
     /// 9: + status EcSeenElsewhere (an unverified EC version whose trial passed on another machine).
     /// 10: + status Battery (charge, state, Windows' time left; health once read; the last average on battery),
-    ///     settings BatteryReadMinutes; Battery Estimates (average per power mode and fan profile, most used first).
+    ///     settings BatteryReadMinutes; Battery Estimates (average per power mode and fan profile, most used first) and IdleEstimates (idle intervals per fan profile).
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
     public const int ProtocolVersion = 10;
@@ -119,13 +119,14 @@ public sealed record BatteryStatusDto(
     DateTimeOffset? HealthReadAt = null,
     double? AverageWatts = null,
     int? AverageMinutes = null,
-    IReadOnlyList<BatteryEstimate>? Estimates = null)
+    IReadOnlyList<BatteryEstimate>? Estimates = null,
+    IReadOnlyList<BatteryEstimate>? IdleEstimates = null)
 {
     public static BatteryStatusDto? From(BatteryLive? live, BatteryHealth? health, BatteryAverage? average = null,
-        IReadOnlyList<BatteryEstimate>? estimates = null) => live is not { } l ? null
+        IReadOnlyList<BatteryEstimate>? estimates = null, IReadOnlyList<BatteryEstimate>? idle = null) => live is not { } l ? null
         : new(l.Percent, l.State, l.RemainingMinutes,
             health?.DesignedMWh, health?.FullMWh, health?.Percent, health?.Chemistry, health?.Cycles, health?.ReadAt,
-            average?.Watts, average is null ? null : (int)Math.Round(average.Span.TotalMinutes), estimates is { Count: > 0 } ? estimates : null);
+            average?.Watts, average is null ? null : (int)Math.Round(average.Span.TotalMinutes), estimates is { Count: > 0 } ? estimates : null, idle is { Count: > 0 } ? idle : null);
 }
 
 public sealed record FanEventDto(DateTimeOffset At, string Message);

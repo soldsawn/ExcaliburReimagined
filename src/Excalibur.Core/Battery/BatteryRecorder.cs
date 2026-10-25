@@ -5,8 +5,11 @@ namespace Excalibur.Core.Battery;
 /// <summary>The average power over one finished interval on battery.</summary>
 public sealed record BatteryAverage(DateTimeOffset At, TimeSpan Span, double Watts);
 
-/// <summary>A kept interval: the average, the battery percent at its end, and the power mode, fan profile and brightness it ran with.</summary>
-public sealed record BatteryInterval(BatteryAverage Average, int? Percent, PowerMode? Mode, string Profile, int? Brightness);
+/// <summary>
+/// A kept interval: the average, the battery percent at its end, the power mode, fan profile and brightness it ran with, and the
+/// CPU's average power over it (sampled at each tick, no EC; null when not measured) — low CPU power marks an idle interval.
+/// </summary>
+public sealed record BatteryInterval(BatteryAverage Average, int? Percent, PowerMode? Mode, string Profile, int? Brightness, double? CpuWatts = null);
 
 /// <summary>One reading at the start or end of an interval.</summary>
 public readonly record struct BatteryReading(int RemainingMWh, int? Brightness);
@@ -41,6 +44,8 @@ public sealed class BatteryRecorder(IBatteryMeter meter)
     private Start? _start;
     private DateTimeOffset? _firstAt, _lastTick;
     private bool _changed;
+    private double _cpuSum;
+    private int _cpuCount, _cpuMissing;
 
     public TimeSpan Interval { get; set; } = TimeSpan.FromMinutes(DefaultMinutes);
 
@@ -49,8 +54,11 @@ public sealed class BatteryRecorder(IBatteryMeter meter)
 
     public event Action<BatteryInterval>? Recorded;
 
-    /// <summary>Called every few seconds. <paramref name="ecBusy"/> postpones a due read (the EC is held quiet).</summary>
-    public void Tick(DateTimeOffset now, BatteryLive? live, PowerMode? mode, string profile, bool ecBusy)
+    /// <summary>
+    /// Called every few seconds. <paramref name="ecBusy"/> postpones a due read (the EC is held quiet); <paramref name="cpuWatts"/> is
+    /// the CPU's power now, averaged over the interval.
+    /// </summary>
+    public void Tick(DateTimeOffset now, BatteryLive? live, PowerMode? mode, string profile, bool ecBusy, double? cpuWatts = null)
     {
         bool slept = _lastTick is { } last && now - last >= SleepGap;
         _lastTick = now;
@@ -74,6 +82,8 @@ public sealed class BatteryRecorder(IBatteryMeter meter)
             return;
         }
         if (start.Mode != mode || start.Profile != profile) _changed = true;
+        if (cpuWatts is { } w) { _cpuSum += w; _cpuCount++; }
+        else _cpuMissing++;
         if (now - start.At < Interval || ecBusy) return;
 
         var end = meter.Read();
@@ -90,20 +100,24 @@ public sealed class BatteryRecorder(IBatteryMeter meter)
         {
             var span = now - start.At;
             Last = new BatteryAverage(now, span, drop / 1000.0 / span.TotalHours);
-            Recorded?.Invoke(new BatteryInterval(Last, live.Value.Percent, start.Mode, start.Profile, e.Brightness));
+            // Most ticks must have a CPU reading for the average to stand for the interval.
+            double? cpu = _cpuCount > 0 && _cpuMissing <= _cpuCount / 10 ? _cpuSum / _cpuCount : null;
+            Recorded?.Invoke(new BatteryInterval(Last, live.Value.Percent, start.Mode, start.Profile, e.Brightness, cpu));
         }
         // The end of one interval is the start of the next.
-        _start = new Start(now, e, mode, profile);
+        Restart(new Start(now, e, mode, profile));
+    }
+
+    private void Restart(Start start)
+    {
+        _start = start;
         _changed = false;
+        (_cpuSum, _cpuCount, _cpuMissing) = (0, 0, 0);
     }
 
     private void Begin(DateTimeOffset now, PowerMode? mode, string profile)
     {
-        if (meter.Read() is { } r)
-        {
-            _start = new Start(now, r, mode, profile);
-            _changed = false;
-        }
+        if (meter.Read() is { } r) Restart(new Start(now, r, mode, profile));
         else _firstAt = now + Interval;
     }
 }
