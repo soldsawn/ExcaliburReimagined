@@ -1,7 +1,7 @@
 ﻿<Project>
   <!-- One version for every project: an early-access line, not 1.0 (see README). -->
   <PropertyGroup>
-    <Version>0.1.2</Version>
-    <InformationalVersion>0.1.2-early-access</InformationalVersion>
+    <Version>0.1.3</Version>
+    <InformationalVersion>0.1.3-early-access</InformationalVersion>
   </PropertyGroup>
 </Project>

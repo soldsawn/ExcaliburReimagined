@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.1_Erken_Erişim-orange.svg)](#)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.3_Erken_Erişim-orange.svg)](#)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -16,7 +16,7 @@
 
 > [!WARNING]
 > **⚠️ Erken Erişim (Early Access)**
-> Bu uygulama, dizüstü bilgisayarınızın gömülü denetleyicisine (EC) doğrudan yazar. Yalnızca **Casper Excalibur G870 (EC sürümü `P008B0`, BIOS CQ141)** üzerinde test edilmiştir. Farklı bir model veya EC sürümünde fanları **kontrol etmez**, yalnızca izler. 
+> Bu uygulama, dizüstü bilgisayarınızın gömülü denetleyicisine (EC) doğrudan yazar. Asıl olarak **Casper Excalibur G870 (EC sürümü `P008B0`, BIOS CQ141)** üzerinde geliştirilip test edilmiştir. Farklı bir model veya EC sürümünde fanları önce yalnızca **izler**; fan kontrolü ancak sizin onayınızla yapılan kısa bir denemeden geçerse açılır (bkz. [Diğer modeller](#diğer-modeller)). 
 > *Kullanım tamamen sizin sorumluluğunuzdadır. Bu projenin Casper veya Excalibur markasıyla resmî bir bağı yoktur.*
 
 ## 💡 Neden Excalibur Reimagined?
@@ -31,7 +31,10 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
   <img src="assets/screenshots/profiller.png" width="49%" alt="Profiller" />
   <img src="assets/screenshots/tray-menu.png" width="18%" alt="Simge alanı menüsü" />
 </p>
-<sub>*Ekran görüntüleri uygulamanın deneme modundan alınmıştır.*</sub>
+<p align="center">
+  <img src="assets/screenshots/pil.png" width="49%" alt="Pil" />
+</p>
+<sub>*Ekran görüntüleri uygulamanın deneme modundan alınmıştır; Pil sayfasındaki ölçümler örnek veridir.*</sub>
 
 <a id="özellikler"></a>
 ## ✨ Özellikler
@@ -39,10 +42,24 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 🌀 **Gelişmiş Fan Kontrolü:** Sessiz, Dengeli ve Performans profilleri. İşlemci (CPU) ve ekran kartı (GPU) fanlarını ayrı ayrı yönetme imkânı.
 - 📈 **Özel Fan Eğrileri:** Kendi profilinizi oluşturun, grafik üzerinde noktaları sürükleyerek istediğiniz sıcaklığa istediğiniz fan hızını atayın.
 - ⚡ **Güç ve Performans Modları:** Ofis (75 W), Oyun (85 W) ve Yüksek Performans (100 W) limitleriyle donanımınızın gücünü belirleyin.
+- 🔥 **İşlemci Güç Sınırı:** İşlemcinin uzun ve kısa süreli güç sınırını güç modunun altına indirerek daha serin ve sessiz çalışma. Performans sayfasında işlemcinin ve ekran kartının anlık çektiği güç de görünür.
+- 🔋 **Pil Sayfası:** Pil sağlığı (tam dolum / ilk günkü kapasite), şarj durumu ve kalan süre; pildeyken son dakikaların ortalama tüketimi; güç modu ve fan profiline göre "tam pille ne kadar gider" tablosu ve fan ayarının pile etkisi. Pil, denetleyiciye yük olmasın diye seyrek okunur (varsayılan 10 dakikada bir, şarjdayken hiç); kayıtlar bilgisayarınızda 30 gün tutulur.
+- ⌨️ **Klavye Işığı:** Üç bölge için renk, parlaklık ve efekt; belirli bir süre boşta kalınca ışığı kapatma. Klavyedeki ışık tuşuyla yapılan değişiklikler de izlenir.
 - 🔌 **Akıllı Otomasyon:** Şarj kablosu takıldığında veya çıkarıldığında belirlediğiniz güç modu, fan profili ve ekran yenileme hızı (Hz) otomatik olarak devreye girer.
-- 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan 7 günlük sıcaklık/fan geçmişi.
+- 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan 7 günlük sıcaklık/fan geçmişi (15 dakikadan 7 güne kadar aralıklar).
 
-> **🛠️ Planlanan Özellikler:** Klavye ışığı kontrolü, pil şarj sınırı koyma, uygulamaya/oyuna özel otomatik profiller, klavye kısayolları ve İngilizce dil seçeneği.
+> **🛠️ Planlanan Özellikler:** Uygulamaya/oyuna özel otomatik profiller, görünüm kişiselleştirme, klavye kısayolları ve İngilizce dil seçeneği.
+>
+> **Pil şarj sınırı** (ör. %80'de durdurma) bu dizüstüde desteklenmiyor: BIOS'ta, orijinal uygulamada ve denetleyici yazılımında böyle bir ayar bulunamadı.
+
+<a id="diğer-modeller"></a>
+### 🧪 Diğer Modeller ve EC Sürümleri
+
+Uygulama açılışta dizüstünün fan yazılımı (EC) sürümünü okur:
+- **`P008B0` (G870):** doğrudan fan kontrolü.
+- **Bilinmeyen bir sürüm:** fanlar yalnızca izlenir. Panelde onay isteyen kısa bir deneme başlatılabilir: uygulama fanlara kısa süre bir hız yazar ve fanların gerçekten uyup uymadığına bakar. Fanlar uyarsa o sürüm o bilgisayar için açılır; uymazsa fanlar hemen dizüstünün kendi ayarına bırakılır.
+- **Başka bir bilgisayarda denemesi geçmiş sürümler** tek tıkla "kısa bir ayar" olarak sunulur: şu an **`P003K0`** (G770, BIOS CP221) ve **`P009C0`** (G870, BIOS CP211).
+- Her fanın yüzde başına devri kullanım sırasında öğrenilir. G870 dışındaki modeller deneme sonrası dizüstünün kendi fan ayarıyla başlar; G870 fan eğrileri bu modellerde gereğinden gürültülü olabilir.
 
 ---
 <a id="kurulum"></a>
@@ -88,7 +105,7 @@ Fan kontrolü riskli bir işlemdir. Bu yüzden sistem, donanımınızı korumak 
 
 ### Güvenlik Tasarımı
 - **Donanımsal Alt Sınırlar:** Fan hızı asla %25'in altına inemez.
-- **Isı Kalkanı:** Profiliniz ne olursa olsun; sıcaklık 65°C'yi geçerse fanlar en az %80, 72°C'yi geçerse en az %90 hızda çalışır. Eğer CPU veya GPU 80°C'nin üstünde 3 saniye kalırsa sistem güvenliği için fanlar anında **%100**'e kilitlenir.
+- **Isı Kalkanı:** Profiliniz ne olursa olsun; sıcaklık 3 saniye boyunca 70°C'nin üstünde kalırsa fanlar en az %80, 78°C'nin üstünde kalırsa en az %90 hızda çalışır. CPU veya GPU 80°C'nin üstünde 3 saniye kalırsa (ya da iki ölçüm üst üste 92°C'yi geçerse) fanlar beklemeden **%100**'e çıkar.
 - **Bekçi (Guardian) Servisi:** Ana fan servisi çöker veya kilitlenirse, yedek servis anında müdahale ederek fan kontrolünü dizüstü bilgisayarın orijinal yazılımına (EC Otomatik) geri devreder.
 - **Hata Toleransı:** EC (Embedded Controller) okuması doğrulanamazsa, bilgisayar uyku moduna geçerse veya uygulamadan "Çıkış" yaparsanız kontrol tamamen orijinal donanım ayarlarına bırakılır. Eğer bilgisayar kilitlenirse, güç tuşuna 15-30 saniye basılı tutmak EC'yi sıfırlar.
 
@@ -98,10 +115,13 @@ Uygulama 3 ana bileşenden oluşur:
 2. `ExcaliburFanGuardian` *(Hizmet)*: Çekirdek servisi izleyen gözetmen.
 3. `ExcaliburReimagined.exe` *(Arayüz)*: Sadece bir kontrolcüdür. Donanıma dokunmaz, yerel adlandırılmış boru (named pipe) üzerinden servise komut gönderir.
 
-Geliştiriciler, test yapmak için donanıma dokunmayan simülasyon modunu kullanabilir: `ExcaliburFanService.exe --simulate`
+Geliştiriciler, test yapmak için donanıma dokunmayan simülasyon modunu kullanabilir: `ExcaliburFanService.exe --simulate` (`--on-battery` pildeymiş gibi, `--ec <sürüm>` başka bir EC sürümüymüş gibi davranır).
+
+### EC ile Daha Az Konuşmak
+EC, Windows'un kendi pil ve sıcaklık okumalarıyla paylaşılır; iki taraf aynı anda konuşursa Windows olay günlüğünde ACPI 13/15 uyarıları görülebilir. Bu yüzden servis EC'yi gereksiz yere meşgul etmez: işlemci sıcaklığı doğrudan işlemciden okunur, Windows açıldıktan sonraki ilk 10 dakika ve denetleyici kendi işini yaparken (ışık tuşu, şarj kablosu) okumalar bekletilir, pil seyrek okunur. Yavaş çağrılar ve uyarı anları `C:\ProgramData\ExcaliburReimagined\logs` günlüğüne yazılır.
 
 ## 🤝 Katkıda Bulunma
-Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lütfen bir **Issue** açarak EC ve BIOS sürümünüzü belirtin. Okuma/yazma doğrulaması yapılmadan yeni cihazlar için fan kontrolü kilidi açılmaz.
+Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lütfen bir **Issue** açarak model, EC ve BIOS sürümünüzü ve denemenin sonucunu belirtin. Okuma/yazma doğrulaması yapılmadan yeni cihazlar için fan kontrolü kilidi açılmaz; birkaç farklı bilgisayarda geçen sürümler listeye eklenir.
 
 ## 📄 Lisans ve Sorumluluk Reddi
 [MIT Lisansı](LICENSE) ile sunulmaktadır. (Donanım erişimi için kurulan PawnIO modülleri LGPL-2.1 lisanslıdır ve resmi kaynaktan çekilir). Donanım bileşenlerine yapılan müdahaleler cihazı garanti dışı bırakabilir veya ısınma sorunlarına yol açabilir. Kullanımdan doğacak tüm sorumluluk kullanıcıya aittir.
@@ -114,16 +134,18 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **Early access (`v0.1.1`).** This application writes directly to the laptop's embedded controller (EC). It has only been tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions, it acts in monitor-only mode. Use at your own risk.
+> **Early access (`v0.1.3`).** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). Trials have passed on `P003K0` (G770) and `P009C0` (G870), which are offered as a one-click calibration. Use at your own risk.
 
 **Features:**
 - Custom fan curves with separate CPU/GPU targets.
-- Hardware power modes (75W / 85W / 100W GPU limits).
+- Hardware power modes (75W / 85W / 100W GPU limits) and your own CPU power limits.
+- Battery page: health, charge and time left, average draw on battery, a "full battery lasts" table per power mode and fan profile, and the fan profile's cost while idle. The battery is read sparingly (every 10 minutes by default, never while charging).
+- Keyboard light: three-zone colour, brightness, effects and idle-off.
 - Smart automation based on AC/Battery status (auto-switch profiles and refresh rates).
 - Zero telemetry, low background resource usage, and local temperature history.
 
 **Safety First:**
-Hardcoded limits ensure fans never go below 25%. Automatic overrides kick in at 65°C (80% fan), 72°C (90% fan), and force 100% fan speed if temps exceed 80°C for 3 seconds. A background "Guardian" service constantly monitors the main process; if it crashes, fan control is immediately returned to the factory BIOS.
+Hardcoded limits ensure fans never go below 25%. Automatic overrides kick in when temperatures stay above 70°C (80% fan) or 78°C (90% fan) for 3 seconds, and force 100% fan speed above 80°C for 3 seconds (or two readings above 92°C). A background "Guardian" service constantly monitors the main process; if it crashes, fan control is immediately returned to the factory BIOS.
 
 **Installation (Elevated PowerShell):**
 ```powershell
