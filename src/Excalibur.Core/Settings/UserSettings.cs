@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Excalibur.Core.Automation;
 
 namespace Excalibur.Core.Settings;
 
@@ -51,6 +52,8 @@ public sealed record UserSettings
     public ThemeMode Theme { get; init; } = ThemeMode.System;
     /// <summary>The screen refresh rate on the charger and on battery; applied by the tray.</summary>
     public RefreshRateRule RefreshRate { get; init; } = new();
+    /// <summary>What runs while a program is open (A6); the tray watches the programs and applies them.</summary>
+    public IReadOnlyList<AppRule> AppRules { get; init; } = [];
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -72,8 +75,29 @@ public sealed record UserSettings
             Theme = Enum.IsDefined(s.Theme) ? s.Theme : d.Theme,
             Accent = IsColor(s.Accent) ? s.Accent : d.Accent,
             RefreshRate = s.RefreshRate is { IsValid: true } ? s.RefreshRate : d.RefreshRate,
+            AppRules = CleanRules(s.AppRules),
         };
     }
+
+    /// <summary>A bad or repeated rule is dropped; the others stay.</summary>
+    private static IReadOnlyList<AppRule> CleanRules(IReadOnlyList<AppRule?>? rules)
+    {
+        var result = new List<AppRule>();
+        foreach (var r in rules ?? [])
+        {
+            if (r is null || r.Validate().Count > 0 || result.Count >= AppRule.MaxRules
+                || result.Any(x => string.Equals(x.Program, r.Program, StringComparison.OrdinalIgnoreCase))) continue;
+            result.Add(r);
+        }
+        return result;
+    }
+
+    // Value equality over the rule list (a record would compare it by reference), so a reload that changed nothing stays quiet.
+    public bool Equals(UserSettings? other) =>
+        other is not null && Version == other.Version && TrayFont == other.TrayFont && Osd == other.Osd && Accent == other.Accent
+        && Theme == other.Theme && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules);
+
+    public override int GetHashCode() => HashCode.Combine(Version, TrayFont, Osd, Accent, Theme, RefreshRate, AppRules.Count);
 
     public static bool IsColor(string? text) =>
         text is { Length: 7 } && text[0] == '#' && text.Skip(1).All(Uri.IsHexDigit);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Excalibur.Core.Automation;
 using Excalibur.Core.Battery;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
@@ -30,9 +31,11 @@ public static class FanPipe
     /// 9: + status EcSeenElsewhere (an unverified EC version whose trial passed on another machine).
     /// 10: + status Battery (charge, state, Windows' time left; health once read; the last average on battery),
     ///     settings BatteryReadMinutes; Battery Estimates (average per power mode and fan profile, most used first) and IdleEstimates (idle intervals per fan profile).
+    /// 11: + setAppOverride(appOverride) (a running program's rule: fan profile, power mode, CPU limit, held in memory over the saved
+    ///     choices; none = the program closed), status AppProgram; profile changes it makes have Source "app".
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 10;
+    public const int ProtocolVersion = 11;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -51,6 +54,8 @@ public static class FanSource
     public const string Tray = "tray";
     public const string Window = "window";
     public const string Automation = "automation";
+    /// <summary>A running program's rule (the tray shows its own notice for it).</summary>
+    public const string App = "app";
     /// <summary>The service itself (e.g. a timed manual mode ending).</summary>
     public const string Service = "service";
 }
@@ -60,14 +65,14 @@ public static class FanSource
 /// getSettings, updateSettings(settings), history(from, to, maxPoints), setPowerMode(powerMode),
 /// shutdown (stops the guardian and this service; fans go back to the EC),
 /// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), trialEc,
-/// setLighting(lighting), setLightIdle(idle).
+/// setLighting(lighting), setLightIdle(idle), setAppOverride(appOverride).
 /// <see cref="Source"/> is one of <see cref="FanSource"/>.
 /// </summary>
 public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = null, int? Gpu = null, int? Minutes = null,
     string? Source = null, ServiceSettingsPatch? Settings = null,
     DateTimeOffset? From = null, DateTimeOffset? To = null, int? MaxPoints = null,
     PowerMode? PowerMode = null, CustomProfile? Definition = null, IReadOnlyList<string>? Names = null, CpuLimit? CpuLimit = null,
-    KeyboardLighting? Lighting = null, bool? Idle = null);
+    KeyboardLighting? Lighting = null, bool? Idle = null, AppOverride? AppOverride = null);
 
 /// <param name="Code">A stable machine-readable reason when <paramref name="Ok"/> is false and the UI should word it itself
 /// (power_battery, power_usbc, power_failed); <paramref name="Error"/> stays an English sentence for logs.</param>
@@ -165,7 +170,8 @@ public sealed record FanStatusDto(
     bool LightIdle = false,
     int? LightBrightness = null,
     bool EcSeenElsewhere = false,
-    BatteryStatusDto? Battery = null)
+    BatteryStatusDto? Battery = null,
+    string? AppProgram = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {

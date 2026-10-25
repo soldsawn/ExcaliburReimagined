@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
+using Excalibur.Core.Automation;
 using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
@@ -37,6 +38,8 @@ public sealed class FanPipeServer(
     /// <summary>Instances waiting at once, so a client arriving while another is being accepted never finds the pipe busy.</summary>
     private const int Listeners = 3;
     private const int MaxLineLength = 4096;
+    // The program whose rule is in force (setAppOverride), so the tray can tell after a service restart that it must send it again.
+    private volatile string? _appProgram;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
         Task.WhenAll(Enumerable.Range(0, Listeners).Select(_ => Task.Run(() => ListenAsync(stoppingToken), stoppingToken)));
@@ -196,6 +199,9 @@ public sealed class FanPipeServer(
                     if (req.Idle is not { } idle) return new FanResponse(false, "setLightIdle needs idle");
                     lighting.SetIdle(idle);
                     break;
+                case "setappoverride":
+                    SetAppOverride(req.AppOverride, now);
+                    break;
                 case "clearfault":
                     loop.ClearFault(now);
                     break;
@@ -279,6 +285,18 @@ public sealed class FanPipeServer(
         });
     }
 
+    private void SetAppOverride(AppOverride? rule, DateTimeOffset now)
+    {
+        if (rule?.Validate() is { Count: > 0 } errors) throw new ArgumentException(string.Join("; ", errors));
+        if (rule is null && _appProgram is null) return;
+        _appProgram = rule?.Program;
+        fileLog.Write(now, rule is null ? "app rule ended"
+            : $"app rule: {rule.Program} (profile {rule.Profile ?? "-"}, mode {rule.PowerMode?.ToString() ?? "-"}, CPU limit "
+              + (rule.CpuLimit is null ? "-" : rule.CpuLimit.Limit is { } l ? $"{l.Pl1Watts}/{l.Pl2Watts} W" : "none") + ")");
+        switcher.SetOverride(rule?.Profile, now);
+        power.SetAppOverride(rule?.PowerMode, rule?.CpuLimit);
+    }
+
     private void SwitchProfile(FanProfile profile, DateTimeOffset now, string? source) => switcher.Switch(profile, now, source);
 
     private FanStatusDto Status() =>
@@ -289,6 +307,7 @@ public sealed class FanPipeServer(
             LightIdle = lighting.Idle,
             // The light key changes it behind the page's back; the page follows this.
             LightBrightness = settings.Current.Lighting?.Brightness,
+            AppProgram = _appProgram,
             Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last, batteryEstimates.All, batteryEstimates.Idle),
         };
 }

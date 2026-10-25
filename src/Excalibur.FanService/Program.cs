@@ -121,7 +121,7 @@ builder.Services.AddSingleton(settingsStore);
 builder.Services.AddSingleton(fileLog);
 builder.Services.AddSingleton(history);
 builder.Services.AddSingleton(powerHardware);
-builder.Services.AddSingleton<ProfileSwitcher>();
+builder.Services.AddSingleton(new ProfileSwitcher(loop, settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(sp =>
 {
     var switcher = sp.GetRequiredService<ProfileSwitcher>();

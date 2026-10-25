@@ -1,3 +1,4 @@
+using Excalibur.Core.Automation;
 using Excalibur.Core.Hardware;
 using Excalibur.Core.Settings;
 
@@ -55,7 +56,9 @@ public sealed record PowerStatus(
 ///   USB-C adapter the mode is Office, and the user's choice returns when the charger is back;</item>
 ///   <item>nothing is written until the user chose a mode or turned automation on, except forcing
 ///   Office on battery when the GPU limit positively shows a faster mode (unknown = leave it alone);</item>
-///   <item>with automation on, plugging the charger in or out applies that side's rule (a mode, a fan profile, or both).</item>
+///   <item>with automation on, plugging the charger in or out applies that side's rule (a mode, a fan profile, or both);</item>
+///   <item>a running program's rule (<see cref="SetAppOverride"/>) sits above the saved choices without changing them: its mode
+///   (not on battery) and CPU limit are in force until it closes or the user picks a mode or limit.</item>
 /// </list>
 /// Every hardware call is guarded; a failure is logged and reported, never thrown at the caller.
 /// Thread-safe: the timer, the pipe and the resume handler all call into it.
@@ -78,6 +81,9 @@ public sealed class PowerManager
     private PowerSource? _pending;
     // How often the CPU limit is checked again (the firmware may reset it, e.g. after sleep): every 30 polls, about a minute.
     private const int CpuLimitCheckEvery = 30;
+    // A running program's rule: its mode and CPU limit, and the mode in effect before it (to go back to when nothing is chosen).
+    private PowerMode? _appMode, _beforeApp;
+    private CpuLimitOverride? _appLimit;
 
     /// <param name="switchProfile">(fan profile name, <c>FanSource</c>) — switches the fan profile the way a user command does.</param>
     /// <param name="settle">How long a change of power source waits before the mode and the profile follow: the EC is busy with
@@ -120,7 +126,7 @@ public sealed class PowerManager
             _gpuWatts = SafeGpuWatts();
             _gpuPower = SafeGpuPower();
             _cpu = SafeCpuPower();
-            if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(_settings.Current.CpuLimit);
+            if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(EffectiveLimit());
             if (_pending is not null && !EcQuiet.IsQuiet)
             {
                 _pending = null;
@@ -148,7 +154,7 @@ public sealed class PowerManager
     {
         lock (_gate)
         {
-            ApplyCpuLimit(_settings.Current.CpuLimit);
+            ApplyCpuLimit(EffectiveLimit());
             if (_source is not { } source) return;
             _applied = null;
             Apply(source, first: true);
@@ -167,6 +173,8 @@ public sealed class PowerManager
                     : PowerResult.Fail("power_battery", "That mode needs the charger; on battery only Office is available.");
 
             var result = Send(mode);
+            // The user's pick ends a program rule's mode: it is their choice now.
+            if (result.Ok) _appMode = null;
             // The choice is remembered for the wall adapter only; Office on battery is not a preference.
             if (result.Ok && source.CanRunFast) _settings.Update(s => s with { PowerMode = mode }, out _);
             return result;
@@ -180,6 +188,7 @@ public sealed class PowerManager
         lock (_gate)
         {
             if (!ApplyCpuLimit(limit)) return PowerResult.Fail("cpu_limit_failed", "The CPU limit could not be written.");
+            _appLimit = null;
             _settings.Update(s => s with { CpuLimit = limit }, out _);
             _log(limit is null ? "power: CPU limit back to the power mode" : $"power: CPU limit {limit.Pl1Watts} W / {limit.Pl2Watts} W");
             return PowerResult.Success;
@@ -192,7 +201,35 @@ public sealed class PowerManager
         lock (_gate) ApplyCpuLimit(null);
     }
 
+    /// <summary>
+    /// A running program's rule: its mode (refused on battery and with a weak adapter, like the user's) and CPU limit, or nulls
+    /// when the program closed: the saved choices come back (the mode that was in effect before, when none was ever chosen).
+    /// </summary>
+    public void SetAppOverride(PowerMode? mode, CpuLimitOverride? limit)
+    {
+        lock (_gate)
+        {
+            if (mode is not null && _appMode is null) _beforeApp = Effective();
+            bool modeEnds = mode is null && _appMode is not null;
+            _appMode = mode;
+            if (!Equals(limit, _appLimit))
+            {
+                _appLimit = limit;
+                ApplyCpuLimit(EffectiveLimit());
+            }
+            if (_source is not { } source) return;
+            if (modeEnds && _settings.Current.PowerMode is null && _beforeApp is { } before && source.CanRunFast)
+            {
+                if (_applied != before) Send(before);
+                return;
+            }
+            ApplyMode(source, first: false);
+        }
+    }
+
     // ---- decisions -------------------------------------------------------------------------
+
+    private CpuLimit? EffectiveLimit() => _appLimit is { } app ? app.Limit : _settings.Current.CpuLimit;
 
     private bool ApplyCpuLimit(CpuLimit? limit)
     {
@@ -206,28 +243,12 @@ public sealed class PowerManager
 
     private void Apply(PowerSource source, bool first)
     {
-        var settings = _settings.Current;
-        var automation = settings.PowerAutomation;
+        var automation = _settings.Current.PowerAutomation;
         var rule = automation.Enabled ? automation.RuleFor(source) : null;
-
-        PowerMode? target;
-        if (!source.CanRunFast)
-            target = PowerMode.Office; // the lock; there is no choice here
-        else if (rule?.Mode is { } ruleMode)
-            target = ruleMode;
-        else
-            target = settings.PowerMode; // the user's choice comes back with the charger
-
-        if (target is { } mode)
-        {
-            // On battery with nothing chosen: only act when a faster mode is really active.
-            bool needsForce = !source.CanRunFast && settings.PowerMode is null && !automation.Enabled;
-            if (!needsForce || FasterModeActive())
-            {
-                if (_applied != mode || first) Send(mode);
-                if (source.CanRunFast && rule?.Mode is not null) _settings.Update(s => s with { PowerMode = mode }, out _);
-            }
-        }
+        // The rule's mode becomes the choice for the wall (a running program's mode stays above it).
+        if (source.CanRunFast && rule?.Mode is { } ruleMode && _settings.Current.PowerMode != ruleMode)
+            _settings.Update(s => s with { PowerMode = ruleMode }, out _);
+        ApplyMode(source, first);
 
         // A fan profile only follows a real change of source, not the service starting or a resume.
         if (rule?.FanProfile is { } profile && !first)
@@ -236,6 +257,21 @@ public sealed class PowerManager
             try { _switchProfile(profile, "automation"); }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { _log($"power: could not switch the fan profile ({ex.Message})"); }
         }
+    }
+
+    private void ApplyMode(PowerSource source, bool first)
+    {
+        var settings = _settings.Current;
+        PowerMode? target;
+        if (!source.CanRunFast)
+            target = PowerMode.Office; // the lock; there is no choice here
+        else
+            target = _appMode ?? settings.PowerMode; // the user's choice comes back with the charger
+
+        if (target is not { } mode) return;
+        // On battery with nothing chosen: only act when a faster mode is really active.
+        bool needsForce = !source.CanRunFast && settings.PowerMode is null && !settings.PowerAutomation.Enabled;
+        if ((!needsForce || FasterModeActive()) && (_applied != mode || first)) Send(mode);
     }
 
     private PowerResult Send(PowerMode mode)

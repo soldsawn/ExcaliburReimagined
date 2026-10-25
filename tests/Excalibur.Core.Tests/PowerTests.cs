@@ -305,7 +305,7 @@ public sealed class PowerTests : IDisposable
         Assert.Empty(bad.Validate());
     }
 
-    private sealed class FakePower : IPowerHardware
+    internal sealed class FakePower : IPowerHardware
     {
         public PowerSource Source { get; set; } = new(false, 100, false);
         public int? GpuWatts { get; set; } = 70;
