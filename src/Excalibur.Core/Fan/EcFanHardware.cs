@@ -7,7 +7,7 @@ namespace Excalibur.Core.Fan;
 
 /// <summary>
 /// <see cref="IFanHardware"/> on the real machine: temperatures and RPM from the
-/// firmware's WMI sensor block (GET 0x0200) on every read, fan targets / Cooling Boost from
+/// firmware's WMI sensor block (GET 0x0200) at most every 2 s, fan targets / Cooling Boost from
 /// the EC only every <c>ecRefresh</c>; the applied percent is worked out from the RPM
 /// (<see cref="FanRpmScale"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
@@ -44,10 +44,14 @@ public sealed class EcFanHardware : IFanHardware
     // Targets learnt while handing the fans to the EC at start, so the first block read need not read them again.
     private FanTarget? _knownCpu, _knownGpu;
     private readonly string? _versionCachePath;
-    // The last WMI sensor block and when it was read: reused while the EC is kept quiet (EcQuiet).
+    // The last WMI sensor block and when it was read: reused while the EC is kept quiet (EcQuiet), and between reads.
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm)? _lastWmi;
     private readonly Stopwatch _sinceWmi = new();
     private static readonly TimeSpan MaxReuse = TimeSpan.FromSeconds(15);
+    // The block is read at most every 2 s (1.5 so a 2-s timer's jitter never skips a read). Each read is an EC transaction
+    // through Windows' driver, and the ACPI 13 warnings under load came right after one stalled for 4 s (2026-10-25
+    // 17:44, 19:10, 19:46); the CPU temperature, which the curves and safety rules follow closely, stays live (MSR).
+    private static readonly TimeSpan MinWmiInterval = TimeSpan.FromSeconds(1.5);
     private bool _reused;
 
     /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
@@ -168,7 +172,7 @@ public sealed class EcFanHardware : IFanHardware
 
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) ReadWmiSensors()
     {
-        _reused = EcQuiet.IsQuiet && _lastWmi is not null && _sinceWmi.Elapsed < MaxReuse;
+        _reused = _lastWmi is not null && (_sinceWmi.Elapsed < MinWmiInterval || EcQuiet.IsQuiet && _sinceWmi.Elapsed < MaxReuse);
         if (_reused)
         {
             var last = _lastWmi!.Value;
