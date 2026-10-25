@@ -40,9 +40,13 @@ public sealed record FanLoopOptions
     /// Unverified versions whose trial passed on someone else's machine (a tester's report): the trial is still run here,
     /// worded as a short calibration. One that passes on 2-3 different machines moves to <see cref="KnownEcVersions"/>.
     /// </summary>
-    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0" };
-    /// <summary>EC versions the built-in curves were tuned on; a machine with another one starts on EC automatic after its trial.</summary>
-    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0" };
+    /// P009C0: two G870s (2026-10-21 a tester's CPU fan; 2026-10-25 a user's trial, both fans followed).
+    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0", "P009C0" };
+    /// <summary>
+    /// EC versions the built-in curves suit (tuned on the G870's P008B0); a machine with another one starts on EC automatic after its
+    /// trial. P009C0 has only been seen on G870s, the same laptop and fans.
+    /// </summary>
+    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009C0" };
     public int MaxReadFailures { get; init; } = 3;
     public int MaxWriteFailures { get; init; } = 2;
     /// <summary>Smaller changes than this are not written (the EC ramps anyway).</summary>

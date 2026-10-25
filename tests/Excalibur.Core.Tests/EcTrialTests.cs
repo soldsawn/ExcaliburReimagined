@@ -6,7 +6,7 @@ namespace Excalibur.Core.Tests;
 
 public class EcTrialTests
 {
-    private readonly FakeFanHardware _hw = new() { EcVersion = "P009C0" };
+    private readonly FakeFanHardware _hw = new() { EcVersion = "P010A0" };
     private readonly FanControlLoop _loop;
     private readonly List<string> _trusted = [];
     private FanProfile? _trustedProfile;
@@ -39,7 +39,7 @@ public class EcTrialTests
         Assert.Equal(EcTrialState.Passed, s.Trial!.State);
         Assert.True(s.Trial.CpuFollows);
         Assert.True(s.Trial.GpuFollows);
-        Assert.Equal(["P009C0"], _trusted);
+        Assert.Equal(["P010A0"], _trusted);
         Assert.Equal(FanLoopMode.Running, s.Mode);
         // Each fan got one test percent and was handed back before the next.
         var trial = _hw.Writes.Skip(2).Take(4).ToList();
@@ -59,7 +59,7 @@ public class EcTrialTests
     [Fact]
     public void A_version_the_curves_were_tuned_on_keeps_its_profile_after_the_trial()
     {
-        var t = new EcTrialTests(new FanLoopOptions { CurveEcVersions = new HashSet<string> { "P009C0" } });
+        var t = new EcTrialTests(new FanLoopOptions { CurveEcVersions = new HashSet<string> { "P010A0" } });
         t._loop.StartEcTrial(T0.AddSeconds(2));
         var s = t.RunUntilDone(2);
 
@@ -69,9 +69,13 @@ public class EcTrialTests
         Assert.False(t._hw.CpuTarget.IsAuto); // the profile now runs
     }
 
+    [Fact]
+    public void P009C0_keeps_the_g870_curves_after_its_trial() => Assert.Contains("P009C0", new FanLoopOptions().CurveEcVersions);
+
     [Theory]
     [InlineData("P003K0", true)]
-    [InlineData("P009C0", false)]
+    [InlineData("P009C0", true)]
+    [InlineData("P010A0", false)]
     public void A_version_seen_on_another_machine_is_flagged_while_unverified(string version, bool expected)
     {
         var hw = new FakeFanHardware { EcVersion = version };
@@ -161,8 +165,8 @@ public class EcTrialTests
     [Fact]
     public void A_trusted_version_from_the_settings_runs_at_start()
     {
-        var hw = new FakeFanHardware { EcVersion = "P009C0" };
-        var loop = new FanControlLoop(hw, new FanLoopOptions { KnownEcVersions = new HashSet<string> { "P008B0", "P009C0" } });
+        var hw = new FakeFanHardware { EcVersion = "P010A0" };
+        var loop = new FanControlLoop(hw, new FanLoopOptions { KnownEcVersions = new HashSet<string> { "P008B0", "P010A0" } });
         loop.Start(FanProfile.Balanced, T0);
         Assert.Equal(FanLoopMode.Running, loop.Status.Mode);
     }
