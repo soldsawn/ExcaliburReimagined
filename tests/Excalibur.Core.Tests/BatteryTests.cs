@@ -202,6 +202,39 @@ public class BatteryTests
         Assert.NotEmpty((new ServiceSettings() with { BatteryReadMinutes = 3 }).Validate());
     }
 
+    [Fact]
+    public void Estimates_weight_by_minutes_and_put_the_most_used_first()
+    {
+        var e = new BatteryEstimates();
+        Assert.True(e.TryAddLine("2026-10-24 23:18:37,10.0,36.65,89,Office,Quiet,100"));
+        Assert.True(e.TryAddLine("2026-10-25 18:31:40,30.0,40.00,87,Office,Quiet,100"));
+        Assert.True(e.TryAddLine("2026-10-25 18:41:40,10.0,20.00,75,Office,Balanced,100"));
+        Assert.False(e.TryAddLine("broken"));
+        Assert.False(e.TryAddLine(BatteryCsvLog.Header));
+
+        var all = e.All;
+        Assert.Equal(("Quiet", 40.0), (all[0].Profile, all[0].Minutes));
+        Assert.Equal((36.65 * 10 + 40 * 30) / 40, all[0].Watts, 3);
+        Assert.Equal(PowerMode.Office, all[0].Mode);
+        Assert.Equal("Balanced", all[1].Profile);
+        Assert.Equal(3.14, all[1].Hours(62800)!.Value, 2);
+    }
+
+    [Fact]
+    public void Estimates_are_read_back_from_the_csv_log()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "battery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var log = new BatteryCsvLog(dir);
+            log.Append(new BatteryInterval(new BatteryAverage(T0, TimeSpan.FromMinutes(10), 14), 55, PowerMode.Office, "Quiet", 50));
+            log.Append(new BatteryInterval(new BatteryAverage(T0.AddMinutes(10), TimeSpan.FromMinutes(10), 16), 50, PowerMode.Office, "Quiet", 50));
+            var e = Assert.Single(BatteryEstimates.Load(dir).All);
+            Assert.Equal((20.0, 15.0), (e.Minutes, e.Watts));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private sealed class FakeMeter(int start) : IBatteryMeter
     {
         private int _left = start;

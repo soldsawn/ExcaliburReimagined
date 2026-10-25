@@ -16,6 +16,7 @@ public sealed class BatteryWorker(
     BatteryMonitor battery,
     BatteryRecorder recorder,
     BatteryCsvLog csv,
+    BatteryEstimates estimates,
     FanControlLoop loop,
     PowerManager power,
     ServiceSettingsStore settings,
@@ -63,6 +64,7 @@ public sealed class BatteryWorker(
     private void OnRecorded(BatteryInterval i)
     {
         csv.Append(i);
+        estimates.Add(i);
         fileLog.Write(DateTimeOffset.Now, $"battery: {i.Average.Watts:F1} W over {i.Average.Span.TotalMinutes:F0} min ({i.Mode}, {i.Profile}, brightness {i.Brightness?.ToString() ?? "-"})");
     }
 }

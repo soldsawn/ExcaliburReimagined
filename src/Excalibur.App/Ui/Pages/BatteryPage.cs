@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using Excalibur.App.Tray;
 using Excalibur.Core.Battery;
 using Excalibur.Core.Settings;
 using Excalibur.Core.Fan.Ipc;
@@ -25,6 +26,9 @@ internal sealed class BatteryPage : UserControl
     private readonly TextBlock _health, _capacity, _kind, _healthNote;
     private readonly StackPanel _healthValues, _pages;
     private readonly TextBlock _missing;
+    private readonly Grid _table = new() { Margin = new Thickness(0, 10, 0, 0) };
+    private readonly TextBlock _tableEmpty, _tableNote;
+    private string _tableKey = "";
 
     /// <param name="openSettings">Shows the Settings page, where the read interval is changed.</param>
     public BatteryPage(FanConnection connection, Action openSettings)
@@ -60,6 +64,11 @@ internal sealed class BatteryPage : UserControl
             },
         };
         _missing = InfoPage.Text("", "Body");
+        _tableEmpty = InfoPage.Text("Pilde kullandıkça burada her güç modu ve fan profili için ortalama tüketim ve tam pille ne kadar " +
+                                    "gidileceği görünür. Bir tahmin için o ayarla en az 30 dakika pil verisi gerekir.", "Caption");
+        _tableNote = InfoPage.Text("", "Caption", top: 10);
+        for (int c = 0; c < 4; c++)
+            _table.ColumnDefinitions.Add(new ColumnDefinition { Width = c == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(150) });
 
         _pages = new StackPanel
         {
@@ -67,8 +76,7 @@ internal sealed class BatteryPage : UserControl
             {
                 InfoPage.Card("Şu an", _percent, _state, _remaining, _average, _interval),
                 InfoPage.Card("Pil sağlığı", _healthValues, _healthNote),
-                InfoPage.Card("Yakında",
-                    InfoPage.Text("• Güç modu ve fan profiline göre tam pille ne kadar gidileceği", "Caption")),
+                InfoPage.Card("Pil süresi tahmini", _tableEmpty, _table, _tableNote),
             },
         };
 
@@ -122,6 +130,8 @@ internal sealed class BatteryPage : UserControl
         int minutes = _connection.Settings?.BatteryReadMinutes ?? BatteryRecorder.DefaultMinutes;
         _intervalText.Text = $"Okuma sıklığı: {minutes} dk";
 
+        RenderTable(b);
+
         bool read = b.FullMWh is not null && b.DesignedMWh is not null;
         _healthValues.Visibility = read ? Visibility.Visible : Visibility.Collapsed;
         if (!read)
@@ -139,6 +149,50 @@ internal sealed class BatteryPage : UserControl
             : "";
         _healthNote.Visibility = _healthNote.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
+
+    /// <summary>Rebuilt only when a row changes (the status comes every second).</summary>
+    private void RenderTable(BatteryStatusDto b)
+    {
+        var rows = b.Estimates ?? [];
+        string key = string.Join(";", rows.Select(e => $"{e.Mode}/{e.Profile}/{e.Minutes:F0}/{e.Watts:F1}")) + "|" + b.FullMWh;
+        if (key == _tableKey) return;
+        _tableKey = key;
+
+        _tableEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _table.Visibility = _tableNote.Visibility = rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _table.Children.Clear();
+        _table.RowDefinitions.Clear();
+        AddRow(0, "Caption", "Güç modu · Fan profili", "Ortalama", "Tam pille", "Veri");
+        int row = 1;
+        foreach (var e in rows)
+        {
+            string name = $"{(e.Mode is { } m ? Texts.PowerMode(m) : "?")} · {ProfileNames.Label(e.Profile)}";
+            bool enough = e.Minutes >= BatteryEstimates.NeededMinutes;
+            string average = enough ? $"{e.Watts.ToString("0.0", Tr)} W" : "–";
+            string full = enough && b.FullMWh is { } f && e.Hours(f) is { } h ? Short(TimeSpan.FromHours(h)) : "–";
+            string data = enough ? Short(TimeSpan.FromMinutes(e.Minutes))
+                : $"toplanıyor ({(int)e.Minutes}/{(int)BatteryEstimates.NeededMinutes} dk)";
+            AddRow(row++, "Body", name, average, full, data);
+        }
+        _tableNote.Text = "Yalnız pilde geçen ve bu sırada ayarı değişmeyen süreler sayılır. \"Tam pille\", pilin şu an tam dolumda tuttuğu enerjiye göre" +
+                          (b.FullMWh is { } fm ? $" ({Wh(fm)})." : ".");
+    }
+
+    private void AddRow(int row, string style, params string[] cells)
+    {
+        _table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (int c = 0; c < cells.Length; c++)
+        {
+            var t = InfoPage.Text(cells[c], style, bottom: 6);
+            Grid.SetRow(t, row);
+            Grid.SetColumn(t, c);
+            _table.Children.Add(t);
+        }
+    }
+
+    /// <summary>"4 sa 15 dk", "45 dk".</summary>
+    private static string Short(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours} sa {t.Minutes} dk" : $"{(int)Math.Round(t.TotalMinutes)} dk";
 
     /// <summary>The Settings card that sets how often the battery is read on battery.</summary>
     internal static Border IntervalCard(FanConnection connection)

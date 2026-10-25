@@ -130,7 +130,9 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddSingleton(new BatteryMonitor(batteryHardware, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(new BatteryRecorder(batteryMeter));
-builder.Services.AddSingleton(new BatteryCsvLog(Path.Combine(runtimeDir, "battery"), m => fileLog.Write(DateTimeOffset.Now, m)));
+string batteryDir = Path.Combine(runtimeDir, "battery");
+builder.Services.AddSingleton(new BatteryCsvLog(batteryDir, m => fileLog.Write(DateTimeOffset.Now, m)));
+builder.Services.AddSingleton(BatteryEstimates.Load(batteryDir, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
 builder.Services.AddHostedService<PowerWorker>();
