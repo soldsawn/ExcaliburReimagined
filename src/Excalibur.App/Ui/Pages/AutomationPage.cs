@@ -7,8 +7,8 @@ using Excalibur.Core.Settings;
 namespace Excalibur.App.Ui.Pages;
 
 /// <summary>
-/// Otomasyon: what changes by itself when the charger is plugged in or out (docs/08 1.4). Off until the
-/// user switches it on; every change is saved as soon as it is made, like the rest of the app.
+/// Otomasyon: what changes by itself when the charger is plugged in or out (docs/08 1.4; off until the user switches it on)
+/// and while a program runs (<see cref="AppRulesCard"/>); every change is saved as soon as it is made, like the rest of the app.
 /// </summary>
 internal sealed class AutomationPage : UserControl
 {
@@ -70,9 +70,9 @@ internal sealed class AutomationPage : UserControl
                 InfoPage.Card("Priz ve pil",
                     InfoPage.Text("Şarj kablosu takılıp çıkarılınca güç modunu ve fan profilini kendiliğinden değiştirir. Boş bıraktığınız ayara dokunulmaz.", "Caption", bottom: 10),
                     _enabled, grid, recommended, _status, _error),
+                InfoPage.Card("Programlar", new AppRulesCard(connection)),
                 InfoPage.Card("Yakında",
-                    InfoPage.Text("• Bir oyun ya da uygulama açılınca profili değiştirme, kapanınca geri alma", "Caption"),
-                    InfoPage.Text("• Kısayol tuşlarıyla profil değiştirme", "Caption", top: 4),
+                    InfoPage.Text("• Kısayol tuşlarıyla profil değiştirme", "Caption"),
                     InfoPage.Text("• Casper'ın arka planda çalışan programlarını kapatma (istenince geri açılabilir)", "Caption", top: 4)),
             },
         };

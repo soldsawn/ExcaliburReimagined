@@ -7,7 +7,8 @@ namespace Excalibur.App.Tray;
 /// <summary>
 /// Applies the screen refresh rate rule (docs/08 3.1) in the user's session: when the app starts,
 /// when the charger is plugged in or out, after the laptop wakes up, and when the rule changes.
-/// Does nothing while the rule is off, and never touches a screen that is not the laptop's own.
+/// Does nothing while the rule is off or a program rule holds the rate (<see cref="Held"/>), and never touches a screen that
+/// is not the laptop's own.
 /// </summary>
 internal sealed class RefreshAutomation : IDisposable
 {
@@ -28,8 +29,14 @@ internal sealed class RefreshAutomation : IDisposable
         Schedule();
     }
 
+    /// <summary>True while a program rule set the rate; the charger rule then waits for it to end.</summary>
+    public Func<bool>? Held { get; set; }
+
     /// <summary>Call after the rule was changed in the settings.</summary>
     public void RuleChanged() => Schedule();
+
+    /// <summary>Applies the rule now (a program rule that held the rate ended).</summary>
+    public void ApplyNow() => Apply();
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
     {
@@ -50,7 +57,7 @@ internal sealed class RefreshAutomation : IDisposable
     private void Apply()
     {
         var rule = _settings.Current.RefreshRate;
-        if (!rule.Enabled) return;
+        if (!rule.Enabled || Held?.Invoke() == true) return;
         var panel = DisplayRefresh.FindInternal();
         if (panel is null) return;
 

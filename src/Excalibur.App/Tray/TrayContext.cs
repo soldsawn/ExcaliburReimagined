@@ -45,6 +45,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = IdleMs };
     private readonly UserSettingsStore _userSettings = new();
     private readonly RefreshAutomation _refresh;
+    private readonly AppAutomation? _apps;
 
     private FanStatusDto? _status;
     private int _failures;
@@ -71,6 +72,13 @@ internal sealed class TrayContext : ApplicationContext
             _refresh?.RuleChanged();
         }, null);
         _refresh = new RefreshAutomation(_userSettings, (title, text) => Notify(title, text, ToolTipIcon.Warning));
+        // Not while taking snapshots: those only read.
+        if (snapshot is null)
+        {
+            _apps = new AppAutomation(_client, _userSettings, _refresh,
+                (title, subtitle) => { if (_userSettings.Current.Osd) _osd.Flash(title, subtitle, Theme.Ok); });
+            _refresh.Held = () => _apps.HoldsRefreshRate;
+        }
         _panel.DetailsClicked += OpenMainWindow;
         _panel.VisibleChanged += (_, _) => { _timer.Interval = _panel.Visible ? OpenMs : IdleMs; if (_panel.Visible) _ = PollAsync(); };
 
@@ -263,10 +271,11 @@ internal sealed class TrayContext : ApplicationContext
         _offlineNotified = false;
         _status = s;
 
-        // Changes made here were flashed when sent; the main window's own changes need no notice
-        // (it is on screen); anything else (the service, automation) flashes when a poll sees it.
-        if (_lastProfile is not null && s.Profile != _lastProfile && s.ProfileChangedBy is not (FanSource.Tray or FanSource.Window))
+        // Changes made here were flashed when sent (a program rule's with its own notice); the main window's own changes need
+        // no notice (it is on screen); anything else (the service, automation) flashes when a poll sees it.
+        if (_lastProfile is not null && s.Profile != _lastProfile && s.ProfileChangedBy is not (FanSource.Tray or FanSource.Window or FanSource.App))
             Flash(s);
+        _apps?.Resync(s);
         if (s.Mode == FanLoopMode.Faulted && _lastMode is not null && _lastMode != FanLoopMode.Faulted)
             Notify("Fanlarda bir sorun oldu",
                 "Fanlar güvenlik için orijinal ayara bırakıldı. Hızlı paneldeki \"Tekrar dene\" ile yeniden başlatabilirsiniz.",
@@ -405,6 +414,7 @@ internal sealed class TrayContext : ApplicationContext
         _panel.Dispose();
         _osd.Dispose();
         _menu.Dispose();
+        _apps?.Dispose();
         _refresh.Dispose();
         _userSettings.Dispose();
         base.ExitThreadCore();
