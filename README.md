@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.4-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.5-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -134,7 +134,7 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **`v0.1.4`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770) and `P009C0` (G870), which are offered as a one-click calibration. Use at your own risk.
+> **`v0.1.5`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770) and `P009C0` (G870), which are offered as a one-click calibration. Use at your own risk.
 
 **Features:**
 - Custom fan curves with separate CPU/GPU targets.
