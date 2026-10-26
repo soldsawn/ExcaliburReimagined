@@ -29,11 +29,14 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
     }
 
     private const ushort PerformanceModeFunction = 0x0300, AdapterFunction = 0x0206;
+    // One more look this long after plugging in, in case the flag settled late; after that the adapter cannot change
+    // without a spell on battery. Rechecking every 30 s cost 360 firmware calls an hour on the wall (2026-10-26).
     private static readonly TimeSpan AdapterRecheck = TimeSpan.FromSeconds(30);
 
     private bool _lastOnBattery = true;
     private bool _usbC;
     private DateTime _adapterReadAt = DateTime.MinValue;
+    private bool _adapterRechecked;
 
     public void SetMode(PowerMode mode)
     {
@@ -56,14 +59,15 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
         bool onBattery = status.ACLineStatus == 0;
         int? percent = status.BatteryLifePercent <= 100 ? status.BatteryLifePercent : null;
 
-        // The USB-C flag is a WMI call (slower): read when the charger was just plugged in, then now and then.
+        // The USB-C flag is a WMI call (slower): read when the charger was just plugged in, and once more a little later.
         if (onBattery)
         {
             _usbC = false;
             _adapterReadAt = DateTime.MinValue;
         }
-        else if (_lastOnBattery || DateTime.UtcNow - _adapterReadAt > AdapterRecheck)
+        else if (_lastOnBattery || !_adapterRechecked && DateTime.UtcNow - _adapterReadAt > AdapterRecheck)
         {
+            _adapterRechecked = !_lastOnBattery;
             _usbC = ReadUsbCAdapter();
             _adapterReadAt = DateTime.UtcNow;
         }
