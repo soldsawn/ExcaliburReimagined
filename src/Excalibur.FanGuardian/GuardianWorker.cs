@@ -5,7 +5,7 @@ using Excalibur.Core.Fan;
 namespace Excalibur.FanGuardian;
 
 /// <summary>
-/// Every 2 s: reads the fan service's heartbeat and the firmware's WMI sensors (no EC read), asks
+/// Every 2 s: reads the fan service's heartbeat and the sensors it carries (else the firmware's WMI sensors, no EC read), asks
 /// <see cref="GuardianMonitor"/> what to do, and if needed hands both fans back to the
 /// EC (0xFF, the only value the guardian ever writes). When the service looks dead it
 /// also tries to start it again (at most once a minute; the service recovery settings
@@ -42,12 +42,29 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
         bool processAlive = heartbeat is { } hb && ProcessExists(hb.ProcessId);
 
         FanSensors? sensors = null;
-        if (SensorsDue())
+        // A new heartbeat carries what the service read this second: no firmware call of our own, so the two processes
+        // never stack calls on the EC (every ACPI 13 of 2026-10-25/26 came when one did). Only when the service reads
+        // nothing (its reads fail, it is stopping) does the guardian ask the firmware itself.
+        bool newBeat = heartbeat is { } beat && beat.Sequence != _lastBeat;
+        _lastBeat = heartbeat?.Sequence;
+        bool fromService = newBeat && heartbeat!.Value.Sensors is not null;
+        if (fromService)
+        {
+            sensors = heartbeat!.Value.Sensors;
+            _lastSensors = sensors;
+            _sinceSensors.Restart();
+        }
+        else if (SensorsDue())
         {
             try { sensors = hardware.ReadSensors(); }
             catch (FanReadException) { } // the monitor treats null as "unknown"
             _lastSensors = sensors;
             _sinceSensors.Restart();
+        }
+        if (sensors is not null && fromService != _sensorsFromService)
+        {
+            Log(fromService ? "sensors: from the fan service's heartbeat" : "sensors: reading the firmware (the fan service sends none)");
+            _sensorsFromService = fromService;
         }
 
         var now = _clock.Elapsed;
@@ -93,6 +110,8 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
     private const int WatchfulC = 80;
     private FanSensors? _lastSensors;
     private readonly Stopwatch _sinceSensors = new();
+    private long? _lastBeat;
+    private bool? _sensorsFromService;
 
     private bool SensorsDue() =>
         _lastSensors is not { } last || !_sinceSensors.IsRunning

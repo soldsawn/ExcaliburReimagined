@@ -82,7 +82,11 @@ public sealed class FanWorker(
 
         runtime.Fake?.Advance(Period);
         var status = loop.Tick(now);
-        WriteHeartbeat();
+        // A new snapshot means this tick read the sensors; an old one (a failed read, the loop stopped) is not passed on.
+        var fresh = status.Snapshot is { } read && !ReferenceEquals(read, _lastSnapshot) ? read : null;
+        _lastSnapshot = status.Snapshot;
+        WriteHeartbeat(fresh is null ? null
+            : new FanSensors(fresh.CpuTempC, fresh.GpuTempC, fresh.CpuAppliedPercent, fresh.GpuAppliedPercent));
         history.Record(status, now);
         DrainEvents();
 
@@ -116,12 +120,14 @@ public sealed class FanWorker(
 
     private FanProfile SavedProfile() => settings.Current.FindProfile(settings.Current.Profile) ?? FanProfile.Balanced;
 
-    private void WriteHeartbeat()
+    private FanSnapshot? _lastSnapshot;
+
+    private void WriteHeartbeat(FanSensors? sensors = null)
     {
         try
         {
             FanHeartbeat.Write(runtime.HeartbeatPath,
-                new HeartbeatRecord(++_sequence, DateTimeOffset.Now, loop.Status.HoldsFans, Environment.ProcessId));
+                new HeartbeatRecord(++_sequence, DateTimeOffset.Now, loop.Status.HoldsFans, Environment.ProcessId, sensors));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

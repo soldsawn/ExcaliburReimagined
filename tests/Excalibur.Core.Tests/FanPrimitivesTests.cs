@@ -65,3 +65,38 @@ public class FanCurveTests
             Assert.True(p.CpuCurve.Evaluate(75) >= 95, $"{p.Name} gives {p.CpuCurve.Evaluate(75)}% at 75C");
     }
 }
+
+public class FanHeartbeatTests
+{
+    private readonly string _path = Path.Combine(Path.GetTempPath(), $"heartbeat-{Guid.NewGuid():N}.bin");
+
+    private static readonly DateTimeOffset At = DateTimeOffset.FromUnixTimeMilliseconds(1_761_500_000_000);
+
+    [Fact]
+    public void Sensors_round_trip()
+    {
+        var beat = new HeartbeatRecord(7, At, true, 1234, new FanSensors(86, 74, 100, 91));
+        FanHeartbeat.Write(_path, beat);
+        Assert.Equal(beat, FanHeartbeat.Read(_path));
+        File.Delete(_path);
+    }
+
+    [Fact]
+    public void A_beat_without_sensors_reads_without_them()
+    {
+        FanHeartbeat.Write(_path, new HeartbeatRecord(8, At, false, 1234));
+        Assert.Null(FanHeartbeat.Read(_path)!.Value.Sensors);
+        File.Delete(_path);
+    }
+
+    [Fact]
+    public void An_older_services_24_byte_beat_still_reads()
+    {
+        FanHeartbeat.Write(_path, new HeartbeatRecord(9, At, true, 1234, new FanSensors(50, 45, 30, 30)));
+        using (var fs = new FileStream(_path, FileMode.Open)) fs.SetLength(24);
+        var beat = FanHeartbeat.Read(_path);
+        Assert.Equal((9L, true, 1234), (beat!.Value.Sequence, beat.Value.HoldsFans, beat.Value.ProcessId));
+        Assert.Null(beat.Value.Sensors);
+        File.Delete(_path);
+    }
+}
