@@ -42,8 +42,13 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
         bool processAlive = heartbeat is { } hb && ProcessExists(hb.ProcessId);
 
         FanSensors? sensors = null;
-        try { sensors = hardware.ReadSensors(); }
-        catch (FanReadException) { } // the monitor treats null as "unknown"
+        if (SensorsDue())
+        {
+            try { sensors = hardware.ReadSensors(); }
+            catch (FanReadException) { } // the monitor treats null as "unknown"
+            _lastSensors = sensors;
+            _sinceSensors.Restart();
+        }
 
         var now = _clock.Elapsed;
         var verdict = _monitor.Evaluate(heartbeat, sensors, processAlive, now);
@@ -80,6 +85,19 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
             TryStartFanService();
         }
     }
+
+    // The sensors matter only near the hot limits (88-90 C), so while the last reading was cool they are read this
+    // seldom: the fan service already reads the block every 2 s, and each read is a firmware call that stalled for
+    // 4 s now and then, with an ACPI 13 warning after it (2026-10-26 00:09, 00:28).
+    private static readonly TimeSpan CoolSensorPeriod = TimeSpan.FromSeconds(10);
+    private const int WatchfulC = 80;
+    private FanSensors? _lastSensors;
+    private readonly Stopwatch _sinceSensors = new();
+
+    private bool SensorsDue() =>
+        _lastSensors is not { } last || !_sinceSensors.IsRunning
+        || last.CpuTempC >= WatchfulC || last.GpuTempC >= WatchfulC
+        || _sinceSensors.Elapsed >= CoolSensorPeriod - TimeSpan.FromMilliseconds(500); // a 2-s tick's jitter
 
     private void TryStartFanService()
     {
