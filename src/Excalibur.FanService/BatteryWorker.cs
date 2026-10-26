@@ -8,9 +8,8 @@ namespace Excalibur.FanService;
 
 /// <summary>
 /// The battery, on its own task: a slow WMI answer can only delay the battery page. Reads the health once and then once a
-/// day, and drives <see cref="BatteryRecorder"/> (sparse reads on battery, kept intervals to the csv log). No battery read in
-/// Windows' first <see cref="EcFanHardware.NoRefreshAfterBoot"/> (the driver may ask the EC, and the EC is busy then,
-/// 2026-10-24) or while the EC is held quiet; a failed health read is tried again after <see cref="Retry"/>.
+/// day, and drives <see cref="BatteryRecorder"/> (sparse reads on battery, kept intervals to the csv log). No battery read
+/// while the EC is held quiet; a failed health read is tried again after <see cref="Retry"/>.
 /// </summary>
 public sealed class BatteryWorker(
     BatteryMonitor battery,
@@ -56,8 +55,7 @@ public sealed class BatteryWorker(
     private void TickOnce()
     {
         var now = DateTimeOffset.Now;
-        bool ecBusy = !runtime.Simulated
-            && (TimeSpan.FromMilliseconds(Environment.TickCount64) < EcFanHardware.NoRefreshAfterBoot || EcQuiet.IsQuiet);
+        bool ecBusy = !runtime.Simulated && EcQuiet.IsQuiet;
         if (!ecBusy && now >= _healthAt)
             _healthAt = now + (battery.ReadHealth() ? Every : Retry);
         recorder.Interval = TimeSpan.FromMinutes(settings.Current.BatteryReadMinutes);

@@ -28,9 +28,6 @@ public sealed class EcFanHardware : IFanHardware
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
     private readonly FanRpmScale _scale;
-    // Windows' EC driver is busy while Windows has run less than this (the battery health read waits it out).
-    public static readonly TimeSpan NoRefreshAfterBoot = TimeSpan.FromMinutes(10);
-
     private EcBlock? _ec;
     private volatile bool _boost;
     private ManagementEventWatcher? _boostWatcher; // kept so it is plainly alive as long as this object
