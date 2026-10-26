@@ -174,16 +174,18 @@ public sealed class EcFanHardware : IFanHardware
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) ReadWmiSensors()
     {
         _reused = _lastWmi is not null && (_sinceWmi.Elapsed < MinWmiInterval || EcQuiet.IsQuiet && _sinceWmi.Elapsed < MaxReuse);
-        if (_reused)
-        {
-            var last = _lastWmi!.Value;
-            // The CPU temperature does not come from the EC (MSR): it stays live.
-            if (cpuTemperature?.Invoke() is { } live and >= 1 and <= MaxTempC) last = last with { CpuC = live };
-            return last;
-        }
-        SmiCommand sensors;
-        try { sensors = wmi.Execute(SmiCommand.Get(0x0200)); }
+        if (_reused) return LastWmi();
+        SmiCommand? reply;
+        try { reply = wmi.TryExecute(SmiCommand.Get(0x0200)); }
         catch (Exception ex) { throw new FanReadException("WMI sensor read failed.", ex); }
+        // Our other process holds the EC (its own call is stalling): do not pile a second one on top.
+        if (reply is not { } sensors)
+        {
+            if (_lastWmi is null || _sinceWmi.Elapsed >= MaxReuse)
+                throw new FanReadException("WMI sensor read skipped: the EC lock is held elsewhere.");
+            _reused = true;
+            return LastWmi();
+        }
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
@@ -206,6 +208,14 @@ public sealed class EcFanHardware : IFanHardware
         _lastWmi = (cpuC, gpuC, cpuRpm, gpuRpm);
         _sinceWmi.Restart();
         return (cpuC, gpuC, cpuRpm, gpuRpm);
+    }
+
+    private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) LastWmi()
+    {
+        var last = _lastWmi!.Value;
+        // The CPU temperature does not come from the EC (MSR): it stays live.
+        if (cpuTemperature?.Invoke() is { } live and >= 1 and <= MaxTempC) last = last with { CpuC = live };
+        return last;
     }
 
     /// <summary>

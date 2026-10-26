@@ -28,15 +28,25 @@ public sealed class GmWmiGateway : ISmiChannel
     }
 
     /// <summary>Sends one command and returns the firmware's response block.</summary>
-    public SmiCommand Execute(SmiCommand request)
+    public SmiCommand Execute(SmiCommand request) => Send(request, skipWhenBusy: false)!.Value;
+
+    /// <summary>
+    /// Like <see cref="Execute"/>, but sends nothing and returns null when the EC lock is not free within 2 s: for reads
+    /// whose last answer can stand in. Every ACPI 13 since the lock came in (11, 2026-10-23 to 10-26) followed one
+    /// process's sensor call stalling 3-4.5 s while the other gave up waiting and sent its own on top of it.
+    /// </summary>
+    public SmiCommand? TryExecute(SmiCommand request) => Send(request, skipWhenBusy: true);
+
+    private SmiCommand? Send(SmiCommand request, bool skipWhenBusy)
     {
         // The firmware keeps a single shared response buffer, so requests must not interleave.
         lock (_gate)
         {
             // The handler reads the EC through Windows' driver, so a collision stalls this call.
             // Taking the EC lock keeps our other process's raw EC access out meanwhile; when it is
-            // not free within 2 s the call goes ahead anyway (sensors and fan control must not stop).
+            // not free within 2 s a command goes ahead anyway (power mode and lighting must not be lost).
             using var ecLock = EcLock.TryAcquire();
+            if (skipWhenBusy && !ecLock.Held) return null;
             var sw = Stopwatch.StartNew();
             try
             {

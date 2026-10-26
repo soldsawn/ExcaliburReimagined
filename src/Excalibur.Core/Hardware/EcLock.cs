@@ -16,6 +16,9 @@ internal readonly struct EcLock : IDisposable
 
     private EcLock(Mutex mutex) => _mutex = mutex;
 
+    /// <summary>False for the empty holder <see cref="TryAcquire"/> returns when the lock was not free.</summary>
+    public bool Held => _mutex is not null;
+
     /// <summary>Takes the lock or throws when it is not free within 2 s (raw EC access must not go unlocked).</summary>
     public static EcLock Acquire()
         => TryAcquire() is { _mutex: not null } held ? held
