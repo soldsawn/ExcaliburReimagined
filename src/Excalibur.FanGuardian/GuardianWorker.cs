@@ -44,7 +44,8 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
         FanSensors? sensors = null;
         // A new heartbeat carries what the service read this second: no firmware call of our own, so the two processes
         // never stack calls on the EC (every ACPI 13 of 2026-10-25/26 came when one did). Only when the service reads
-        // nothing (its reads fail, it is stopping) does the guardian ask the firmware itself.
+        // nothing (its reads fail, it is stopping) does the guardian ask the firmware itself, and only while the service
+        // holds the fans: otherwise the monitor does not look at the sensors (the read at a start stalled 4.2 s, 10-26 22:46).
         bool newBeat = heartbeat is { } beat && beat.Sequence != _lastBeat;
         _lastBeat = heartbeat?.Sequence;
         bool fromService = newBeat && heartbeat!.Value.Sensors is not null;
@@ -54,7 +55,7 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
             _lastSensors = sensors;
             _sinceSensors.Restart();
         }
-        else if (SensorsDue())
+        else if (heartbeat is { HoldsFans: true } && SensorsDue())
         {
             try { sensors = hardware.ReadSensors(); }
             catch (FanReadException) { } // the monitor treats null as "unknown"

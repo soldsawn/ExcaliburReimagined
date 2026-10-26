@@ -27,7 +27,10 @@ public sealed class BatteryWorker(
     private static readonly TimeSpan Every = TimeSpan.FromDays(1);
     private static readonly TimeSpan Retry = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan Period = TimeSpan.FromSeconds(5);
-    private DateTimeOffset _healthAt = DateTimeOffset.MinValue;
+    // Not with the service's start: a restart after Windows' first minutes sent it with the fan, power and lighting
+    // calls, and it stalled 4.8 s among them before an ACPI 13 (2026-10-26 22:46).
+    private static readonly TimeSpan HealthAfterStart = TimeSpan.FromSeconds(30);
+    private DateTimeOffset _healthAt = DateTimeOffset.Now + HealthAfterStart;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
