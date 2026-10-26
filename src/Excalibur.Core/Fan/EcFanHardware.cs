@@ -53,6 +53,7 @@ public sealed class EcFanHardware : IFanHardware
     // 17:44, 19:10, 19:46); the CPU temperature, which the curves and safety rules follow closely, stays live (MSR).
     private static readonly TimeSpan MinWmiInterval = TimeSpan.FromSeconds(1.5);
     private bool _reused;
+    private GpuTempSource _gpuSource = GpuTempSource.Ec;
 
     /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
     public Action<string>? Log { get; set; }
@@ -136,7 +137,7 @@ public sealed class EcFanHardware : IFanHardware
             CheckFollow(FanId.Cpu, cpuPercent);
             CheckFollow(FanId.Gpu, gpuPercent);
         }
-        return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget, cpuPercent, gpuPercent, _boost);
+        return new FanSnapshot(cpuC, gpuC, cpuRpm, gpuRpm, e.CpuTarget, e.GpuTarget, cpuPercent, gpuPercent, _boost, _gpuSource == GpuTempSource.Cpu);
     }
 
     /// <summary>Acts on <see cref="FanFollowCheck"/>: one more write, or one EC read to see what the register holds.</summary>
@@ -186,6 +187,18 @@ public sealed class EcFanHardware : IFanHardware
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
+        var (resolvedGpuC, gpuSource) = ResolveGpuTemperature(gpuC, cpuC, Power.Nvml.TemperatureC);
+        if (gpuSource != _gpuSource)
+        {
+            Log?.Invoke(gpuSource switch
+            {
+                GpuTempSource.Driver => $"GPU temperature: the EC reports {gpuC}C (no reading), using the NVIDIA driver's",
+                GpuTempSource.Cpu => $"GPU temperature: the EC reports {gpuC}C and the NVIDIA driver none (GPU off); the GPU fan follows the CPU",
+                _ => "GPU temperature: the EC reports it again",
+            });
+            _gpuSource = gpuSource;
+        }
+        gpuC = resolvedGpuC;
         if (cpuC is < 1 or > MaxTempC || gpuC is < 1 or > MaxTempC)
             throw new FanReadException($"Implausible temperatures CPU={cpuC} GPU={gpuC}.");
         if (cpuRpm is < 0 or > MaxRpm || gpuRpm is < 0 or > MaxRpm)
@@ -193,6 +206,25 @@ public sealed class EcFanHardware : IFanHardware
         _lastWmi = (cpuC, gpuC, cpuRpm, gpuRpm);
         _sinceWmi.Restart();
         return (cpuC, gpuC, cpuRpm, gpuRpm);
+    }
+
+    /// <summary>
+    /// What the EC reports when it has no GPU reading. Seen on the G870 while the GPU was switched off (GPU mode trial,
+    /// 2026-10-23 20:04-20:30: 30 C throughout, once 0, which faulted the loop); E-Helper's notes say some models report
+    /// 30 C all the time.
+    /// </summary>
+    public const int PlaceholderGpuC = 30;
+
+    /// <summary>
+    /// The GPU temperature the fans follow: the EC's, unless it is 0 or <see cref="PlaceholderGpuC"/>; then the NVIDIA
+    /// driver's (asked only then, so a sleeping GPU is not woken on a machine whose EC reports it), and when the driver has
+    /// none either the GPU is off and its fan follows the CPU (the heat pipes are shared; user's choice, 2026-10-26).
+    /// </summary>
+    public static (int C, GpuTempSource Source) ResolveGpuTemperature(int ecC, int cpuC, Func<int?> driverC)
+    {
+        if (ecC is not (0 or PlaceholderGpuC)) return (ecC, GpuTempSource.Ec);
+        if (driverC() is { } c and >= 1 and <= MaxTempC) return (c, GpuTempSource.Driver);
+        return (cpuC, GpuTempSource.Cpu);
     }
 
     public void SetTarget(FanId fan, FanTarget target)

@@ -178,7 +178,7 @@ public sealed record FanStatusDto(
         var snap = s.Snapshot;
         return new FanStatusDto(
             s.Mode, s.Profile, s.ManualUntil,
-            snap?.CpuTempC, snap?.GpuTempC, snap?.CpuRpm, snap?.GpuRpm,
+            snap?.CpuTempC, snap is { GpuOff: true } ? null : snap?.GpuTempC, snap?.CpuRpm, snap?.GpuRpm,
             ToPercent(snap?.CpuTarget), ToPercent(snap?.GpuTarget),
             snap?.CpuAppliedPercent, snap?.GpuAppliedPercent,
             snap?.CoolingBoost ?? false,

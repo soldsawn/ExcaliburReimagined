@@ -320,7 +320,7 @@ internal sealed class TrayContext : ApplicationContext
 
         // NotifyIcon.Text is limited to 127 characters.
         string tip = $"{AppName} · {ProfileNames.Label(s.Profile, s.ManualUntil)}\n"
-            + $"İşlemci {s.CpuTempC} °C · {s.CpuRpm} rpm\nEkran kartı {s.GpuTempC} °C · {s.GpuRpm} rpm"
+            + $"İşlemci {s.CpuTempC} °C · {s.CpuRpm} rpm\nEkran kartı {(s.GpuTempC is { } g ? $"{g} °C" : "kapalı")} · {s.GpuRpm} rpm"
             + (s.Mode == FanLoopMode.Faulted ? "\nSorun var: fanlar orijinal ayarda" : "");
         _tray.Text = tip.Length > 127 ? tip[..127] : tip;
     }
@@ -329,7 +329,7 @@ internal sealed class TrayContext : ApplicationContext
     {
         var s = _status;
         _stateItem.Text = !Connected || s is null ? "Fan kontrolüne bağlanılamıyor"
-            : $"CPU {s.CpuTempC}°  ·  GPU {s.GpuTempC}°  ·  {ProfileNames.Label(s.Profile, s.ManualUntil)}";
+            : $"CPU {s.CpuTempC}°  ·  GPU {(s.GpuTempC is { } g ? $"{g}°" : "kapalı")}  ·  {ProfileNames.Label(s.Profile, s.ManualUntil)}";
         foreach (var item in _profileItems)
         {
             item.Checked = Connected && s?.Profile == (string)item.Tag!;

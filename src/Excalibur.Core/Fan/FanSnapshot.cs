@@ -1,6 +1,7 @@
 namespace Excalibur.Core.Fan;
 
 /// <summary>One validated reading of everything the fan loop needs.</summary>
+/// <param name="GpuOff">No GPU reading (the GPU is switched off): <see cref="GpuTempC"/> holds the CPU's, which the GPU fan follows.</param>
 public sealed record FanSnapshot(
     int CpuTempC,
     int GpuTempC,
@@ -10,11 +11,20 @@ public sealed record FanSnapshot(
     FanTarget GpuTarget,
     int CpuAppliedPercent,
     int GpuAppliedPercent,
-    bool CoolingBoost)
+    bool CoolingBoost,
+    bool GpuOff = false)
 {
     public int TempOf(FanId fan) => fan == FanId.Cpu ? CpuTempC : GpuTempC;
 
     public FanTarget TargetOf(FanId fan) => fan == FanId.Cpu ? CpuTarget : GpuTarget;
+}
+
+/// <summary>Where the GPU temperature came from (<see cref="EcFanHardware.ResolveGpuTemperature"/>).</summary>
+public enum GpuTempSource
+{
+    Ec,
+    Driver,
+    Cpu,
 }
 
 /// <summary>The firmware's sensor block alone (temperatures and the percent worked out from RPM), no EC read.</summary>

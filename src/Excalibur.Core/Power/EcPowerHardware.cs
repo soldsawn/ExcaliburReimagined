@@ -110,9 +110,14 @@ internal static class Nvml
 
     public static int? PowerUsageWatts() => Milliwatts(nvmlDeviceGetPowerUsage);
 
-    private delegate int MilliwattQuery(IntPtr device, out uint milliwatts);
+    /// <summary>The GPU die temperature in °C; null when the driver cannot tell (no NVIDIA GPU, or it is switched off).</summary>
+    public static int? TemperatureC() => Query((IntPtr device, out uint c) => nvmlDeviceGetTemperature(device, 0, out c));
 
-    private static int? Milliwatts(MilliwattQuery query)
+    private delegate int NvmlQuery(IntPtr device, out uint value);
+
+    private static int? Milliwatts(NvmlQuery query) => Query(query) is { } mw ? (int)Math.Round(mw / 1000.0) : null;
+
+    private static int? Query(NvmlQuery query)
     {
         lock (Gate)
         {
@@ -128,7 +133,7 @@ internal static class Nvml
             if (!_ready) return null;
             try
             {
-                return query(_device, out uint milliwatts) == 0 ? (int)Math.Round(milliwatts / 1000.0) : null;
+                return query(_device, out uint value) == 0 ? (int)value : null;
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
         }
@@ -138,4 +143,5 @@ internal static class Nvml
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint celsius);
 }
