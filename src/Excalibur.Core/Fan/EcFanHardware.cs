@@ -7,15 +7,16 @@ namespace Excalibur.Core.Fan;
 
 /// <summary>
 /// <see cref="IFanHardware"/> on the real machine: temperatures and RPM from the
-/// firmware's WMI sensor block (GET 0x0200) at most every 2 s, fan targets / Cooling Boost from
-/// the EC only every <c>ecRefresh</c>; the applied percent is worked out from the RPM
+/// firmware's WMI sensor block (GET 0x0200) at most every 2 s; the fan targets are the ones we wrote, and the EC is read
+/// only when a fan does not follow its target (no periodic read: each fell on an ACPI 15 warning, 2026-10-25/26
+/// 13:20:00.294, 13:44:51.278 ...); the applied percent is worked out from the RPM
 /// (<see cref="FanRpmScale"/>), so it needs no EC read at all. Every EC transaction can collide
 /// with Windows' own EC driver reading the battery from the same controller, and a spoiled
 /// battery read shuts the machine down as "critical battery"; WMI goes through Windows'
 /// driver and is safe. A target we write is not read back: <see cref="FanFollowCheck"/> checks it by
 /// the RPM (only 0xFF, the safe state, keeps a read-back). Targets we write update the cached EC values at once, and the
 /// Fn+1 Cooling Boost state also arrives at once through the firmware's <c>GMC_WMIEvent</c>
-/// (the watcher lives as long as the process; if it cannot start, the EC refresh still catches the state).
+/// (the watcher lives as long as the process; if it cannot start, a fan that does not follow its target makes us read it).
 /// The CPU temperature comes from <c>cpuTemperature</c> when given and readable (the CPU's own sensor, current to the
 /// second), else from the WMI block, which refreshes it only about every 16.5 s.
 /// </summary>
@@ -27,14 +28,9 @@ public sealed class EcFanHardware : IFanHardware
     private const int MaxTempC = 115;
     private const int MaxRpm = 7000;
     private readonly FanRpmScale _scale;
-    private static readonly TimeSpan DefaultEcRefresh = TimeSpan.FromSeconds(60);
-    // No refresh read while Windows has run less than this: its EC driver is busy then, and the ACPI 15 warnings after
-    // each start fell on our minute read (2026-10-24: 2, 8, 9, 10 and 18 min after start). The targets are ours and
-    // Fn+1 arrives as an event, so the block read at start is enough meanwhile.
+    // Windows' EC driver is busy while Windows has run less than this (the battery health read waits it out).
     public static readonly TimeSpan NoRefreshAfterBoot = TimeSpan.FromMinutes(10);
 
-    private readonly TimeSpan _ecRefresh;
-    private readonly Stopwatch _sinceEcRead = new();
     private EcBlock? _ec;
     private volatile bool _boost;
     private ManagementEventWatcher? _boostWatcher; // kept so it is plainly alive as long as this object
@@ -64,7 +60,7 @@ public sealed class EcFanHardware : IFanHardware
     /// twelve EC transactions at every start and wake, and the start's burst of EC traffic is what Windows answered with
     /// ACPI 15 warnings (2026-10-23 21:09:50, three within the version read); it changes only with a BIOS update.</param>
     /// <param name="scale">RPM per percent of each fan (<see cref="FanRpmScale"/>); the G870's when null.</param>
-    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, TimeSpan? ecRefresh = null, Func<int?>? cpuTemperature = null,
+    public EcFanHardware(EmbeddedController ec, GmWmiGateway wmi, Func<int?>? cpuTemperature = null,
         string? versionCachePath = null, FanRpmScale? scale = null)
     {
         _versionCachePath = versionCachePath;
@@ -72,7 +68,6 @@ public sealed class EcFanHardware : IFanHardware
         this.ec = ec;
         this.wmi = wmi;
         this.cpuTemperature = cpuTemperature;
-        _ecRefresh = ecRefresh ?? DefaultEcRefresh;
         StartBoostWatcher();
     }
 
@@ -110,17 +105,14 @@ public sealed class EcFanHardware : IFanHardware
     {
         var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
 
-        if (_ec is null || (_sinceEcRead.Elapsed >= _ecRefresh && !_reused
-            && TimeSpan.FromMilliseconds(Environment.TickCount64) >= NoRefreshAfterBoot))
+        // Read once, and only what the hand-back at start did not tell us; Cooling Boost comes as an event.
+        if (_ec is null)
         {
             try
             {
                 _ec = new EcBlock(_knownCpu ?? Target(FanRegisters.CpuTarget), _knownGpu ?? Target(FanRegisters.GpuTarget));
                 _knownCpu = _knownGpu = null;
-                _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
-                _sinceEcRead.Restart();
             }
-            catch (EcBusyException) when (_ec is not null) { } // keep the cached values; a later tick tries again
             catch (TimeoutException ex) { throw new FanReadException("EC read timed out.", ex); }
         }
         var e = _ec;
@@ -154,13 +146,16 @@ public sealed class EcFanHardware : IFanHardware
                 ec.WriteByte(reg, target.Value);
                 return;
             }
+            // Fn+1 pressed before we started (no event seen) runs the fans at full speed whatever the target says.
+            _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
+            if (_boost) return;
             var held = FanTarget.FromRaw(ec.ReadStable(reg));
             Log?.Invoke($"!! {fan} fan runs at {percent}% and does not follow its target {target}; the EC holds {held?.ToString() ?? "an invalid value"}");
             // Let the loop see what is really there, so it writes the target again if needed.
             if (held is { } h && _ec is not null)
                 _ec = fan == FanId.Cpu ? _ec with { CpuTarget = h } : _ec with { GpuTarget = h };
         }
-        catch (TimeoutException) { } // the 60-s EC refresh shows the truth anyway
+        catch (TimeoutException) { } // the next check that the fan does not follow tries again
     }
 
     /// <summary>Temperatures and applied percents from WMI only: never touches the EC (the guardian's normal read).</summary>
@@ -282,6 +277,30 @@ public sealed class EcFanHardware : IFanHardware
         throw new FanWriteException(target.IsAuto
             ? $"{fan} fan target {target} did not read back from 0x{reg:X2}."
             : $"{fan} fan target {target} could not be written to 0x{reg:X2}.");
+    }
+
+    /// <summary>
+    /// Hands both fans to the EC without reading anything: the start on a verified EC, whose first tick writes the
+    /// profile's targets right after (checked by the RPM). The reads this used to make fell on ACPI 15 warnings at
+    /// every start (2026-10-25 13:05:14.120, 10-26 13:32:02.229).
+    /// </summary>
+    public void ResetToAutoAtStart()
+    {
+        Exception? first = null;
+        foreach (var fan in new[] { FanId.Cpu, FanId.Gpu })
+        {
+            try
+            {
+                ec.WriteByte(FanRegisters.TargetOf(fan), FanTarget.Auto.Value);
+                _follow.Wrote(fan, FanTarget.Auto, _lastPercent[(int)fan], _clock.Elapsed);
+                if (_ec is not null)
+                    _ec = fan == FanId.Cpu ? _ec with { CpuTarget = FanTarget.Auto } : _ec with { GpuTarget = FanTarget.Auto };
+                else
+                    Learnt(fan, FanTarget.Auto);
+            }
+            catch (TimeoutException ex) { first ??= ex; }
+        }
+        if (first is not null) throw new FanWriteException("Could not hand the fans back to the EC.", first);
     }
 
     private void Learnt(FanId fan, FanTarget target)

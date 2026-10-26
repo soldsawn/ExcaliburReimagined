@@ -11,6 +11,12 @@ public interface IFanHardware
 
     /// <summary>The EC firmware version string (e.g. "P008B0"), or null when unreadable.</summary>
     string? ReadEcVersion();
+
+    /// <summary>
+    /// Hands both fans to the EC at start on a verified EC, whose first tick writes the profile's targets right after;
+    /// the real hardware then reads nothing back (<see cref="EcFanHardware.ResetToAutoAtStart"/>).
+    /// </summary>
+    void ResetToAutoAtStart() => this.ResetToAuto();
 }
 
 public static class FanHardwareExtensions

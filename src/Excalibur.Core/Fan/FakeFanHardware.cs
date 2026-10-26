@@ -71,6 +71,15 @@ public sealed class FakeFanHardware : IFanHardware
 
     public string? ReadEcVersion() => EcVersion;
 
+    /// <summary>How often the loop took the start's no-read hand-back.</summary>
+    public int StartHandBacks { get; private set; }
+
+    public void ResetToAutoAtStart()
+    {
+        StartHandBacks++;
+        this.ResetToAuto();
+    }
+
     /// <summary>
     /// Moves each chip toward its equilibrium with a 20 s time constant. Calibrated to the
     /// measurements (docs/06-07): CPU idles at ~50 C on the stock 66% and ~55 C at 45%

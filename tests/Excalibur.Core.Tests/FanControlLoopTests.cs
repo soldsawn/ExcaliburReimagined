@@ -27,6 +27,22 @@ public class FanControlLoopTests
     }
 
     [Fact]
+    public void Start_on_a_known_ec_hands_back_without_reading()
+    {
+        _loop.Start(Balanced, T0);
+        Assert.Equal(1, _hw.StartHandBacks);
+    }
+
+    [Fact]
+    public void Start_on_an_unverified_ec_looks_before_writing()
+    {
+        _hw.EcVersion = "X001A0";
+        _loop.Start(Balanced, T0);
+        Assert.Equal(0, _hw.StartHandBacks);
+        Assert.Equal(FanLoopMode.MonitorOnly, _loop.Status.Mode);
+    }
+
+    [Fact]
     public void Balanced_tick_writes_the_curve()
     {
         _loop.Start(Balanced, T0);

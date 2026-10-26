@@ -149,10 +149,10 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         {
             _profile = profile;
             _ecVersion = hardware.ReadEcVersion();
-            ForceAuto(now, "start");
-            _mode = _ecVersion is not null && _known.Contains(_ecVersion)
-                ? FanLoopMode.Running
-                : FanLoopMode.MonitorOnly;
+            bool known = _ecVersion is not null && _known.Contains(_ecVersion);
+            // An unverified EC keeps the look before writing (0xFF is written only when not already there).
+            ForceAuto(now, "start", atStart: known);
+            _mode = known ? FanLoopMode.Running : FanLoopMode.MonitorOnly;
             Log(now, _mode == FanLoopMode.Running
                 ? $"started, EC {_ecVersion}, profile {_profile.Name}"
                 : $"EC firmware '{_ecVersion ?? "unreadable"}' is not verified; monitor only, fans stay on the EC");
@@ -375,12 +375,13 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         ForceAuto(now, "fault");
     }
 
-    private void ForceAuto(DateTimeOffset now, string why)
+    private void ForceAuto(DateTimeOffset now, string why, bool atStart = false)
     {
         ResetSmoothing();
         try
         {
-            hardware.ResetToAuto();
+            if (atStart) hardware.ResetToAutoAtStart();
+            else hardware.ResetToAuto();
             _holdsFans = false;
             _applied = FanDecision.BothAuto;
             _cpuReason = _gpuReason = FanReason.Auto;
