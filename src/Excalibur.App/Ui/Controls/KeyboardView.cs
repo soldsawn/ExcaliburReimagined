@@ -65,19 +65,27 @@ internal sealed class KeyboardView : FrameworkElement
         else _animation.Stop();
     }
 
+    // Height / width of the deck. The height is capped, so on a wide window the deck keeps this shape and sits in the middle
+    // instead of stretching the keys sideways (full screen, 2026-10-26).
+    private const double Aspect = 0.27;
+
     protected override Size MeasureOverride(Size available)
     {
         double w = double.IsInfinity(available.Width) ? 640 : available.Width;
-        return new Size(w, Math.Clamp(w * 0.27, 150, 230));
+        return new Size(w, Math.Clamp(w * Aspect, 150, 230));
     }
 
-    private double Unit => (ActualWidth - 2 * Pad) / TotalUnits;
+    /// <summary>The deck's width and left edge inside the control.</summary>
+    private double DeckWidth => Math.Min(ActualWidth, ActualHeight / Aspect);
+    private double DeckLeft => (ActualWidth - DeckWidth) / 2;
+
+    private double Unit => (DeckWidth - 2 * Pad) / TotalUnits;
 
     private static int ZoneAt(double units) => units < TotalUnits / 3 ? 0 : units < 2 * TotalUnits / 3 ? 1 : 2;
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
-        double u = (e.GetPosition(this).X - Pad) / Unit;
+        double u = (e.GetPosition(this).X - DeckLeft - Pad) / Unit;
         if (u >= 0 && u <= TotalUnits) ZoneClicked?.Invoke(ZoneAt(u));
     }
 
@@ -100,12 +108,14 @@ internal sealed class KeyboardView : FrameworkElement
         double unit = Unit;
         if (unit <= 0) return;
         var (colours, level) = Frame();
-        var bounds = new Rect(0, 0, ActualWidth, ActualHeight);
-        dc.DrawRoundedRectangle(Deck, new Pen((Brush)FindResource("Border"), 1), new Rect(0.5, 0.5, ActualWidth - 1, ActualHeight - 1), 14, 14);
+        double width = DeckWidth;
+        dc.PushTransform(new TranslateTransform(DeckLeft, 0));
+        var bounds = new Rect(0, 0, width, ActualHeight);
+        dc.DrawRoundedRectangle(Deck, new Pen((Brush)FindResource("Border"), 1), new Rect(0.5, 0.5, width - 1, ActualHeight - 1), 14, 14);
         dc.PushClip(new RectangleGeometry(bounds, 14, 14));
 
         // The glow under the keys: one soft ellipse per zone, wide enough to bleed into its neighbours.
-        double third = (ActualWidth - 2 * Pad) / 3;
+        double third = (width - 2 * Pad) / 3;
         if (level > 0)
             for (int z = 0; z < 3; z++)
             {
@@ -140,6 +150,7 @@ internal sealed class KeyboardView : FrameworkElement
             var accent = new Pen((Brush)FindResource("Accent"), 2);
             dc.DrawRoundedRectangle(null, accent, new Rect(Pad + _selected * third - 4, Pad - 6, third + 8, ActualHeight - 2 * Pad + 12), 8, 8);
         }
+        dc.Pop();
     }
 
     private static T Frozen<T>(T f) where T : Freezable { f.Freeze(); return f; }
