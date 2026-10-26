@@ -84,6 +84,12 @@ internal static class Texts
             return $"Profil kaydedildi: {m.Groups[1].Value}";
         if ((m = Regex.Match(message, @"^custom profile deleted: (.+)$")).Success)
             return $"Profil silindi: {m.Groups[1].Value}";
+        if (message == "fans written through WMI 0x0205")
+            return "Fanlar BIOS üzerinden yönetiliyor";
+        if (message.StartsWith("EC trial: the fans do not follow WMI", StringComparison.Ordinal))
+            return "Deneme: fanlar BIOS üzerinden ayarlanamadı, doğrudan deneniyor";
+        if (message.StartsWith("EC trial: both fans follow WMI", StringComparison.Ordinal))
+            return "Deneme başarılı: fanlar BIOS üzerinden yönetilecek";
         if (message == "safety: released")
             return "Sıcaklık normale döndü";
         if (message.StartsWith("safety:", StringComparison.Ordinal))

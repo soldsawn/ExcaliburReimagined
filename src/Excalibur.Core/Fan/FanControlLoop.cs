@@ -30,7 +30,8 @@ public sealed record FanStatus(
     int? CpuCurvePercent = null,
     int? GpuCurvePercent = null,
     EcTrialStatus? Trial = null,
-    bool EcSeenElsewhere = false);
+    bool EcSeenElsewhere = false,
+    FanWritePath WritePath = FanWritePath.Ec);
 
 public sealed record FanLoopOptions
 {
@@ -47,6 +48,8 @@ public sealed record FanLoopOptions
     /// trial. P009C0 has only been seen on G870s, the same laptop and fans.
     /// </summary>
     public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009C0" };
+    /// <summary>Trusted EC versions whose fans are written through the BIOS (WMI SET 0x0205): their trial passed that way.</summary>
+    public IReadOnlySet<string> WmiEcVersions { get; init; } = new HashSet<string>();
     public int MaxReadFailures { get; init; } = 3;
     public int MaxWriteFailures { get; init; } = 2;
     /// <summary>Smaller changes than this are not written (the EC ramps anyway).</summary>
@@ -74,6 +77,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private readonly FanLoopOptions _options = options ?? new FanLoopOptions();
     // The verified versions plus any the user's trial passed while running.
     private readonly HashSet<string> _known = new((options ?? new FanLoopOptions()).KnownEcVersions, StringComparer.Ordinal);
+    private readonly HashSet<string> _wmi = new((options ?? new FanLoopOptions()).WmiEcVersions, StringComparer.Ordinal);
     private EcTrial? _trial;
     private readonly FanController _controller = new();
     private readonly TemperatureFilter _filter = new();
@@ -107,10 +111,16 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     public const int MaxEvents = 50;
 
     /// <summary>
-    /// An EC version passed the user's trial; the host saves it so the next start trusts it too, with the profile the loop
-    /// now runs. Raised under the loop's lock.
+    /// The lowest percent written through WMI (the EC path keeps <see cref="SafetyPolicy.AbsoluteFloor"/>): Casper's G870 app
+    /// sends 35-100 there; whether a BIOS takes less is unknown (user's choice, 2026-10-26).
     /// </summary>
-    public event Action<string, FanProfile>? EcTrusted;
+    public const int WmiFloor = 30;
+
+    /// <summary>
+    /// An EC version passed the user's trial; the host saves it so the next start trusts it too, with the profile the loop
+    /// now runs and the way the fans are written. Raised under the loop's lock.
+    /// </summary>
+    public event Action<string, FanProfile, FanWritePath>? EcTrusted;
 
     /// <summary>How many events were ever logged; with <see cref="Events"/> a host can tell which are new.</summary>
     public long TotalEvents
@@ -133,7 +143,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     {
         var status = new FanStatus(_mode, _profile.Name, _manualUntil, _snapshot, _applied, _ecVersion, _readFailures, _holdsFans,
             _profileChangedBy, _profileChangedAt, _cpuReason, _gpuReason, _cpuCurve, _gpuCurve, _trial?.Status,
-            _mode == FanLoopMode.MonitorOnly && _ecVersion is not null && _options.SeenElsewhereEcVersions.Contains(_ecVersion));
+            _mode == FanLoopMode.MonitorOnly && _ecVersion is not null && _options.SeenElsewhereEcVersions.Contains(_ecVersion),
+            hardware.WritePath);
         _published = status;
         return status;
     }
@@ -150,12 +161,14 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             _profile = profile;
             _ecVersion = hardware.ReadEcVersion();
             bool known = _ecVersion is not null && _known.Contains(_ecVersion);
+            hardware.WritePath = known && _wmi.Contains(_ecVersion!) ? FanWritePath.Wmi : FanWritePath.Ec;
             // An unverified EC keeps the look before writing (0xFF is written only when not already there).
             ForceAuto(now, "start", atStart: known);
             _mode = known ? FanLoopMode.Running : FanLoopMode.MonitorOnly;
             Log(now, _mode == FanLoopMode.Running
                 ? $"started, EC {_ecVersion}, profile {_profile.Name}"
                 : $"EC firmware '{_ecVersion ?? "unreadable"}' is not verified; monitor only, fans stay on the EC");
+            if (hardware.WritePath == FanWritePath.Wmi) Log(now, "fans written through WMI 0x0205");
             Publish();
         }
     }
@@ -281,6 +294,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             bool hot = _hot.Update(s, now);
             var desired = _controller.Decide(filtered, _profile, now);
             var decision = SafetyPolicy.Apply(_floors.Apply(filtered, now), desired, hot, out string? reason, out var cpuRaised, out var gpuRaised);
+            if (hardware.WritePath == FanWritePath.Wmi)
+                decision = new FanDecision(AtLeast(decision.Cpu, WmiFloor), AtLeast(decision.Gpu, WmiFloor));
             _cpuReason = decision.Cpu.IsAuto ? FanReason.Auto : cpuRaised ?? _controller.ReasonOf(FanId.Cpu);
             _gpuReason = decision.Gpu.IsAuto ? FanReason.Auto : gpuRaised ?? _controller.ReasonOf(FanId.Gpu);
             // What each curve alone asks for, at the temperature the curve sees.
@@ -335,6 +350,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         var after = _trial.Advance(s, now);
         _holdsFans = _trial.HoldsFan;
         if (after == before) return;
+        if (after.WmiFollows == false && before.WmiFollows is null) Log(now, "EC trial: the fans do not follow WMI 0x0205; trying the EC");
         if (after.CpuFollows == true && before.CpuFollows != true) Log(now, "EC trial: the CPU fan follows 0x2C");
         if (after.State == EcTrialState.Failed)
             Log(now, $"EC trial of {after.EcVersion} failed ({after.Problem}); fans handed to the EC");
@@ -349,14 +365,19 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                 _manualUntil = null;
                 Changed(now, Ipc.FanSource.Service);
             }
-            Log(now, $"EC trial: the GPU fan follows 0x2D; {after.EcVersion} trusted, profile {_profile.Name} starts");
+            Log(now, after.Path == FanWritePath.Wmi
+                ? $"EC trial: both fans follow WMI 0x0205; {after.EcVersion} trusted (fans through WMI), profile {_profile.Name} starts"
+                : $"EC trial: the GPU fan follows 0x2D; {after.EcVersion} trusted, profile {_profile.Name} starts");
             _known.Add(after.EcVersion);
+            if (after.Path == FanWritePath.Wmi) _wmi.Add(after.EcVersion);
             _mode = FanLoopMode.Running;
             ResetSmoothing();
             _userChanged = true;
-            EcTrusted?.Invoke(after.EcVersion, _profile);
+            EcTrusted?.Invoke(after.EcVersion, _profile, after.Path);
         }
     }
+
+    private static FanTarget AtLeast(FanTarget t, int percent) => t.IsAuto || t.Percent >= percent ? t : FanTarget.FromPercent(percent);
 
     private bool NeedsWrite(FanId fan, FanTarget current, FanTarget want, bool urgent, DateTimeOffset now)
     {

@@ -126,8 +126,9 @@ public sealed class FanWorker(
     {
         try
         {
-            FanHeartbeat.Write(runtime.HeartbeatPath,
-                new HeartbeatRecord(++_sequence, DateTimeOffset.Now, loop.Status.HoldsFans, Environment.ProcessId, sensors));
+            var status = loop.Status;
+            FanHeartbeat.Write(runtime.HeartbeatPath, new HeartbeatRecord(++_sequence, DateTimeOffset.Now, status.HoldsFans,
+                Environment.ProcessId, sensors, status.WritePath == FanWritePath.Wmi));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

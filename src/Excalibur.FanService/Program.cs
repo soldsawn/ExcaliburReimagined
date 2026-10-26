@@ -45,6 +45,8 @@ FakeFanHardware? fake = simulate ? new FakeFanHardware() : null;
 // --ec <version> pretends another EC firmware in the simulation (to try the unknown-EC trial).
 if (fake is not null && Array.FindIndex(args, a => a.Equals("--ec", StringComparison.OrdinalIgnoreCase)) is int ecArg and >= 0 && ecArg + 1 < args.Length)
     fake.EcVersion = args[ecArg + 1];
+// --wmi-fans: the simulated BIOS acts on WMI SET 0x0205, so that trial passes through WMI.
+if (fake is not null) fake.WmiWorks = args.Contains("--wmi-fans", StringComparer.OrdinalIgnoreCase);
 EmbeddedController? ec = null;
 PawnIoCpuPowerRegisters? cpuRegisters = null;
 Timer? cpuSampler = null;
@@ -98,11 +100,14 @@ var settingsStore = new ServiceSettingsStore(runtime.SettingsPath);
 var loop = new FanControlLoop(hardware, new FanLoopOptions
 {
     KnownEcVersions = new HashSet<string>(new FanLoopOptions().KnownEcVersions.Concat(settingsStore.Current.TrustedEcVersions)),
+    WmiEcVersions = new HashSet<string>(settingsStore.Current.WmiFanEcVersions),
 });
-// A version that passed the user's trial stays trusted after a restart, with the profile the trial left running.
-loop.EcTrusted += (v, profile) => settingsStore.Update(s => s with
+// A version that passed the user's trial stays trusted after a restart, with the profile the trial left running and the way
+// its fans are written.
+loop.EcTrusted += (v, profile, path) => settingsStore.Update(s => s with
 {
     TrustedEcVersions = s.TrustedEcVersions.Contains(v) ? s.TrustedEcVersions : [.. s.TrustedEcVersions, v],
+    WmiFanEcVersions = [.. s.WmiFanEcVersions.Where(w => w != v), .. path == FanWritePath.Wmi ? new[] { v } : []],
     Profile = profile.Name,
 }, out _);
 builder.Services.AddSingleton(loop);

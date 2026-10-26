@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using Excalibur.Core.Fan;
 using Excalibur.Core.Settings;
 
 namespace Excalibur.App.Ui.Pages;
@@ -47,6 +48,7 @@ internal static class InfoPage
                 Text($"İşlemci: {HardwareNames.Cpu ?? "?"}   ·   Ekran kartı: {HardwareNames.Gpu ?? "?"}" +
                      (HardwareNames.Bios is { } bios ? $"   ·   BIOS: {bios}" : "") +
                      (fanFirmware is null ? "" : $"   ·   Fan denetleyici yazılımı: {fanFirmware}"), "Caption", top: 6),
+                Text(connection.Status is { Mode: FanLoopMode.Running } status ? FanPage.WritePathLine(status.WritePath) : "", "Caption", top: 6),
                 UpdateCheck()));
     }
 

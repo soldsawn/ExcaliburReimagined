@@ -73,6 +73,9 @@ public sealed record ServiceSettings
     /// </summary>
     public IReadOnlyList<string> TrustedEcVersions { get; init; } = [];
 
+    /// <summary>The trusted versions whose trial passed through the BIOS (WMI SET 0x0205): their fans are written that way.</summary>
+    public IReadOnlyList<string> WmiFanEcVersions { get; init; } = [];
+
     /// <summary>The keyboard light (A5); null = never chosen, the service leaves the light alone.</summary>
     public KeyboardLighting? Lighting { get; init; }
 
@@ -91,6 +94,7 @@ public sealed record ServiceSettings
         && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit && Lighting == other.Lighting
         && BatteryReadMinutes == other.BatteryReadMinutes
         && CustomProfiles.SequenceEqual(other.CustomProfiles) && TrustedEcVersions.SequenceEqual(other.TrustedEcVersions)
+        && WmiFanEcVersions.SequenceEqual(other.WmiFanEcVersions)
         && (Slots is null ? other.Slots is null : other.Slots is not null && Slots.SequenceEqual(other.Slots));
 
     public override int GetHashCode() => HashCode.Combine(Version, Profile, History, PowerMode, CustomProfiles.Count, Slots?.Count);
@@ -130,7 +134,7 @@ public sealed record ServiceSettings
         // Gaming and High performance are never used on battery (the stock software does the same).
         if (PowerAutomation.OnBattery.Mode is { } bm && bm != Power.PowerMode.Office) errors.Add("only Office can be used on battery");
         if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
-        foreach (var v in TrustedEcVersions.Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
+        foreach (var v in TrustedEcVersions.Concat(WmiFanEcVersions).Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
         if (Lighting is { } lighting) errors.AddRange(lighting.Validate());
         if (!BatteryRecorder.IntervalChoices.Contains(BatteryReadMinutes)) errors.Add($"battery read interval {BatteryReadMinutes} min is not offered");
         return errors;
@@ -169,7 +173,8 @@ public sealed record ServiceSettings
         PowerMode? powerMode = ReadMode(node, "powerMode", problems);
         var automation = ReadAutomation(node, known, problems);
         var cpuLimit = ReadCpuLimit(node, problems);
-        var trusted = ReadTrustedEcVersions(node, problems);
+        var trusted = ReadEcVersions(node, "trustedEcVersions", problems);
+        var wmiFans = ReadEcVersions(node, "wmiFanEcVersions", problems);
         var lighting = ReadLighting(node, problems);
         int batteryMinutes = Get(node, "batteryReadMinutes", d.BatteryReadMinutes, problems);
         if (!BatteryRecorder.IntervalChoices.Contains(batteryMinutes))
@@ -184,20 +189,20 @@ public sealed record ServiceSettings
         return (new ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
-            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted, Lighting = lighting,
+            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted, WmiFanEcVersions = wmiFans, Lighting = lighting,
             BatteryReadMinutes = batteryMinutes,
         }, problems);
     }
 
-    private static IReadOnlyList<string> ReadTrustedEcVersions(JsonObject node, List<string> problems)
+    private static IReadOnlyList<string> ReadEcVersions(JsonObject node, string name, List<string> problems)
     {
-        var array = node.FirstOrDefault(kv => string.Equals(kv.Key, "trustedEcVersions", StringComparison.OrdinalIgnoreCase)).Value as JsonArray;
+        var array = node.FirstOrDefault(kv => string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase)).Value as JsonArray;
         if (array is null) return [];
         var versions = new List<string>();
         foreach (var item in array)
         {
             string? v = item is JsonValue value && value.TryGetValue(out string? text) ? text : null;
-            if (!IsEcVersion(v)) { problems.Add($"trusted EC version '{v}' is not an EC version; dropped"); continue; }
+            if (!IsEcVersion(v)) { problems.Add($"{name}: '{v}' is not an EC version; dropped"); continue; }
             if (!versions.Contains(v!)) versions.Add(v!);
         }
         return versions;

@@ -48,6 +48,15 @@ public sealed class EcFanHardware : IFanHardware
     private bool _reused;
     private GpuTempSource _gpuSource = GpuTempSource.Ec;
 
+    /// <summary>
+    /// <see cref="FanWritePath.Wmi"/>: targets go to the BIOS as SET 0x0205 (A2 CPU, A3 GPU, A4 the third fan, always 0xFF),
+    /// one call carrying both fans, never read back; the EC's fan registers are then neither read nor written.
+    /// </summary>
+    public FanWritePath WritePath { get; set; }
+
+    /// <summary>The firmware function that sets the fans on BIOSes that fill it in (Casper's G870 app uses it).</summary>
+    public const ushort WmiFanFunction = 0x0205;
+
     /// <summary>Where the RPM checks of written targets report a fan that does not follow (the service's log).</summary>
     public Action<string>? Log { get; set; }
 
@@ -103,6 +112,12 @@ public sealed class EcFanHardware : IFanHardware
         var (cpuC, gpuC, cpuRpm, gpuRpm) = ReadWmiSensors();
 
         // Read once, and only what the hand-back at start did not tell us; Cooling Boost comes as an event.
+        // Through WMI nothing is read: the fans are ours only after a write.
+        if (_ec is null && WritePath == FanWritePath.Wmi)
+        {
+            _ec = new EcBlock(_knownCpu ?? FanTarget.Auto, _knownGpu ?? FanTarget.Auto);
+            _knownCpu = _knownGpu = null;
+        }
         if (_ec is null)
         {
             try
@@ -135,6 +150,17 @@ public sealed class EcFanHardware : IFanHardware
         var now = _clock.Elapsed;
         var follow = _follow.Check(fan, percent, _boost, now, out var target);
         if (follow == FanFollow.None) return;
+        if (WritePath == FanWritePath.Wmi)
+        {
+            // No register to look at: write it once more, then only say so.
+            try
+            {
+                if (follow == FanFollow.Rewrite && _ec is not null) WriteWmi(_ec.CpuTarget, _ec.GpuTarget);
+                else Log?.Invoke($"wmi: {fan} fan runs at {percent}% and does not follow its target {target}");
+            }
+            catch (FanWriteException) { }
+            return;
+        }
         byte reg = FanRegisters.TargetOf(fan);
         try
         {
@@ -235,6 +261,17 @@ public sealed class EcFanHardware : IFanHardware
         if (!FanRegisters.IsWritable(reg, target.Value))
             throw new InvalidOperationException($"Refusing to write 0x{target.Value:X2} to 0x{reg:X2}.");
 
+        if (WritePath == FanWritePath.Wmi)
+        {
+            var known = _ec ?? new EcBlock(_knownCpu ?? FanTarget.Auto, _knownGpu ?? FanTarget.Auto);
+            var next = fan == FanId.Cpu ? known with { CpuTarget = target } : known with { GpuTarget = target };
+            WriteWmi(next.CpuTarget, next.GpuTarget);
+            _follow.Wrote(fan, target, _lastPercent[(int)fan], _clock.Elapsed);
+            if (_ec is not null) _ec = next;
+            else Learnt(fan, target);
+            return;
+        }
+
         // At start (nothing known yet) the fans are usually on EC automatic already: look before writing.
         if (target.IsAuto && _ec is null)
         {
@@ -283,6 +320,11 @@ public sealed class EcFanHardware : IFanHardware
     /// </summary>
     public void ResetToAutoAtStart()
     {
+        if (WritePath == FanWritePath.Wmi)
+        {
+            this.ResetToAuto();
+            return;
+        }
         Exception? first = null;
         foreach (var fan in new[] { FanId.Cpu, FanId.Gpu })
         {
@@ -298,6 +340,16 @@ public sealed class EcFanHardware : IFanHardware
             catch (TimeoutException ex) { first ??= ex; }
         }
         if (first is not null) throw new FanWriteException("Could not hand the fans back to the EC.", first);
+    }
+
+    /// <summary>One SET 0x0205 with both fans' targets; a fan below <see cref="FanControlLoop.WmiFloor"/> gets the floor.</summary>
+    private void WriteWmi(FanTarget cpu, FanTarget gpu)
+    {
+        static uint Value(FanTarget t) => t.IsAuto ? FanTarget.AutoValue : (uint)Math.Max(t.Percent, FanControlLoop.WmiFloor);
+        var command = SmiCommand.Set(WmiFanFunction);
+        (command.A2, command.A3, command.A4) = (Value(cpu), Value(gpu), FanTarget.AutoValue);
+        try { wmi.Execute(command); }
+        catch (Exception ex) { throw new FanWriteException($"WMI fan write (CPU {cpu}, GPU {gpu}) failed.", ex); }
     }
 
     private void Learnt(FanId fan, FanTarget target)

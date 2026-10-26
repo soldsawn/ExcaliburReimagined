@@ -82,6 +82,18 @@ public class FanHeartbeatTests
     }
 
     [Fact]
+    public void The_wmi_flag_round_trips_beside_holding()
+    {
+        foreach (var (holds, wmi) in new[] { (true, true), (false, true), (true, false) })
+        {
+            var beat = new HeartbeatRecord(7, At, holds, 1234, WmiFans: wmi);
+            FanHeartbeat.Write(_path, beat);
+            Assert.Equal(beat, FanHeartbeat.Read(_path));
+        }
+        File.Delete(_path);
+    }
+
+    [Fact]
     public void A_beat_without_sensors_reads_without_them()
     {
         FanHeartbeat.Write(_path, new HeartbeatRecord(8, At, false, 1234));

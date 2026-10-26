@@ -81,6 +81,8 @@ public partial class FanPage : UserControl
         bool on = _connection.Connected && s is not null;
         ApplyManual.IsEnabled = on;
         FaultBanner.Visibility = on && s!.Mode == FanLoopMode.Faulted ? Visibility.Visible : Visibility.Collapsed;
+        WritePathText.Visibility = on && s!.Mode == FanLoopMode.Running ? Visibility.Visible : Visibility.Collapsed;
+        if (on) WritePathText.Text = WritePathLine(s!.WritePath);
         if (!on)
         {
             Chart.Show(null, null);
@@ -106,5 +108,10 @@ public partial class FanPage : UserControl
                 .Select(e => new { Time = e.At.ToString("HH:mm:ss"), Message = Texts.Event(e.Message) }).ToList();
         }
     }
+
+    /// <summary>How the fans are written here (the trial chose it on a model other than the G870).</summary>
+    public static string WritePathLine(FanWritePath path) => path == FanWritePath.Wmi
+        ? $"Fan kontrolü: BIOS üzerinden. Bu dizüstünde fanlar en az %{FanControlLoop.WmiFloor} döner."
+        : "Fan kontrolü: doğrudan fan denetleyicisine yazılıyor.";
 
 }

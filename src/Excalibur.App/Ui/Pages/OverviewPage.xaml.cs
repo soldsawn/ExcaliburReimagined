@@ -96,9 +96,11 @@ public partial class OverviewPage : UserControl
         (TrialTitle.Text, TrialText.Text) = t?.State switch
         {
             EcTrialState.Running => ("Fan kontrolü deneniyor",
-                $"{(t.Fan == FanId.Gpu ? "Ekran kartı" : "İşlemci")} fanı birkaç saniye farklı hızda dönecek. Deneme bitince fanlar orijinal ayara döner."),
+                $"{t.Fan switch { FanId.Gpu => "Ekran kartı fanı", FanId.Cpu => "İşlemci fanı", _ => "İki fan" }} birkaç saniye farklı hızda dönecek. " +
+                "Deneme bitince fanlar orijinal ayara döner."),
             EcTrialState.Passed => ("Deneme başarılı",
-                "İki fan da uygulamanın komutlarına uydu; fan kontrolü bu dizüstünde açıldı. " +
+                "İki fan da uygulamanın komutlarına uydu; fan kontrolü bu dizüstünde açıldı" +
+                (t.Path == FanWritePath.Wmi ? " (BIOS üzerinden). " : ". ") +
                 (s.Profile == FanProfile.EcAuto.Name
                     ? "Hazır profiller başka bir modele göre ayarlandığı için fanlar şimdilik orijinal ayarda kalıyor; Soğutma sayfasından bir profil " +
                       "seçebilir ya da kendi eğrinizi kurabilirsiniz. "
@@ -123,8 +125,8 @@ public partial class OverviewPage : UserControl
         // A version that already passed elsewhere: the card says what happens and its button is the consent.
         var answer = _connection.Status?.EcSeenElsewhere == true ? MessageBoxResult.Yes : MessageBox.Show(
             $"Bu fan yazılımı sürümü ({firmware}) henüz denenmedi.\n\n" +
-            "Deneme yaklaşık yarım dakika sürer: önce işlemci, sonra ekran kartı fanı birkaç saniye farklı hızda döner ve hızın gerçekten " +
-            "değişip değişmediğine bakılır. Her fan denendikten sonra orijinal ayara döner. Dizüstü 75 °C'nin altındayken başlar, " +
+            "Deneme en çok bir dakika sürer: fanlar önce birlikte BIOS üzerinden, olmazsa tek tek doğrudan birkaç saniye farklı hızda döner " +
+            "ve hızın gerçekten değişip değişmediğine bakılır. Her denemeden sonra fanlar orijinal ayara döner. Dizüstü 75 °C'nin altındayken başlar, " +
             "80 °C'yi geçerse durur.\n\nDenemeyi başlatmak istiyor musunuz?",
             "Fan kontrolünü dene", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
@@ -158,7 +160,8 @@ public partial class OverviewPage : UserControl
         };
         return $"Excalibur Reimagined {app} · Model: {HardwareNames.Model ?? "?"} · BIOS: {HardwareNames.Bios ?? "?"} · " +
                $"Fan yazılımı (EC): {s?.EcVersion ?? "?"} · Deneme: {result}" +
-               (t is null ? "" : $" · işlemci fanı {Fan(t.CpuFollows)}, ekran kartı fanı {Fan(t.GpuFollows)}");
+               (t is null ? "" : $" · WMI 0x0205: {Fan(t.WmiFollows)}, işlemci fanı {Fan(t.CpuFollows)}, ekran kartı fanı {Fan(t.GpuFollows)}") +
+               (t is { State: EcTrialState.Passed } ? $" · yol: {(t.Path == FanWritePath.Wmi ? "WMI" : "EC")}" : "");
     }
 
     // The power mode next to the fan profile, so both are one click away (the Performans page has the same choice, with more room).

@@ -33,9 +33,10 @@ public static class FanPipe
     ///     settings BatteryReadMinutes; Battery Estimates (average per power mode and fan profile, most used first) and IdleEstimates (idle intervals per fan profile).
     /// 11: + setAppOverride(appOverride) (a running program's rule: fan profile, power mode, CPU limit, held in memory over the saved
     ///     choices; none = the program closed), status AppProgram; profile changes it makes have Source "app".
+    /// 12: + status WritePath (Ec / Wmi: how the fans are written), Trial WmiFollows / Path, settings WmiFanEcVersions.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 11;
+    public const int ProtocolVersion = 12;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -171,7 +172,8 @@ public sealed record FanStatusDto(
     int? LightBrightness = null,
     bool EcSeenElsewhere = false,
     BatteryStatusDto? Battery = null,
-    string? AppProgram = null)
+    string? AppProgram = null,
+    FanWritePath WritePath = FanWritePath.Ec)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {
@@ -184,7 +186,8 @@ public sealed record FanStatusDto(
             snap?.CoolingBoost ?? false,
             s.EcVersion, s.ConsecutiveReadFailures, s.HoldsFans, simulated, startedAt,
             FanPipe.ProtocolVersion, s.ProfileChangedBy, s.ProfileChangedAt,
-            s.CpuReason, s.GpuReason, s.CpuCurvePercent, s.GpuCurvePercent, Trial: s.Trial, EcSeenElsewhere: s.EcSeenElsewhere);
+            s.CpuReason, s.GpuReason, s.CpuCurvePercent, s.GpuCurvePercent, Trial: s.Trial, EcSeenElsewhere: s.EcSeenElsewhere,
+            WritePath: s.WritePath);
     }
 
     private static int? ToPercent(FanTarget? t) => t is { IsAuto: false } v ? v.Percent : null;

@@ -69,9 +69,10 @@ public sealed class SettingsTests : IDisposable
     [Fact]
     public void Trusted_ec_versions_round_trip_and_bad_ones_are_dropped()
     {
-        var (s, problems) = ServiceSettings.Parse("""{"trustedEcVersions":["P009C0","bad",42,"P009C0"]}""");
+        var (s, problems) = ServiceSettings.Parse("""{"trustedEcVersions":["P009C0","bad",42,"P009C0"],"wmiFanEcVersions":["P009C0","x"]}""");
         Assert.Equal(["P009C0"], s.TrustedEcVersions);
-        Assert.Equal(2, problems.Count);
+        Assert.Equal(["P009C0"], s.WmiFanEcVersions);
+        Assert.Equal(3, problems.Count);
         var (back, again) = ServiceSettings.Parse(s.ToJson());
         Assert.Equal(s, back);
         Assert.Empty(again);

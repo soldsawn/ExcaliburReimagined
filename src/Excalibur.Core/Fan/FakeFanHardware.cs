@@ -27,6 +27,14 @@ public sealed class FakeFanHardware : IFanHardware
 
     public List<(FanId Fan, FanTarget Target)> Writes { get; } = [];
 
+    public FanWritePath WritePath { get; set; }
+
+    /// <summary>Whether the BIOS acts on WMI SET 0x0205; when not (the G870's BIOS), a WMI write changes nothing.</summary>
+    public bool WmiWorks { get; set; }
+
+    /// <summary>The writes sent through WMI (<see cref="Writes"/> has the EC's).</summary>
+    public List<(FanId Fan, FanTarget Target)> WmiWrites { get; } = [];
+
     /// <summary>A fan that ignores its target register (an EC firmware with another layout): it stays on the stock curve.</summary>
     public FanId? DeafFan { get; set; }
 
@@ -65,8 +73,13 @@ public sealed class FakeFanHardware : IFanHardware
             BusyNextWrites--;
             throw new FanBusyException("simulated busy EC");
         }
+        if (WritePath == FanWritePath.Wmi)
+        {
+            WmiWrites.Add((fan, target));
+            if (!WmiWorks) return;
+        }
+        else Writes.Add((fan, target));
         if (fan == FanId.Cpu) CpuTarget = target; else GpuTarget = target;
-        Writes.Add((fan, target));
     }
 
     public string? ReadEcVersion() => EcVersion;

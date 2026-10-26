@@ -1,5 +1,8 @@
 namespace Excalibur.Core.Fan;
 
+/// <summary>How fan targets reach the EC: written to its registers, or handed to the BIOS (WMI SET 0x0205).</summary>
+public enum FanWritePath { Ec, Wmi }
+
 /// <summary>What the fan loop needs from the machine. Real: <see cref="EcFanHardware"/>.</summary>
 public interface IFanHardware
 {
@@ -8,6 +11,12 @@ public interface IFanHardware
 
     /// <summary>Writes one fan target (the real hardware checks it by the RPM afterwards); throws <see cref="FanWriteException"/>.</summary>
     void SetTarget(FanId fan, FanTarget target);
+
+    /// <summary>
+    /// Where <see cref="SetTarget"/> writes. Wmi only where a trial saw the fans follow it (a BIOS whose 0x0205 handler is
+    /// filled in; the G870's CQ141/CQ171/CQ212 leave it empty).
+    /// </summary>
+    FanWritePath WritePath { get; set; }
 
     /// <summary>The EC firmware version string (e.g. "P008B0"), or null when unreadable.</summary>
     string? ReadEcVersion();

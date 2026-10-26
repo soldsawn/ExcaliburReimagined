@@ -53,6 +53,7 @@
                 <c:CurveChart x:Name="Chart" Height="300" />
                 <TextBlock Text="İpucu: grafiğin üzerinde gezinin; renkli noktaların üzerine gelince fanın neden o hızda döndüğünü görürsünüz."
                            Style="{StaticResource Caption}" Margin="0,8,0,0" />
+                <TextBlock x:Name="WritePathText" Style="{StaticResource Caption}" Margin="0,4,0,0" Visibility="Collapsed" />
             </StackPanel>
         </c:BracketCard>
 

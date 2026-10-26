@@ -366,5 +366,6 @@ public class FanControlLoopTests
 
         public void SetTarget(FanId fan, FanTarget target) => inner.SetTarget(fan, target);
         public string? ReadEcVersion() => inner.ReadEcVersion();
+        public FanWritePath WritePath { get => inner.WritePath; set => inner.WritePath = value; }
     }
 }

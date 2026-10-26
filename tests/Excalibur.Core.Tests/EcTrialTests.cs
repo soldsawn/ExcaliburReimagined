@@ -10,13 +10,14 @@ public class EcTrialTests
     private readonly FanControlLoop _loop;
     private readonly List<string> _trusted = [];
     private FanProfile? _trustedProfile;
+    private FanWritePath? _trustedPath;
 
     public EcTrialTests() : this(new FanLoopOptions()) { }
 
     private EcTrialTests(FanLoopOptions options)
     {
         _loop = new FanControlLoop(_hw, options);
-        _loop.EcTrusted += (v, profile) => { _trusted.Add(v); _trustedProfile = profile; };
+        _loop.EcTrusted += (v, profile, path) => { _trusted.Add(v); _trustedProfile = profile; _trustedPath = path; };
         _loop.Start(FanProfile.Balanced, T0);
         TickAt(1);
     }
@@ -103,14 +104,98 @@ public class EcTrialTests
     }
 
     [Fact]
-    public void It_waits_15_s_for_a_fan_before_failing()
+    public void It_waits_15_s_for_wmi_and_15_s_for_a_fan_before_failing()
     {
         _hw.DeafFan = FanId.Cpu;
         _loop.StartEcTrial(T0.AddSeconds(2));
-        TickAt(2); // writes the CPU target
-        for (int i = 3; i <= 16; i++) Assert.Equal(EcTrialState.Running, TickAt(i).Trial!.State);
-        Assert.True(TickAt(16).HoldsFans);
-        Assert.Equal(EcTrialState.Failed, TickAt(17).Trial!.State);
+        TickAt(2); // writes both targets through WMI
+        for (int i = 3; i <= 16; i++) Assert.True(TickAt(i).HoldsFans);
+        var s = TickAt(17); // WMI did nothing: handed back, the EC is next
+        Assert.Equal(EcTrialState.Running, s.Trial!.State);
+        Assert.False(s.Trial.WmiFollows);
+        Assert.Equal(FanWritePath.Ec, _hw.WritePath);
+
+        TickAt(18); // writes the CPU target
+        for (int i = 19; i <= 32; i++) Assert.Equal(EcTrialState.Running, TickAt(i).Trial!.State);
+        Assert.True(TickAt(32).HoldsFans);
+        Assert.Equal(EcTrialState.Failed, TickAt(33).Trial!.State);
+    }
+
+    [Fact]
+    public void Fans_that_follow_wmi_pass_without_touching_the_ec_registers()
+    {
+        _hw.WmiWorks = true;
+        int startWrites = _hw.Writes.Count;
+        _loop.StartEcTrial(T0.AddSeconds(2));
+        var s = RunUntilDone(2);
+
+        Assert.Equal(EcTrialState.Passed, s.Trial!.State);
+        Assert.True(s.Trial.WmiFollows);
+        Assert.Null(s.Trial.CpuFollows);
+        Assert.Equal(FanWritePath.Wmi, s.Trial.Path);
+        Assert.Equal(FanWritePath.Wmi, _trustedPath);
+        Assert.Equal(FanWritePath.Wmi, s.WritePath);
+        Assert.Equal(startWrites, _hw.Writes.Count);
+        // Both fans moved together, then both were handed back.
+        Assert.Equal([FanId.Cpu, FanId.Gpu, FanId.Cpu, FanId.Gpu], _hw.WmiWrites.Select(w => w.Fan));
+        Assert.All(_hw.WmiWrites.Take(2), w => Assert.False(w.Target.IsAuto));
+        Assert.All(_hw.WmiWrites.Skip(2), w => Assert.True(w.Target.IsAuto));
+    }
+
+    [Fact]
+    public void Fans_that_ignore_wmi_are_tried_on_the_ec()
+    {
+        _loop.StartEcTrial(T0.AddSeconds(2));
+        var s = RunUntilDone(2);
+
+        Assert.Equal(EcTrialState.Passed, s.Trial!.State);
+        Assert.False(s.Trial.WmiFollows);
+        Assert.True(s.Trial.GpuFollows);
+        Assert.Equal(FanWritePath.Ec, s.Trial.Path);
+        Assert.Equal(FanWritePath.Ec, _trustedPath);
+        Assert.Equal(FanWritePath.Ec, s.WritePath);
+    }
+
+    [Fact]
+    public void A_failed_trial_leaves_the_fans_on_the_ec_path()
+    {
+        _hw.WmiWorks = true;
+        _loop.StartEcTrial(T0.AddSeconds(2));
+        TickAt(2);
+        _hw.CpuTempC = 81;
+        var s = TickAt(3);
+
+        Assert.Equal(EcTrialProblem.TooHot, s.Trial!.Problem);
+        Assert.Null(s.Trial.WmiFollows);
+        Assert.True(_hw.WmiWrites[^1].Target.IsAuto); // handed back the way it was written
+        Assert.Equal(FanWritePath.Ec, _hw.WritePath);
+    }
+
+    [Fact]
+    public void A_wmi_version_is_written_through_wmi_and_never_below_30()
+    {
+        var hw = new FakeFanHardware { EcVersion = "P010A0", WmiWorks = true, CpuTempC = 40, GpuTempC = 38 };
+        var loop = new FanControlLoop(hw, new FanLoopOptions
+        {
+            KnownEcVersions = new HashSet<string> { "P010A0" },
+            WmiEcVersions = new HashSet<string> { "P010A0" },
+        });
+        loop.Start(FanProfile.Quiet, T0);
+        for (int i = 1; i <= 20; i++) loop.Tick(T0.AddSeconds(i));
+
+        Assert.Equal(FanWritePath.Wmi, loop.Status.WritePath);
+        Assert.Empty(hw.Writes);
+        Assert.Contains(hw.WmiWrites, w => !w.Target.IsAuto);
+        Assert.All(hw.WmiWrites.Where(w => !w.Target.IsAuto), w => Assert.True(w.Target.Percent >= FanControlLoop.WmiFloor));
+    }
+
+    [Fact]
+    public void A_version_trusted_on_the_ec_is_written_on_the_ec()
+    {
+        var hw = new FakeFanHardware { EcVersion = "P010A0", WmiWorks = true };
+        var loop = new FanControlLoop(hw, new FanLoopOptions { KnownEcVersions = new HashSet<string> { "P010A0" } });
+        loop.Start(FanProfile.Balanced, T0);
+        Assert.Equal(FanWritePath.Ec, hw.WritePath);
     }
 
     [Fact]
@@ -142,6 +227,7 @@ public class EcTrialTests
     [Fact]
     public void Stopping_the_service_during_the_trial_hands_the_fans_back()
     {
+        _hw.WmiWorks = true;
         _loop.StartEcTrial(T0.AddSeconds(2));
         TickAt(2);
         Assert.False(_hw.CpuTarget.IsAuto);
@@ -149,6 +235,7 @@ public class EcTrialTests
 
         Assert.Equal(EcTrialProblem.Stopped, _loop.Status.Trial!.Problem);
         Assert.True(_hw.CpuTarget.IsAuto);
+        Assert.True(_hw.GpuTarget.IsAuto);
         Assert.False(_loop.Status.HoldsFans);
     }
 
