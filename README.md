@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.3_Erken_Erişim-orange.svg)](#)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.4-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -15,13 +15,13 @@
 </div>
 
 > [!WARNING]
-> **⚠️ Erken Erişim (Early Access)**
+> **⚠️ Dikkat**
 > Bu uygulama, dizüstü bilgisayarınızın gömülü denetleyicisine (EC) doğrudan yazar. Asıl olarak **Casper Excalibur G870 (EC sürümü `P008B0`, BIOS CQ141)** üzerinde geliştirilip test edilmiştir. Farklı bir model veya EC sürümünde fanları önce yalnızca **izler**; fan kontrolü ancak sizin onayınızla yapılan kısa bir denemeden geçerse açılır (bkz. [Diğer modeller](#diğer-modeller)). 
 > *Kullanım tamamen sizin sorumluluğunuzdadır. Bu projenin Casper veya Excalibur markasıyla resmî bir bağı yoktur.*
 
 ## 💡 Neden Excalibur Reimagined?
 
-Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz kaynak tüketir veya fan eğrilerini tam olarak yansıtmaz. **Excalibur Reimagined**, donanım katmanıyla doğrudan iletişim kurarak fanları ve güç modlarını pürüzsüzce yönetir. İnternete bağlanmaz, veri toplamaz, arka planda sessizce işini yapar.
+Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz kaynak tüketir veya fan eğrilerini tam olarak yansıtmaz. **Excalibur Reimagined**, donanım katmanıyla doğrudan iletişim kurarak fanları ve güç modlarını pürüzsüzce yönetir. Kendiliğinden internete bağlanmaz, veri toplamaz, arka planda sessizce işini yapar.
 
 <p align="center">
   <img src="assets/screenshots/panel.png" width="49%" alt="Panel" />
@@ -41,14 +41,16 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 
 - 🌀 **Gelişmiş Fan Kontrolü:** Sessiz, Dengeli ve Performans profilleri. İşlemci (CPU) ve ekran kartı (GPU) fanlarını ayrı ayrı yönetme imkânı.
 - 📈 **Özel Fan Eğrileri:** Kendi profilinizi oluşturun, grafik üzerinde noktaları sürükleyerek istediğiniz sıcaklığa istediğiniz fan hızını atayın.
-- ⚡ **Güç ve Performans Modları:** Ofis (75 W), Oyun (85 W) ve Yüksek Performans (100 W) limitleriyle donanımınızın gücünü belirleyin.
+- ⚡ **Güç ve Performans Modları:** Ofis (75 W), Oyun (85 W) ve Yüksek Performans (100 W) limitleriyle donanımınızın gücünü belirleyin; Panel'de fan profilinin hemen yanında. İsterseniz her mod (ve pil) için Windows güç planı ve Windows güç modu da birlikte değişir (Ayarlar, varsayılan kapalı).
 - 🔥 **İşlemci Güç Sınırı:** İşlemcinin uzun ve kısa süreli güç sınırını güç modunun altına indirerek daha serin ve sessiz çalışma. Performans sayfasında işlemcinin ve ekran kartının anlık çektiği güç de görünür.
 - 🔋 **Pil Sayfası:** Pil sağlığı (tam dolum / ilk günkü kapasite), şarj durumu ve kalan süre; pildeyken son dakikaların ortalama tüketimi; güç modu ve fan profiline göre "tam pille ne kadar gider" tablosu ve fan ayarının pile etkisi. Pil, denetleyiciye yük olmasın diye seyrek okunur (varsayılan 10 dakikada bir, şarjdayken hiç); kayıtlar bilgisayarınızda 30 gün tutulur.
 - ⌨️ **Klavye Işığı:** Üç bölge için renk, parlaklık ve efekt; belirli bir süre boşta kalınca ışığı kapatma. Klavyedeki ışık tuşuyla yapılan değişiklikler de izlenir.
 - 🔌 **Akıllı Otomasyon:** Şarj kablosu takıldığında veya çıkarıldığında belirlediğiniz güç modu, fan profili ve ekran yenileme hızı (Hz) otomatik olarak devreye girer.
+- 🎮 **Program Kuralları:** Seçtiğiniz bir program ya da oyun açıkken kendi fan profili, güç modu ve işlemci sınırı devreye girer; kapanınca önceki ayarlar geri gelir.
 - 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan 7 günlük sıcaklık/fan geçmişi (15 dakikadan 7 güne kadar aralıklar).
+- 🔄 **Güncelleme Denetimi:** Ayarlar'daki düğmeye basınca GitHub'da yeni sürüm olup olmadığına bakar. Kendiliğinden internete bağlanmaz, veri göndermez, kendi kendine indirmez.
 
-> **🛠️ Planlanan Özellikler:** Uygulamaya/oyuna özel otomatik profiller, görünüm kişiselleştirme, klavye kısayolları ve İngilizce dil seçeneği.
+> **🛠️ Planlanan Özellikler:** Görünüm kişiselleştirme, klavye kısayolları ve İngilizce dil seçeneği.
 >
 > **Pil şarj sınırı** (ör. %80'de durdurma) bu dizüstüde desteklenmiyor: BIOS'ta, orijinal uygulamada ve denetleyici yazılımında böyle bir ayar bulunamadı.
 
@@ -134,14 +136,16 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **Early access (`v0.1.3`).** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). Trials have passed on `P003K0` (G770) and `P009C0` (G870), which are offered as a one-click calibration. Use at your own risk.
+> **`v0.1.4`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). Trials have passed on `P003K0` (G770) and `P009C0` (G870), which are offered as a one-click calibration. Use at your own risk.
 
 **Features:**
 - Custom fan curves with separate CPU/GPU targets.
-- Hardware power modes (75W / 85W / 100W GPU limits) and your own CPU power limits.
+- Hardware power modes (75W / 85W / 100W GPU limits) and your own CPU power limits; optionally the Windows power plan and power mode follow each mode (off by default).
 - Battery page: health, charge and time left, average draw on battery, a "full battery lasts" table per power mode and fan profile, and the fan profile's cost while idle. The battery is read sparingly (every 10 minutes by default, never while charging).
 - Keyboard light: three-zone colour, brightness, effects and idle-off.
 - Smart automation based on AC/Battery status (auto-switch profiles and refresh rates).
+- Program rules: a fan profile, power mode and CPU limit while a chosen program or game runs.
+- Update check on demand (Settings): reads the GitHub release list only when you press the button.
 - Zero telemetry, low background resource usage, and local temperature history.
 
 **Safety First:**
