@@ -37,7 +37,7 @@ internal static class InfoPage
                 Text("Tema Windows'un açık/koyu ayarını izliyor, vurgu rengi kırmızı.", "Body"),
                 Text("Yakında: vurgu rengi ve tema seçimi, tepsi simgesindeki rakamların yazı tipi, hızlı panelde görünecek profiller.", "Caption", top: 6)),
             BatteryPage.IntervalCard(connection),
-            WindowsPowerCard(),
+            WindowsPowerCard.Create(),
             Card("Hakkında",
                 Text($"Excalibur Reimagined {version}", "Body"),
                 Text("Casper Excalibur G870 için, Control Center'ın yerine geçen hafif bir uygulama. Kendiliğinden internete bağlanmaz, " +
@@ -48,26 +48,6 @@ internal static class InfoPage
                      (HardwareNames.Bios is { } bios ? $"   ·   BIOS: {bios}" : "") +
                      (fanFirmware is null ? "" : $"   ·   Fan denetleyici yazılımı: {fanFirmware}"), "Caption", top: 6),
                 UpdateCheck()));
-    }
-
-    /// <summary>Windows' own power mode follows the performance mode (off by default); the tray applies it.</summary>
-    private static Border WindowsPowerCard()
-    {
-        var store = new UserSettingsStore();
-        var box = new CheckBox
-        {
-            Content = "Windows güç modunu performans moduna göre değiştir", FontSize = 14, Margin = new Thickness(0, 10, 0, 0),
-            IsChecked = store.Current.WindowsPowerMode,
-        };
-        box.SetResourceReference(Control.ForegroundProperty, "Text");
-        box.Checked += (_, _) => store.Save(store.Current with { WindowsPowerMode = true });
-        box.Unchecked += (_, _) => store.Save(store.Current with { WindowsPowerMode = false });
-        box.Unloaded += (_, _) => store.Dispose();
-        return Card("Windows güç modu",
-            Text("Açıksa Windows'un kendi güç modu da değişir: Ofis modunda en iyi güç verimliliği, Oyun modunda dengeli, " +
-                 "Yüksek performansta en iyi performans. Güç planını kendin ya da başka bir uygulamayla ayarlıyorsan kapalı bırak.", "Caption"),
-            box,
-            Text("Windows bu ayarı yalnızca Dengeli güç planı seçiliyken uygular.", "Caption", top: 6));
     }
 
     /// <summary>Asks GitHub for the newest release, only when the button is pressed.</summary>

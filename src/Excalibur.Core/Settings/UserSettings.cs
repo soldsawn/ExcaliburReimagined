@@ -33,6 +33,44 @@ public sealed record RefreshRateRule
     public bool IsValid => (OnAcHz == 0 || OnAcHz is >= 30 and <= 360) && OnBatteryHz is >= 30 and <= 360;
 }
 
+/// <summary>Windows' own power mode (Settings > Power), which Windows applies only while the Balanced plan is active.</summary>
+public enum WindowsPowerOverlay
+{
+    BestEfficiency,
+    Balanced,
+    BestPerformance,
+}
+
+/// <summary>What Windows switches to with one performance mode; a null part is left alone.</summary>
+public sealed record WindowsPowerRule(Guid? Plan = null, WindowsPowerOverlay? Mode = null)
+{
+    public bool IsValid => Mode is null || Enum.IsDefined(Mode.Value);
+}
+
+/// <summary>
+/// The Windows power plan and power mode that follow the laptop's performance mode (the stock software switches plans too).
+/// Off by default. On battery the mode is always Office, so the battery has its own rule.
+/// </summary>
+public sealed record WindowsPowerRules
+{
+    public bool Enabled { get; init; }
+    public WindowsPowerRule Office { get; init; } = new(Mode: WindowsPowerOverlay.BestEfficiency);
+    public WindowsPowerRule Gaming { get; init; } = new(Mode: WindowsPowerOverlay.Balanced);
+    public WindowsPowerRule HighPerformance { get; init; } = new(Mode: WindowsPowerOverlay.BestPerformance);
+    public WindowsPowerRule Battery { get; init; } = new(Mode: WindowsPowerOverlay.BestEfficiency);
+
+    [JsonIgnore]
+    public bool IsValid => Office is { IsValid: true } && Gaming is { IsValid: true } && HighPerformance is { IsValid: true } && Battery is { IsValid: true };
+
+    /// <summary>The rule in force: the battery's on battery, else the performance mode's.</summary>
+    public WindowsPowerRule RuleFor(Power.PowerMode mode, bool onBattery) => onBattery ? Battery : mode switch
+    {
+        Power.PowerMode.Office => Office,
+        Power.PowerMode.Gaming => Gaming,
+        _ => HighPerformance,
+    };
+}
+
 /// <summary>
 /// Per-user appearance settings of the app (tray and main window), in
 /// %AppData%\ExcaliburReimagined\settings.json. They never reach the service or the EC, so the
@@ -54,8 +92,8 @@ public sealed record UserSettings
     public RefreshRateRule RefreshRate { get; init; } = new();
     /// <summary>What runs while a program is open (A6); the tray watches the programs and applies them.</summary>
     public IReadOnlyList<AppRule> AppRules { get; init; } = [];
-    /// <summary>Windows' own power mode follows the performance mode; off by default (many set the Windows side themselves).</summary>
-    public bool WindowsPowerMode { get; init; }
+    /// <summary>The Windows power plan and power mode for each performance mode; off by default (many set them themselves).</summary>
+    public WindowsPowerRules WindowsPower { get; init; } = new();
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -78,6 +116,7 @@ public sealed record UserSettings
             Accent = IsColor(s.Accent) ? s.Accent : d.Accent,
             RefreshRate = s.RefreshRate is { IsValid: true } ? s.RefreshRate : d.RefreshRate,
             AppRules = CleanRules(s.AppRules),
+            WindowsPower = s.WindowsPower is { IsValid: true } ? s.WindowsPower : d.WindowsPower,
         };
     }
 
@@ -98,7 +137,7 @@ public sealed record UserSettings
     public bool Equals(UserSettings? other) =>
         other is not null && Version == other.Version && TrayFont == other.TrayFont && Osd == other.Osd && Accent == other.Accent
         && Theme == other.Theme && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules)
-        && WindowsPowerMode == other.WindowsPowerMode;
+        && WindowsPower == other.WindowsPower;
 
     public override int GetHashCode() => HashCode.Combine(Version, TrayFont, Osd, Accent, Theme, RefreshRate, AppRules.Count);
 
