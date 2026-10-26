@@ -5,6 +5,7 @@ using Excalibur.App.Tray;
 using Excalibur.App.Ui.Controls;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
+using Excalibur.Core.Power;
 
 namespace Excalibur.App.Ui.Pages;
 
@@ -48,6 +49,7 @@ public partial class OverviewPage : UserControl
 
         foreach (var key in new[] { "mode", "source", "hottest" })
             Stats.Children.Add(StatBox(key));
+        BuildPowerButtons();
         _connection.Changed += Render;
         Render();
     }
@@ -62,6 +64,7 @@ public partial class OverviewPage : UserControl
         Chip(on ? s!.GpuTempC : null, on ? s!.GpuRpm : null, on ? s!.GpuTarget : null, on ? s!.GpuAppliedPercent : null, GpuTemp, GpuFan, GpuDuty, GpuBar);
 
         RenderStats(on ? s : null);
+        RenderPower(on ? s!.Power : null);
 
         FaultBanner.Visibility = on && s!.Mode == FanLoopMode.Faulted ? Visibility.Visible : Visibility.Collapsed;
         RenderTrial(on ? s : null);
@@ -156,6 +159,74 @@ public partial class OverviewPage : UserControl
         return $"Excalibur Reimagined {app} · Model: {HardwareNames.Model ?? "?"} · BIOS: {HardwareNames.Bios ?? "?"} · " +
                $"Fan yazılımı (EC): {s?.EcVersion ?? "?"} · Deneme: {result}" +
                (t is null ? "" : $" · işlemci fanı {Fan(t.CpuFollows)}, ekran kartı fanı {Fan(t.GpuFollows)}");
+    }
+
+    // The power mode next to the fan profile, so both are one click away (the Performans page has the same choice, with more room).
+    // Short names keep both cards on one row at the window's default width; the full name is in the tooltip.
+    private static readonly (PowerMode Mode, string Label, string Full)[] PowerModes =
+    [
+        (PowerMode.Office, "Ofis", "Ofis modu"), (PowerMode.Gaming, "Oyun", "Oyun modu"), (PowerMode.HighPerformance, "Yüksek", "Yüksek performans"),
+    ];
+    private readonly Dictionary<PowerMode, RadioButton> _powerButtons = [];
+    private bool _renderingPower;
+
+    private void BuildPowerButtons()
+    {
+        string group = "overviewpower" + GetHashCode();
+        foreach (var (mode, label, full) in PowerModes)
+        {
+            var b = new RadioButton
+            {
+                GroupName = group, MinWidth = 0, Height = 52,
+                ToolTip = $"{full}: işlemci en çok {PowerModeInfo.CpuWatts(mode)} W, ekran kartı en çok {PowerModeInfo.GpuWatts(mode)} W",
+                Content = new StackPanel
+                {
+                    Children =
+                    {
+                        new TextBlock { Text = label, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
+                        new TextBlock
+                        {
+                            Text = $"{PowerModeInfo.CpuWatts(mode)}/{PowerModeInfo.GpuWatts(mode)} W", Style = (Style)FindResource("Caption"),
+                            HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0),
+                        },
+                    },
+                },
+            };
+            b.SetResourceReference(StyleProperty, "Segment");
+            b.Checked += async (_, _) =>
+            {
+                if (_renderingPower) return;
+                var r = await _connection.RequestAsync(new FanRequest("setPowerMode", PowerMode: mode));
+                PowerError.Text = r is null ? "Fan servisine ulaşılamadı." : r.Ok ? "" : r.Code switch
+                {
+                    "power_battery" => "Pilde yalnızca Ofis modu kullanılabilir.",
+                    "power_usbc" => "Bu USB-C adaptörde yalnızca Ofis modu kullanılabilir.",
+                    _ => "Güç modu değiştirilemedi.",
+                };
+                PowerError.Visibility = PowerError.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+                Render();
+            };
+            _powerButtons[mode] = b;
+            PowerButtons.Children.Add(b);
+        }
+    }
+
+    private void RenderPower(PowerStatusDto? power)
+    {
+        _renderingPower = true;
+        foreach (var (mode, button) in _powerButtons)
+        {
+            button.IsEnabled = power is not null && (mode == PowerMode.Office || power.Lock == PowerLock.None);
+            button.IsChecked = power?.Mode == mode;
+        }
+        _renderingPower = false;
+        PowerHint.Text = power?.Lock switch
+        {
+            null => "",
+            PowerLock.OnBattery => "Pilde yalnızca Ofis modu çalışır.",
+            PowerLock.UsbCAdapter => "USB-C adaptörde yalnızca Ofis modu.",
+            _ => "İşlemci / ekran kartı güç sınırı",
+        };
     }
 
     private readonly Dictionary<string, (TextBlock Value, TextBlock Caption)> _stats = [];
