@@ -1,6 +1,9 @@
+using System.Diagnostics;
+using System.Net.Http;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using Excalibur.Core.Settings;
 
 namespace Excalibur.App.Ui.Pages;
 
@@ -34,14 +37,78 @@ internal static class InfoPage
                 Text("Tema Windows'un açık/koyu ayarını izliyor, vurgu rengi kırmızı.", "Body"),
                 Text("Yakında: vurgu rengi ve tema seçimi, tepsi simgesindeki rakamların yazı tipi, hızlı panelde görünecek profiller.", "Caption", top: 6)),
             BatteryPage.IntervalCard(connection),
+            WindowsPowerCard(),
             Card("Hakkında",
                 Text($"Excalibur Reimagined {version}", "Body"),
-                Text("Casper Excalibur G870 için, Control Center'ın yerine geçen hafif bir uygulama. İnternete bağlanmaz, veri göndermez.", "Caption", top: 6),
+                Text("Casper Excalibur G870 için, Control Center'ın yerine geçen hafif bir uygulama. Kendiliğinden internete bağlanmaz, " +
+                     "veri göndermez; yalnızca aşağıdaki düğmeye basınca GitHub'da yeni sürüm var mı diye bakar.", "Caption", top: 6),
                 Text("Fanları arka planda bir Windows hizmeti yönetir. O hizmet bir sorun yaşarsa ikinci bir koruma hizmeti fanları hemen " +
                      "orijinal ayara bırakır.", "Caption", top: 6),
                 Text($"İşlemci: {HardwareNames.Cpu ?? "?"}   ·   Ekran kartı: {HardwareNames.Gpu ?? "?"}" +
                      (HardwareNames.Bios is { } bios ? $"   ·   BIOS: {bios}" : "") +
-                     (fanFirmware is null ? "" : $"   ·   Fan denetleyici yazılımı: {fanFirmware}"), "Caption", top: 6)));
+                     (fanFirmware is null ? "" : $"   ·   Fan denetleyici yazılımı: {fanFirmware}"), "Caption", top: 6),
+                UpdateCheck()));
+    }
+
+    /// <summary>Windows' own power mode follows the performance mode (off by default); the tray applies it.</summary>
+    private static Border WindowsPowerCard()
+    {
+        var store = new UserSettingsStore();
+        var box = new CheckBox
+        {
+            Content = "Windows güç modunu performans moduna göre değiştir", FontSize = 14, Margin = new Thickness(0, 10, 0, 0),
+            IsChecked = store.Current.WindowsPowerMode,
+        };
+        box.SetResourceReference(Control.ForegroundProperty, "Text");
+        box.Checked += (_, _) => store.Save(store.Current with { WindowsPowerMode = true });
+        box.Unchecked += (_, _) => store.Save(store.Current with { WindowsPowerMode = false });
+        box.Unloaded += (_, _) => store.Dispose();
+        return Card("Windows güç modu",
+            Text("Açıksa Windows'un kendi güç modu da değişir: Ofis modunda en iyi güç verimliliği, Oyun modunda dengeli, " +
+                 "Yüksek performansta en iyi performans. Güç planını kendin ya da başka bir uygulamayla ayarlıyorsan kapalı bırak.", "Caption"),
+            box,
+            Text("Windows bu ayarı yalnızca Dengeli güç planı seçiliyken uygular.", "Caption", top: 6));
+    }
+
+    /// <summary>Asks GitHub for the newest release, only when the button is pressed.</summary>
+    private static StackPanel UpdateCheck()
+    {
+        var button = new Button { Content = "Güncellemeleri denetle", HorizontalAlignment = HorizontalAlignment.Left };
+        button.SetResourceReference(FrameworkElement.StyleProperty, "PlainButton");
+        var result = Text("", "Caption", top: 8);
+        var open = new Button { Content = "İndirme sayfasını aç", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+        open.SetResourceReference(FrameworkElement.StyleProperty, "AccentButton");
+        string? url = null;
+        open.Click += (_, _) =>
+        {
+            if (url is { Length: > 0 }) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        };
+        button.Click += async (_, _) =>
+        {
+            button.IsEnabled = false;
+            open.Visibility = Visibility.Collapsed;
+            result.Text = "Bakılıyor…";
+            var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                http.DefaultRequestHeaders.UserAgent.ParseAdd($"ExcaliburReimagined/{current.ToString(3)}");
+                var newest = ReleaseFeed.Newest(await http.GetStringAsync(ReleaseFeed.ApiUrl));
+                if (newest is not null && ReleaseFeed.IsNewer(newest, current))
+                {
+                    result.Text = $"Yeni sürüm var: {newest.Version.ToString(3)} (sende {current.ToString(3)}).";
+                    url = newest.Url;
+                    open.Visibility = Visibility.Visible;
+                }
+                else result.Text = "En son sürümü kullanıyorsun.";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                result.Text = "GitHub'a ulaşılamadı; internet bağlantını kontrol edip yeniden dene.";
+            }
+            button.IsEnabled = true;
+        };
+        return new StackPanel { Margin = new Thickness(0, 12, 0, 0), Children = { button, result, open } };
     }
 
     internal static UserControl Page(string title, string subtitle, params UIElement[] cards)
