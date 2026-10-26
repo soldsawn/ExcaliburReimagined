@@ -46,6 +46,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly UserSettingsStore _userSettings = new();
     private readonly RefreshAutomation _refresh;
     private readonly AppAutomation? _apps;
+    private readonly WindowsPowerMode? _windowsPower;
 
     private FanStatusDto? _status;
     private int _failures;
@@ -78,6 +79,7 @@ internal sealed class TrayContext : ApplicationContext
             _apps = new AppAutomation(_client, _userSettings, _refresh,
                 (title, subtitle) => { if (_userSettings.Current.Osd) _osd.Flash(title, subtitle, Theme.Ok); });
             _refresh.Held = () => _apps.HoldsRefreshRate;
+            _windowsPower = new WindowsPowerMode(_userSettings);
         }
         _panel.DetailsClicked += OpenMainWindow;
         _panel.VisibleChanged += (_, _) => { _timer.Interval = _panel.Visible ? OpenMs : IdleMs; if (_panel.Visible) _ = PollAsync(); };
@@ -276,6 +278,7 @@ internal sealed class TrayContext : ApplicationContext
         if (_lastProfile is not null && s.Profile != _lastProfile && s.ProfileChangedBy is not (FanSource.Tray or FanSource.Window or FanSource.App))
             Flash(s);
         _apps?.Resync(s);
+        _windowsPower?.Follow(s.Power);
         if (s.Mode == FanLoopMode.Faulted && _lastMode is not null && _lastMode != FanLoopMode.Faulted)
             Notify("Fanlarda bir sorun oldu",
                 "Fanlar güvenlik için orijinal ayara bırakıldı. Hızlı paneldeki \"Tekrar dene\" ile yeniden başlatabilirsiniz.",

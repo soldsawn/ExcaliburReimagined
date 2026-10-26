@@ -54,6 +54,8 @@ public sealed record UserSettings
     public RefreshRateRule RefreshRate { get; init; } = new();
     /// <summary>What runs while a program is open (A6); the tray watches the programs and applies them.</summary>
     public IReadOnlyList<AppRule> AppRules { get; init; } = [];
+    /// <summary>Windows' own power mode follows the performance mode; off by default (many set the Windows side themselves).</summary>
+    public bool WindowsPowerMode { get; init; }
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -95,7 +97,8 @@ public sealed record UserSettings
     // Value equality over the rule list (a record would compare it by reference), so a reload that changed nothing stays quiet.
     public bool Equals(UserSettings? other) =>
         other is not null && Version == other.Version && TrayFont == other.TrayFont && Osd == other.Osd && Accent == other.Accent
-        && Theme == other.Theme && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules);
+        && Theme == other.Theme && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules)
+        && WindowsPowerMode == other.WindowsPowerMode;
 
     public override int GetHashCode() => HashCode.Combine(Version, TrayFont, Osd, Accent, Theme, RefreshRate, AppRules.Count);
 
