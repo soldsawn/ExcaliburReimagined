@@ -1,4 +1,5 @@
 using Excalibur.Core.Fan;
+using Excalibur.Core.Hardware;
 using Excalibur.Core.History;
 using Excalibur.Core.Settings;
 
@@ -64,6 +65,7 @@ public sealed class FanWorker(
         history.Flush();
         DrainEvents();
         Log("service stopped, fans handed to the EC");
+        EcTrace.Dump("stop", DateTime.Now, EcTrace.DumpedAtStop);
     }
 
     private void TickOnce()

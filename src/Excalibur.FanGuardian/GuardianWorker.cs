@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.ServiceProcess;
 using Excalibur.Core.Fan;
+using Excalibur.Core.Hardware;
 
 namespace Excalibur.FanGuardian;
 
@@ -34,6 +35,7 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         Log("guardian stopped");
+        EcTrace.Dump("stop", DateTime.Now, EcTrace.DumpedAtStop);
     }
 
     private void Check()

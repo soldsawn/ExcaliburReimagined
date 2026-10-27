@@ -300,7 +300,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             bool hot = _hot.Update(s, now);
             if (grace) hot = _grace.Hot.Update(s, now);
             var desired = _controller.Decide(filtered, _profile, now);
-            var decision = SafetyPolicy.Apply(_floors.Apply(filtered, now), desired, hot, out string? reason, out var cpuRaised, out var gpuRaised);
+            var decision = SafetyPolicy.Apply(_floors.Apply(filtered, now), desired, hot, out string? reason, out var cpuRaised, out var gpuRaised, s);
             if (hardware.WritePath == FanWritePath.Wmi)
                 decision = new FanDecision(AtLeast(decision.Cpu, WmiFloor), AtLeast(decision.Gpu, WmiFloor));
             _cpuReason = decision.Cpu.IsAuto ? FanReason.Auto : cpuRaised ?? _controller.ReasonOf(FanId.Cpu);

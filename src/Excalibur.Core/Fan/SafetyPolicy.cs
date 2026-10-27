@@ -20,16 +20,19 @@ public static class SafetyPolicy
         => Apply(s, desired, hot, out reason, out _, out _);
 
     /// <param name="cpuRaised">Set when the CPU fan was raised: <see cref="FanReason.SafetyFloor"/> or <see cref="FanReason.Hot"/>.</param>
+    /// <param name="raw">The temperatures the hot rule decided on, for its log line (the floors see a held value: a
+    /// hot line read "CPU 60C" while the CPU sat at 97 C, 2026-10-27).</param>
     public static FanDecision Apply(FanSnapshot s, FanDecision desired, bool hot, out string? reason,
-        out FanReason? cpuRaised, out FanReason? gpuRaised)
+        out FanReason? cpuRaised, out FanReason? gpuRaised, FanSnapshot? raw = null)
     {
         reason = null;
-        var cpu = Limit(FanId.Cpu, s, desired.Cpu, hot, ref reason, out cpuRaised);
-        var gpu = Limit(FanId.Gpu, s, desired.Gpu, hot, ref reason, out gpuRaised);
+        var shown = hot && raw is not null ? raw : s;
+        var cpu = Limit(FanId.Cpu, s, shown, desired.Cpu, hot, ref reason, out cpuRaised);
+        var gpu = Limit(FanId.Gpu, s, shown, desired.Gpu, hot, ref reason, out gpuRaised);
         return new FanDecision(cpu, gpu);
     }
 
-    private static FanTarget Limit(FanId fan, FanSnapshot s, FanTarget desired, bool hot, ref string? reason, out FanReason? raised)
+    private static FanTarget Limit(FanId fan, FanSnapshot s, FanSnapshot shown, FanTarget desired, bool hot, ref string? reason, out FanReason? raised)
     {
         raised = null;
         if (desired.IsAuto) return desired;
@@ -45,7 +48,7 @@ public static class SafetyPolicy
         if (percent >= min) return desired;
 
         raised = hot ? FanReason.Hot : FanReason.SafetyFloor;
-        reason ??= $"safety: {fan} {percent}% -> {min}% (CPU {s.CpuTempC}C, GPU {s.GpuTempC}C{(hot ? ", hot" : "")})";
+        reason ??= $"safety: {fan} {percent}% -> {min}% (CPU {shown.CpuTempC}C, GPU {shown.GpuTempC}C{(hot ? ", hot" : "")})";
         return FanTarget.FromPercent(min);
     }
 }

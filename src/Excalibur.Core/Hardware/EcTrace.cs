@@ -44,13 +44,17 @@ public static class EcTrace
         if (dumpSlow) Dump($"slow {what}", now);
     }
 
-    /// <summary>Writes the calls of the minute before <paramref name="at"/>, one line per call.</summary>
-    public static void Dump(string why, DateTime at)
+    /// <summary>The span dumped when a service stops: ACPI 15 came with some stops and not others (2026-10-27).</summary>
+    public static readonly TimeSpan DumpedAtStop = TimeSpan.FromSeconds(2);
+
+    /// <summary>Writes the calls of the <paramref name="before"/> (default <see cref="Dumped"/>) before <paramref name="at"/>, one line per call.</summary>
+    public static void Dump(string why, DateTime at, TimeSpan? before = null)
     {
         if (Report is not { } report) return;
+        var span = before ?? Dumped;
         Entry[] entries;
-        lock (Gate) entries = Entries.Where(e => e.At >= at - Dumped && e.At <= at + TimeSpan.FromSeconds(5)).ToArray();
-        var sb = new StringBuilder($"ec trace ({why}, {at:HH:mm:ss.fff}): {entries.Length} calls in the {Dumped.TotalSeconds:F0} s before");
+        lock (Gate) entries = Entries.Where(e => e.At >= at - span && e.At <= at + TimeSpan.FromSeconds(5)).ToArray();
+        var sb = new StringBuilder($"ec trace ({why}, {at:HH:mm:ss.fff}): {entries.Length} calls in the {span.TotalSeconds:F0} s before");
         foreach (var e in entries) sb.Append($"\n    {e.At:HH:mm:ss.fff}  {e.What,-18} {e.Ms,6:F0} ms");
         report(sb.ToString());
     }

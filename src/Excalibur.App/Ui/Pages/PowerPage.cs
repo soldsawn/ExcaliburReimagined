@@ -167,8 +167,7 @@ internal sealed class PowerPage : UserControl
                         new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _byMode, _own } },
                         _ownPanel, _limitError),
                     InfoPage.Card("Ekran kartı güç sınırı",
-                        InfoPage.Text("Ekran kartının gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı. " +
-                                      "USB-C şarj aletiyle oynarken de işe yarar.", "Caption"),
+                        InfoPage.Text("Ekran kartının gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı.", "Caption"),
                         new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _gpuByMode, _gpuOwn } },
                         _gpuPanel, _gpuError)),
             },

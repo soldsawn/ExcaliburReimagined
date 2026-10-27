@@ -137,6 +137,13 @@ public class SafetyPolicyTests
     }
 
     [Fact]
+    public void Hot_logs_the_raw_temperature_it_decided_on()
+    {
+        SafetyPolicy.Apply(Snap(60, 46), new FanDecision(P(80), P(70)), hot: true, out var reason, out _, out _, raw: Snap(97, 46));
+        Assert.Contains("CPU 97C", reason);
+    }
+
+    [Fact]
     public void Never_lowers_a_fan()
     {
         var d = SafetyPolicy.Apply(Snap(45, 45), new FanDecision(P(100), P(70)), hot: false, out var reason);
