@@ -179,7 +179,7 @@ public sealed class HistoryTests : IDisposable
     {
         // A flat 30% curve at 71 C; the floor from 70 C is 80%.
         var hw = new FakeFanHardware { CpuTempC = 71, GpuTempC = 50 };
-        var loop = new FanControlLoop(hw);
+        var loop = new FanControlLoop(hw, new FanLoopOptions { StartGrace = TimeSpan.Zero });
         var flat = new FanProfile("Flat", FanCurve.Flat(30), FanCurve.Flat(30));
         loop.Start(flat, T0);
         var s = loop.Tick(T0.AddSeconds(1));

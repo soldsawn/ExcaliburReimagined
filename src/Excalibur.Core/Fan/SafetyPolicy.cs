@@ -63,21 +63,32 @@ public sealed class HotTracker
     public const double SustainSeconds = 3;
     public const int ImmediateReadings = 2;
 
+    private readonly int _hotC;
+    private readonly double _sustainSeconds;
+    private readonly int? _immediateC;
     private DateTimeOffset? _hotSince;
     private int _immediate;
+
+    /// <param name="immediateC">Null: only a sustained temperature is hot (<see cref="StartGrace"/>).</param>
+    public HotTracker(int hotC = HotC, double sustainSeconds = SustainSeconds, int? immediateC = ImmediateC)
+    {
+        _hotC = hotC;
+        _sustainSeconds = sustainSeconds;
+        _immediateC = immediateC;
+    }
 
     public bool Update(FanSnapshot raw, DateTimeOffset now)
     {
         int hottest = Math.Max(raw.CpuTempC, raw.GpuTempC);
-        if (hottest < HotC)
+        if (hottest < _hotC)
         {
             _hotSince = null;
             _immediate = 0;
             return false;
         }
         _hotSince ??= now;
-        _immediate = hottest >= ImmediateC ? _immediate + 1 : 0;
-        return _immediate >= ImmediateReadings || (now - _hotSince.Value).TotalSeconds >= SustainSeconds - 0.5;
+        _immediate = hottest >= _immediateC ? _immediate + 1 : 0;
+        return _immediate >= ImmediateReadings || (now - _hotSince.Value).TotalSeconds >= _sustainSeconds - 0.5;
     }
 
     public void Reset()
@@ -107,4 +118,48 @@ public sealed class FloorTracker
     }
 
     public void Reset() => _recent.Clear();
+}
+
+/// <summary>
+/// The first <see cref="Length"/> after the service starts or the machine wakes. Windows starting up takes the CPU to
+/// 80-97 C for 7-23 s, and the curve, the floors and the hot rule ran both fans at 90-100% at nearly every start
+/// (2026-10-24..27; a tester's G870 found it loud enough to stop using the app). Meanwhile the curve and the floors see
+/// the lowest reading of the last <see cref="SustainSeconds"/> (no more than <see cref="SeedC"/>, the CPU's idle, until
+/// that much has been read), and the hot rule needs <see cref="HotGraceC"/> for <see cref="HotGraceSeconds"/>: under
+/// the guardian's ~8 s at 90 C, so it never finds the fans slow first (user's choice, 2026-10-27).
+/// </summary>
+public sealed class StartGrace
+{
+    public static readonly TimeSpan Length = TimeSpan.FromSeconds(60);
+    public const double SustainSeconds = 10;
+    public const int SeedC = 60;
+    public const int HotGraceC = 90;
+    public const double HotGraceSeconds = 6;
+
+    private readonly TimeSpan _length;
+    private readonly Queue<(DateTimeOffset At, int CpuC, int GpuC)> _recent = new();
+    private DateTimeOffset? _startedAt;
+
+    public StartGrace(TimeSpan? length = null) => _length = length ?? Length;
+
+    public HotTracker Hot { get; } = new(HotGraceC, HotGraceSeconds, immediateC: null);
+
+    public void Begin(DateTimeOffset now)
+    {
+        _startedAt = now;
+        _recent.Clear();
+        Hot.Reset();
+    }
+
+    public bool Active(DateTimeOffset now) => _startedAt is { } at && now - at < _length;
+
+    /// <summary>Returns <paramref name="raw"/> with the temperatures held for <see cref="SustainSeconds"/>.</summary>
+    public FanSnapshot Apply(FanSnapshot raw, DateTimeOffset now)
+    {
+        _recent.Enqueue((now, raw.CpuTempC, raw.GpuTempC));
+        while (now - _recent.Peek().At > TimeSpan.FromSeconds(SustainSeconds)) _recent.Dequeue();
+        bool spanned = now - _startedAt >= TimeSpan.FromSeconds(SustainSeconds);
+        int Held(int lowest) => spanned ? lowest : Math.Min(lowest, SeedC);
+        return raw with { CpuTempC = Held(_recent.Min(r => r.CpuC)), GpuTempC = Held(_recent.Min(r => r.GpuC)) };
+    }
 }

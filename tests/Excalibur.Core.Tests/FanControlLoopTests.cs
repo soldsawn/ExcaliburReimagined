@@ -13,10 +13,59 @@ public class FanControlLoopTests
     public FanControlLoopTests(ITestOutputHelper output)
     {
         _output = output;
-        _loop = new FanControlLoop(_hw);
+        // The rules as they run once the start is over; StartGrace has its own tests below.
+        _loop = new FanControlLoop(_hw, new FanLoopOptions { StartGrace = TimeSpan.Zero });
     }
 
     private FanStatus TickAt(int second) => _loop.Tick(T0.AddSeconds(second));
+
+    [Fact]
+    public void A_hot_start_of_windows_does_not_spin_the_fans_up()
+    {
+        // 2026-10-27 12:26:08: CPU 94-96 C for ~10 s after the start, then back to idle.
+        var loop = new FanControlLoop(_hw);
+        _hw.CpuTempC = 95;
+        loop.Start(Balanced, T0);
+        for (int i = 1; i <= 5; i++) loop.Tick(T0.AddSeconds(i));
+        _hw.CpuTempC = 55;
+        for (int i = 6; i <= 20; i++) loop.Tick(T0.AddSeconds(i));
+        Assert.All(_hw.Writes, w => Assert.True(w.Target.IsAuto || w.Target.Percent <= 60, $"{w.Fan} {w.Target}"));
+        Assert.DoesNotContain(loop.Events, e => e.Message.StartsWith("safety"));
+    }
+
+    [Fact]
+    public void Heat_that_lasts_through_a_start_still_reaches_100()
+    {
+        var loop = new FanControlLoop(_hw);
+        _hw.CpuTempC = 92;
+        loop.Start(Balanced, T0);
+        for (int i = 1; i <= 7; i++) loop.Tick(T0.AddSeconds(i));
+        Assert.Equal(P(100), _hw.CpuTarget); // 6 s after the first hot reading: before the guardian's ~8 s
+        Assert.Equal(P(100), _hw.GpuTarget);
+    }
+
+    [Fact]
+    public void Warmth_that_lasts_10_s_after_a_start_reaches_the_curve_and_floors()
+    {
+        var loop = new FanControlLoop(_hw);
+        _hw.CpuTempC = 75;
+        loop.Start(Balanced, T0);
+        loop.Tick(T0.AddSeconds(1));
+        Assert.Equal(P(60), _hw.CpuTarget); // read as the idle seed until 10 s have been seen
+        for (int i = 2; i <= 20; i++) loop.Tick(T0.AddSeconds(i));
+        Assert.Equal(P(100), _hw.CpuTarget); // the curve at 75 C
+    }
+
+    [Fact]
+    public void After_the_start_grace_the_usual_rules_apply()
+    {
+        var loop = new FanControlLoop(_hw);
+        loop.Start(Balanced, T0);
+        for (int i = 1; i <= 60; i++) loop.Tick(T0.AddSeconds(i));
+        _hw.CpuTempC = 82;
+        for (int i = 61; i <= 64; i++) loop.Tick(T0.AddSeconds(i));
+        Assert.Equal(P(100), _hw.CpuTarget); // 80 C for 3 s
+    }
 
     [Fact]
     public void Start_hands_fans_to_the_ec_first_and_runs_on_a_known_ec()

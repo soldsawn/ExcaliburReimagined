@@ -62,6 +62,8 @@ public sealed record FanLoopOptions
     /// <summary>A rise this big is written without waiting for <see cref="MinWriteInterval"/> (a load that just started).</summary>
     public int UrgentRise { get; init; } = 10;
     public TimeSpan MaxManualDuration { get; init; } = TimeSpan.FromMinutes(10);
+    /// <summary>How long after a start the curve, floors and hot rule ignore short spikes (<see cref="Fan.StartGrace"/>).</summary>
+    public TimeSpan StartGrace { get; init; } = Fan.StartGrace.Length;
 }
 
 /// <summary>
@@ -83,6 +85,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private readonly TemperatureFilter _filter = new();
     private readonly HotTracker _hot = new();
     private readonly FloorTracker _floors = new();
+    private readonly StartGrace _grace = new((options ?? new FanLoopOptions()).StartGrace);
     private readonly LinkedList<FanEvent> _events = new();
     private readonly object _gate = new();
     // Events and the published status have their own cheap guards so a pipe request never waits
@@ -164,6 +167,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             hardware.WritePath = known && _wmi.Contains(_ecVersion!) ? FanWritePath.Wmi : FanWritePath.Ec;
             // An unverified EC keeps the look before writing (0xFF is written only when not already there).
             ForceAuto(now, "start", atStart: known);
+            _grace.Begin(now);
             _mode = known ? FanLoopMode.Running : FanLoopMode.MonitorOnly;
             Log(now, _mode == FanLoopMode.Running
                 ? $"started, EC {_ecVersion}, profile {_profile.Name}"
@@ -289,9 +293,12 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                 return Publish();
             }
 
-            // Curve and floors see the rise-limited temperature; the hot rule sees the raw one.
-            var filtered = _filter.Apply(s, now);
+            // Curve and floors see the rise-limited temperature; the hot rule sees the raw one. Just after a start
+            // both see only what has lasted (StartGrace).
+            bool grace = _grace.Active(now);
+            var filtered = _filter.Apply(grace ? _grace.Apply(s, now) : s, now);
             bool hot = _hot.Update(s, now);
+            if (grace) hot = _grace.Hot.Update(s, now);
             var desired = _controller.Decide(filtered, _profile, now);
             var decision = SafetyPolicy.Apply(_floors.Apply(filtered, now), desired, hot, out string? reason, out var cpuRaised, out var gpuRaised);
             if (hardware.WritePath == FanWritePath.Wmi)
