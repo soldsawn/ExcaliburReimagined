@@ -8,7 +8,7 @@ namespace Excalibur.App.Ui.Pages;
 
 /// <summary>
 /// Performans: the power mode (which sets both the graphics card's and the CPU's limits), the power both
-/// draw right now, and the user's own CPU limit. The service decides what is allowed: on battery or a weak
+/// draw right now, and the user's own CPU and graphics card limits. The service decides what is allowed: on battery or a weak
 /// USB-C adapter only Office, so the other two are greyed out then.
 /// </summary>
 internal sealed class PowerPage : UserControl
@@ -23,6 +23,8 @@ internal sealed class PowerPage : UserControl
     private const string Pl2Tip = "İşlemcinin birkaç saniyelik ani yüklerde çıkabileceği en yüksek güç. Programlar daha çabuk açılır, " +
         "ama kısa süreli ısınmaya ve fanın birden hızlanmasına yol açar.";
     private const string GpuTip = "Ekran kartının çekebileceği en yüksek güç. Güç modu belirler: Ofis 75 W, Oyun 85 W, Yüksek performans 100 W.";
+    private const string GpuLimitTip = "Ekran kartı bu gücün üstüne çıkmasın diye hızı birkaç saniyede bir ayarlanır. " +
+        "Boştayken etkisi yoktur; ağır oyunlarda sınıra kadar çıkar.";
     private const string NowTip = "Şu an çekilen güç. Boştayken düşüktür, oyunlarda ve ağır işlerde sınıra yaklaşır.";
 
     private readonly FanConnection _connection;
@@ -34,7 +36,11 @@ internal sealed class PowerPage : UserControl
     private readonly Slider _pl1, _pl2;
     private readonly TextBlock _pl1Text, _pl2Text, _limitNote, _limitError;
     private readonly StackPanel _ownPanel;
-    private bool _rendering, _limitDirty;
+    private readonly RadioButton _gpuByMode, _gpuOwn;
+    private readonly Slider _gpuSlider;
+    private readonly TextBlock _gpuText, _gpuNote, _gpuError;
+    private readonly StackPanel _gpuPanel;
+    private bool _rendering, _limitDirty, _gpuDirty;
 
     public PowerPage(FanConnection connection)
     {
@@ -117,6 +123,31 @@ internal sealed class PowerPage : UserControl
         };
         SliderTexts();
 
+        // ---- own graphics card limit ----
+        string gpuGroup = "gpulimit" + GetHashCode();
+        _gpuByMode = Choice(gpuGroup, "Güç modu belirlesin", "önerilen");
+        _gpuOwn = Choice(gpuGroup, "Kendim sınırlayacağım", "daha serin ve sessiz");
+        _gpuByMode.Checked += async (_, _) => { if (!_rendering) await SendGpuLimit(null); };
+        _gpuOwn.Checked += (_, _) => { if (!_rendering) { _gpuDirty = true; RenderGpuLimit(); } };
+        _gpuSlider = new Slider
+        {
+            Minimum = GpuLimit.MinWatts, Maximum = 75, Value = 50, TickFrequency = GpuLimit.Step, IsSnapToTickEnabled = true,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 12, 0),
+        };
+        _gpuSlider.SetResourceReference(StyleProperty, "ThinSlider");
+        _gpuSlider.ValueChanged += (_, _) => { if (!_rendering) _gpuDirty = true; _gpuText.Text = $"{_gpuSlider.Value:0} W"; };
+        _gpuText = InfoPage.Text($"{_gpuSlider.Value:0} W", "Body");
+        _gpuNote = InfoPage.Text("", "Caption", top: 6);
+        _gpuError = ErrorText();
+        var gpuApply = new Button { Content = "Uygula", Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 110 };
+        gpuApply.SetResourceReference(StyleProperty, "AccentButton");
+        gpuApply.Click += async (_, _) => await SendGpuLimit((int)_gpuSlider.Value);
+        _gpuPanel = new StackPanel
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            Children = { SliderRow("En yüksek güç", GpuLimitTip, _gpuSlider, _gpuText), _gpuNote, gpuApply },
+        };
+
         Content = new StackPanel
         {
             Children =
@@ -132,6 +163,11 @@ internal sealed class PowerPage : UserControl
                                   "Güç modunun sınırından yüksek bir değer etkisizdir.", "Caption"),
                     new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _byMode, _own } },
                     _ownPanel, _limitError),
+                InfoPage.Card("Ekran kartı güç sınırı",
+                    InfoPage.Text("Ekran kartının gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı. " +
+                                  "USB-C şarj aletiyle oynarken de işe yarar.", "Caption"),
+                    new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _gpuByMode, _gpuOwn } },
+                    _gpuPanel, _gpuError),
             },
         };
 
@@ -217,6 +253,19 @@ internal sealed class PowerPage : UserControl
         Render();
     }
 
+    private async Task SendGpuLimit(int? watts)
+    {
+        var r = await _connection.RequestAsync(new FanRequest("setGpuLimit", GpuLimitWatts: watts));
+        Show(_gpuError, r is null ? "Fan servisine ulaşılamadı." : r.Ok ? null : r.Code switch
+        {
+            "gpu_limit_invalid" => "Bu değer kullanılamaz.",
+            "gpu_limit_failed" => "Ekran kartı sınırlanamadı.",
+            _ => r.Error ?? "İstek kabul edilmedi.",
+        });
+        if (r?.Ok == true) _gpuDirty = false;
+        Render();
+    }
+
     private static string Message(string? code, string? error) => code switch
     {
         "power_battery" => "Pilde yalnızca Ofis modu kullanılabilir.",
@@ -255,6 +304,7 @@ internal sealed class PowerPage : UserControl
         _gpuLimit.Text = power?.GpuWatts is { } gl ? $"Sınır {gl} W" : "Ekran kartı okunamıyor";
 
         RenderLimit();
+        RenderGpuLimit();
 
         if (power is null)
         {
@@ -293,5 +343,29 @@ internal sealed class PowerPage : UserControl
             ? $"Şu anki güç modunda uzun süreli sınır en çok {ml} W; daha yüksek değer etkisiz kalır."
             : power?.CpuLimit is { } on && !_limitDirty ? $"Uygulanıyor: uzun süreli {on.Pl1Watts} W, kısa süreli {on.Pl2Watts} W."
             : _limitDirty ? "Değişiklikler \"Uygula\"ya basınca geçerli olur." : "";
+    }
+
+    private void RenderGpuLimit()
+    {
+        var power = _connection.Connected ? _connection.Status?.Power : null;
+        _rendering = true;
+        _gpuByMode.IsEnabled = _gpuOwn.IsEnabled = power is not null;
+        // Up to what the driver allows now (the power mode's limit, read live): a higher target would do nothing.
+        if (power?.GpuWatts is { } enforced)
+            _gpuSlider.Maximum = Math.Clamp(enforced / GpuLimit.Step * GpuLimit.Step, GpuLimit.MinWatts, GpuLimit.MaxWatts);
+        if (!_gpuDirty && power is not null)
+        {
+            _gpuByMode.IsChecked = power.GpuLimitWatts is null;
+            _gpuOwn.IsChecked = power.GpuLimitWatts is not null;
+            if (power.GpuLimitWatts is { } w) _gpuSlider.Value = w;
+        }
+        _rendering = false;
+        _gpuText.Text = $"{_gpuSlider.Value:0} W";
+        _gpuPanel.Visibility = _gpuOwn.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+
+        _gpuNote.Text = _gpuDirty ? "Değişiklik \"Uygula\"ya basınca geçerli olur."
+            : power?.GpuLimitWatts is { } on
+                ? power.GpuLockMhz is { } mhz ? $"Uygulanıyor: en çok {on} W (ekran kartı şu an en çok {mhz} MHz'de)." : $"Uygulanıyor: en çok {on} W (şu an sınırın altında)."
+            : "";
     }
 }

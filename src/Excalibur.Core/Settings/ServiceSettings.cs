@@ -67,6 +67,9 @@ public sealed record ServiceSettings
     /// <summary>The user's own CPU power limits; null = the power mode decides (nothing is written).</summary>
     public CpuLimit? CpuLimit { get; init; }
 
+    /// <summary>The user's GPU power target in watts (<see cref="GpuLimit"/>); null = the power mode decides (nothing is written).</summary>
+    public int? GpuLimitWatts { get; init; }
+
     /// <summary>
     /// EC firmware versions this machine's user tried and that passed (<see cref="EcTrial"/>), trusted beside the built-in
     /// list. Only the service adds to it, after a trial.
@@ -91,7 +94,7 @@ public sealed record ServiceSettings
     // Value equality over the lists (a record would compare them by reference).
     public bool Equals(ServiceSettings? other) =>
         other is not null && Version == other.Version && Profile == other.Profile && History == other.History
-        && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit && Lighting == other.Lighting
+        && PowerMode == other.PowerMode && PowerAutomation == other.PowerAutomation && CpuLimit == other.CpuLimit && GpuLimitWatts == other.GpuLimitWatts && Lighting == other.Lighting
         && BatteryReadMinutes == other.BatteryReadMinutes
         && CustomProfiles.SequenceEqual(other.CustomProfiles) && TrustedEcVersions.SequenceEqual(other.TrustedEcVersions)
         && WmiFanEcVersions.SequenceEqual(other.WmiFanEcVersions)
@@ -134,6 +137,7 @@ public sealed record ServiceSettings
         // Gaming and High performance are never used on battery (the stock software does the same).
         if (PowerAutomation.OnBattery.Mode is { } bm && bm != Power.PowerMode.Office) errors.Add("only Office can be used on battery");
         if (CpuLimit is { } limit) errors.AddRange(limit.Validate());
+        if (GpuLimitWatts is { } gpu) errors.AddRange(GpuLimit.Validate(gpu));
         foreach (var v in TrustedEcVersions.Concat(WmiFanEcVersions).Where(v => !IsEcVersion(v))) errors.Add($"'{v}' is not an EC version");
         if (Lighting is { } lighting) errors.AddRange(lighting.Validate());
         if (!BatteryRecorder.IntervalChoices.Contains(BatteryReadMinutes)) errors.Add($"battery read interval {BatteryReadMinutes} min is not offered");
@@ -173,6 +177,7 @@ public sealed record ServiceSettings
         PowerMode? powerMode = ReadMode(node, "powerMode", problems);
         var automation = ReadAutomation(node, known, problems);
         var cpuLimit = ReadCpuLimit(node, problems);
+        var gpuLimit = ReadGpuLimit(node, problems);
         var trusted = ReadEcVersions(node, "trustedEcVersions", problems);
         var wmiFans = ReadEcVersions(node, "wmiFanEcVersions", problems);
         var lighting = ReadLighting(node, problems);
@@ -189,7 +194,7 @@ public sealed record ServiceSettings
         return (new ServiceSettings
         {
             Profile = profile, History = history, PowerMode = powerMode, PowerAutomation = automation,
-            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, TrustedEcVersions = trusted, WmiFanEcVersions = wmiFans, Lighting = lighting,
+            CustomProfiles = customs, Slots = slots, CpuLimit = cpuLimit, GpuLimitWatts = gpuLimit, TrustedEcVersions = trusted, WmiFanEcVersions = wmiFans, Lighting = lighting,
             BatteryReadMinutes = batteryMinutes,
         }, problems);
     }
@@ -239,6 +244,16 @@ public sealed record ServiceSettings
         // A bad limit is dropped: the power mode decides, which is always safe.
         if (limit is null || limit.Validate().Count > 0) { problems.Add("the CPU limit is unusable; the power mode decides"); return null; }
         return limit;
+    }
+
+    private static int? ReadGpuLimit(JsonObject node, List<string> problems)
+    {
+        var token = node.FirstOrDefault(kv => string.Equals(kv.Key, "gpuLimitWatts", StringComparison.OrdinalIgnoreCase)).Value;
+        if (token is null) return null;
+        // A bad limit is dropped: the power mode decides, which is always safe.
+        if (token is JsonValue v && v.TryGetValue(out int watts) && GpuLimit.Validate(watts).Count == 0) return watts;
+        problems.Add("the GPU limit is unusable; the power mode decides");
+        return null;
     }
 
     private static IReadOnlyList<CustomProfile> ReadCustomProfiles(JsonObject node, List<string> problems)

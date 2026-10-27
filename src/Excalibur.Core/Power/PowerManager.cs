@@ -24,6 +24,9 @@ public interface IPowerHardware
 
     /// <summary>Puts the user's CPU limits in force, or the firmware's when null; throws <see cref="PowerException"/> when that fails.</summary>
     void ApplyCpuLimit(CpuLimit? limit) { }
+
+    /// <summary>Holds the GPU near <paramref name="watts"/> (null: runs free); returns the clock lock in force, null when none.</summary>
+    int? ApplyGpuLimit(int? watts) => null;
 }
 
 public sealed class PowerException(string message, Exception? inner = null) : Exception(message, inner);
@@ -45,7 +48,9 @@ public sealed record PowerStatus(
     bool AutomationEnabled,
     CpuPower? Cpu = null,
     int? GpuPowerWatts = null,
-    CpuLimit? CpuLimit = null);
+    CpuLimit? CpuLimit = null,
+    int? GpuLimitWatts = null,
+    int? GpuLockMhz = null);
 
 /// <summary>
 /// The service's power logic (docs/09 A3). It decides, the hardware does:
@@ -73,7 +78,7 @@ public sealed class PowerManager
 
     private PowerSource? _source;
     private PowerMode? _applied;
-    private int? _gpuWatts, _gpuPower;
+    private int? _gpuWatts, _gpuPower, _gpuLock;
     private CpuPower? _cpu;
     private int _polls;
     private readonly TimeSpan _settle;
@@ -106,7 +111,8 @@ public sealed class PowerManager
             {
                 var source = _source ?? new PowerSource(false, null, false);
                 return new PowerStatus(Effective(), _settings.Current.PowerMode, source, _gpuWatts, LockOf(source),
-                    _settings.Current.PowerAutomation.Enabled, _cpu, _gpuPower, _settings.Current.CpuLimit);
+                    _settings.Current.PowerAutomation.Enabled, _cpu, _gpuPower, _settings.Current.CpuLimit,
+                    _settings.Current.GpuLimitWatts, _gpuLock);
             }
         }
     }
@@ -127,6 +133,7 @@ public sealed class PowerManager
             _gpuPower = SafeGpuPower();
             _cpu = SafeCpuPower();
             if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(EffectiveLimit());
+            ApplyGpuLimit(_settings.Current.GpuLimitWatts);
             if (_pending is not null && !EcQuiet.IsQuiet)
             {
                 _pending = null;
@@ -195,10 +202,27 @@ public sealed class PowerManager
         }
     }
 
-    /// <summary>When the service stops: the firmware's CPU limits go back (the saved choice stays for the next start).</summary>
+    /// <summary>The user's GPU power target, or null to let the power mode decide again; held from the next poll on.</summary>
+    public PowerResult SetGpuLimit(int? watts)
+    {
+        if (watts is { } w && GpuLimit.Validate(w) is { Count: > 0 } errors) return PowerResult.Fail("gpu_limit_invalid", string.Join("; ", errors));
+        lock (_gate)
+        {
+            if (!ApplyGpuLimit(watts)) return PowerResult.Fail("gpu_limit_failed", "The GPU clock could not be locked.");
+            _settings.Update(s => s with { GpuLimitWatts = watts }, out _);
+            _log(watts is null ? "power: GPU limit back to the power mode" : $"power: GPU limit {watts} W");
+            return PowerResult.Success;
+        }
+    }
+
+    /// <summary>When the service stops: the firmware's CPU limits go back and the GPU runs free (the saved choices stay for the next start).</summary>
     public void RestoreCpuLimit()
     {
-        lock (_gate) ApplyCpuLimit(null);
+        lock (_gate)
+        {
+            ApplyCpuLimit(null);
+            ApplyGpuLimit(null);
+        }
     }
 
     /// <summary>
@@ -239,6 +263,19 @@ public sealed class PowerManager
             _log($"power: could not write the CPU limit ({ex.Message})");
             return false;
         }
+    }
+
+    private bool ApplyGpuLimit(int? watts)
+    {
+        int? before = _gpuLock;
+        try { _gpuLock = _hw.ApplyGpuLimit(watts); }
+        catch (Exception ex) when (ex is PowerException or InvalidOperationException)
+        {
+            _log($"power: could not lock the GPU clock ({ex.Message})");
+            return false;
+        }
+        if (_gpuLock != before) _log(_gpuLock is { } mhz ? $"power: GPU clock locked at {mhz} MHz ({_gpuPower} W)" : "power: GPU clock free");
+        return true;
     }
 
     private void Apply(PowerSource source, bool first)

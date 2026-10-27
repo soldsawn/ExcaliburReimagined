@@ -34,9 +34,11 @@ public static class FanPipe
     /// 11: + setAppOverride(appOverride) (a running program's rule: fan profile, power mode, CPU limit, held in memory over the saved
     ///     choices; none = the program closed), status AppProgram; profile changes it makes have Source "app".
     /// 12: + status WritePath (Ec / Wmi: how the fans are written), Trial WmiFollows / Path, settings WmiFanEcVersions.
+    /// 13: + setGpuLimit(gpuLimitWatts) (none = the power mode decides; response Code gpu_limit_invalid / gpu_limit_failed),
+    ///     status Power GpuLimitWatts / GpuLockMhz, settings GpuLimitWatts.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 12;
+    public const int ProtocolVersion = 13;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -65,7 +67,7 @@ public static class FanSource
 /// Commands: status, events, setProfile(profile), setManual(cpu, gpu, minutes), release, clearFault,
 /// getSettings, updateSettings(settings), history(from, to, maxPoints), setPowerMode(powerMode),
 /// shutdown (stops the guardian and this service; fans go back to the EC),
-/// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), trialEc,
+/// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), setGpuLimit(gpuLimitWatts), trialEc,
 /// setLighting(lighting), setLightIdle(idle), setAppOverride(appOverride).
 /// <see cref="Source"/> is one of <see cref="FanSource"/>.
 /// </summary>
@@ -73,7 +75,7 @@ public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = n
     string? Source = null, ServiceSettingsPatch? Settings = null,
     DateTimeOffset? From = null, DateTimeOffset? To = null, int? MaxPoints = null,
     PowerMode? PowerMode = null, CustomProfile? Definition = null, IReadOnlyList<string>? Names = null, CpuLimit? CpuLimit = null,
-    KeyboardLighting? Lighting = null, bool? Idle = null, AppOverride? AppOverride = null);
+    KeyboardLighting? Lighting = null, bool? Idle = null, AppOverride? AppOverride = null, int? GpuLimitWatts = null);
 
 /// <param name="Code">A stable machine-readable reason when <paramref name="Ok"/> is false and the UI should word it itself
 /// (power_battery, power_usbc, power_failed); <paramref name="Error"/> stays an English sentence for logs.</param>
@@ -101,11 +103,13 @@ public sealed record PowerStatusDto(
     int? CpuPl1Watts = null,
     int? CpuPl2Watts = null,
     int? GpuPowerWatts = null,
-    CpuLimit? CpuLimit = null)
+    CpuLimit? CpuLimit = null,
+    int? GpuLimitWatts = null,
+    int? GpuLockMhz = null)
 {
     public static PowerStatusDto From(PowerStatus s) =>
         new(s.Mode, s.Preferred, s.Source.OnBattery, s.Source.BatteryPercent, s.Source.UsbCAdapter, s.GpuWatts, s.Lock, s.AutomationEnabled,
-            s.Cpu?.Watts, s.Cpu?.Pl1Watts, s.Cpu?.Pl2Watts, s.GpuPowerWatts, s.CpuLimit);
+            s.Cpu?.Watts, s.Cpu?.Pl1Watts, s.Cpu?.Pl2Watts, s.GpuPowerWatts, s.CpuLimit, s.GpuLimitWatts, s.GpuLockMhz);
 }
 
 /// <summary>

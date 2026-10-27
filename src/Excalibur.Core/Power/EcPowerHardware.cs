@@ -10,7 +10,8 @@ namespace Excalibur.Core.Power;
 /// <see cref="CpuPowerMeter"/> and <see cref="CpuLimiter"/>, the CPU's power and limits.
 /// Shares the <see cref="GmWmiGateway"/> with the fan hardware: the firmware has one response buffer.
 /// </summary>
-public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null, CpuLimiter? cpuLimiter = null) : IPowerHardware
+public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null, CpuLimiter? cpuLimiter = null,
+    GpuLimiter? gpuLimiter = null) : IPowerHardware
 {
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
@@ -26,6 +27,13 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
             throw new PowerException("CPU limits are not available (PawnIO IntelMSR module missing).");
         }
         cpuLimiter.Apply(limit);
+    }
+
+    public int? ApplyGpuLimit(int? watts)
+    {
+        if (gpuLimiter is null) return null;
+        gpuLimiter.Apply(watts);
+        return gpuLimiter.LockMhz;
     }
 
     private const ushort PerformanceModeFunction = 0x0300, AdapterFunction = 0x0206;
@@ -103,6 +111,22 @@ public sealed class EcPowerHardware(GmWmiGateway wmi, CpuPowerMeter? cpu = null,
     private static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
 }
 
+/// <summary>The GPU's clocks through NVML; a refused lock is a <see cref="PowerException"/>.</summary>
+public sealed class NvmlGpuClocks : IGpuClocks
+{
+    public int? PowerWatts() => Nvml.PowerUsageWatts();
+    public int? GraphicsClockMhz() => Nvml.GraphicsClockMhz();
+    public int? MaxClockMhz() => Nvml.MaxGraphicsClockMhz();
+
+    public void Lock(int maxMhz)
+    {
+        if (Nvml.LockGraphicsClock(GpuLimiter.MinGpuMhz, maxMhz) is not 0 and var code)
+            throw new PowerException($"The driver refused the GPU clock lock (NVML {code?.ToString() ?? "unavailable"}).");
+    }
+
+    public void Unlock() => Nvml.ResetGraphicsClock();
+}
+
 /// <summary>Reads the GPU power limit the driver enforces and the power drawn now; every failure is "unknown" (null).</summary>
 internal static class Nvml
 {
@@ -117,7 +141,25 @@ internal static class Nvml
     /// <summary>The GPU die temperature in °C; null when the driver cannot tell (no NVIDIA GPU, or it is switched off).</summary>
     public static int? TemperatureC() => Query((IntPtr device, out uint c) => nvmlDeviceGetTemperature(device, 0, out c));
 
+    private const int GraphicsClock = 0;
+
+    public static int? GraphicsClockMhz() => Query((IntPtr device, out uint mhz) => nvmlDeviceGetClockInfo(device, GraphicsClock, out mhz));
+
+    public static int? MaxGraphicsClockMhz() => Query((IntPtr device, out uint mhz) => nvmlDeviceGetMaxClockInfo(device, GraphicsClock, out mhz));
+
+    /// <summary>NVML's return code (0 = done), null when NVML is not there. Needs administrator rights (the service has them).</summary>
+    public static int? LockGraphicsClock(int minMhz, int maxMhz) =>
+        Run(device => nvmlDeviceSetGpuLockedClocks(device, (uint)minMhz, (uint)maxMhz));
+
+    public static int? ResetGraphicsClock() => Run(nvmlDeviceResetGpuLockedClocks);
+
     private delegate int NvmlQuery(IntPtr device, out uint value);
+
+    private static int? Run(Func<IntPtr, int> call)
+    {
+        int code = -1;
+        return Query((IntPtr device, out uint value) => { code = call(device); value = 0; return 0; }) is null ? null : code;
+    }
 
     private static int? Milliwatts(NvmlQuery query) => Query(query) is { } mw ? (int)Math.Round(mw / 1000.0) : null;
 
@@ -148,4 +190,8 @@ internal static class Nvml
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
     [DllImport("nvml.dll")] private static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint celsius);
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceGetClockInfo(IntPtr device, int type, out uint mhz);
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceGetMaxClockInfo(IntPtr device, int type, out uint mhz);
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceSetGpuLockedClocks(IntPtr device, uint minMhz, uint maxMhz);
+    [DllImport("nvml.dll")] private static extern int nvmlDeviceResetGpuLockedClocks(IntPtr device);
 }

@@ -167,6 +167,12 @@ public sealed class FanPipeServer(
                     return limitResult.Ok
                         ? new FanResponse(true, Status: Status())
                         : new FanResponse(false, limitResult.Message, Status: Status(), Code: limitResult.Code);
+                case "setgpulimit":
+                    // No gpuLimitWatts = the power mode decides again.
+                    var gpuResult = power.SetGpuLimit(req.GpuLimitWatts);
+                    return gpuResult.Ok
+                        ? new FanResponse(true, Status: Status())
+                        : new FanResponse(false, gpuResult.Message, Status: Status(), Code: gpuResult.Code);
                 case "getsettings":
                     return new FanResponse(true, Status: Status(), Settings: settings.Current);
                 case "updatesettings":

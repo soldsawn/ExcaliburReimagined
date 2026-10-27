@@ -243,4 +243,15 @@ public sealed class SettingsTests : IDisposable
         Assert.Null(bad.CpuLimit);
         Assert.Single(problems);
     }
+
+    [Fact]
+    public void A_gpu_limit_survives_the_file_and_a_bad_one_is_dropped()
+    {
+        var saved = new ServiceSettings { GpuLimitWatts = 45 };
+        Assert.Equal(saved, ServiceSettings.Parse(saved.ToJson()).Settings);
+
+        var (bad, problems) = ServiceSettings.Parse("""{"gpuLimitWatts":12}""");
+        Assert.Null(bad.GpuLimitWatts);
+        Assert.Single(problems);
+    }
 }
