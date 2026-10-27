@@ -95,7 +95,7 @@ public sealed class GuardianMonitor(GuardianOptions? options = null)
 
         bool hot = sensors.CpuTempC >= _o.CpuHotC || sensors.GpuTempC >= _o.GpuHotC;
         _hotCount = hot ? _hotCount + 1 : 0;
-        bool slow = sensors.CpuAppliedPercent < _o.HotMinPercent || sensors.GpuAppliedPercent < _o.HotMinPercent;
+        bool slow = Slow(sensors.CpuAppliedPercent, heartbeat.Value.CpuTarget) || Slow(sensors.GpuAppliedPercent, heartbeat.Value.GpuTarget);
         bool cooledDown = _lastHandBack is not { } last || now - last >= _o.HotCooldown;
         if (_hotCount >= _o.HotEvaluations && slow && cooledDown)
         {
@@ -105,6 +105,12 @@ public sealed class GuardianMonitor(GuardianOptions? options = null)
         }
         return new GuardianVerdict(GuardianAction.None, null, true);
     }
+
+    // A fan below the minimum whose target is already at or above it is still spinning up, not held low: at a cold
+    // start (2026-10-27 12:26) the fans read 80% / 79% eight seconds after the service asked 100%, and the reset that
+    // followed came with an ACPI 15. A target the heartbeat does not carry counts as low, as before.
+    private bool Slow(int applied, FanTarget? target) =>
+        applied < _o.HotMinPercent && !(target is { IsAuto: false } t && t.Percent >= _o.HotMinPercent);
 
     /// <summary>The host calls this after a hand-back succeeded.</summary>
     public void HandedBack(TimeSpan now)

@@ -121,6 +121,27 @@ public class GuardianMonitorTests
     }
 
     [Fact]
+    public void Fans_still_spinning_up_to_a_high_target_are_left_to_the_service()
+    {
+        // 2026-10-27 12:26: cold start, CPU 94-96 C, the service asked 100% but the fans read 80% / 79% eight seconds on.
+        var full = FanTarget.FromPercent(100);
+        for (int t = 0; t <= 20; t += 2)
+            Assert.Equal(GuardianAction.None, _g.Evaluate(Beat() with { CpuTarget = full, GpuTarget = full },
+                Sensors(cpuC: 96, gpuC: 34, cpu: 80, gpu: 79), true, S(t)).Action);
+    }
+
+    [Fact]
+    public void A_low_target_in_the_heat_still_overrides_the_service()
+    {
+        for (int t = 0; t <= 8; t += 2)
+        {
+            var v = _g.Evaluate(Beat() with { CpuTarget = FanTarget.FromPercent(40), GpuTarget = FanTarget.FromPercent(100) },
+                Sensors(cpuC: 93, cpu: 40, gpu: 100), true, S(t));
+            Assert.Equal(t == 8 ? GuardianAction.ResetToAuto : GuardianAction.None, v.Action);
+        }
+    }
+
+    [Fact]
     public void A_gpu_fan_following_the_cpu_at_90_is_not_slow()
     {
         // 2026-10-23 12:01:06: the hot rule had just ended, GPU fan at 90% read 89% from its RPM, guardian still saw 92 C.

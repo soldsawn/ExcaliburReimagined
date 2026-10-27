@@ -86,7 +86,7 @@ public sealed class FanWorker(
         var fresh = status.Snapshot is { } read && !ReferenceEquals(read, _lastSnapshot) ? read : null;
         _lastSnapshot = status.Snapshot;
         WriteHeartbeat(fresh is null ? null
-            : new FanSensors(fresh.CpuTempC, fresh.GpuTempC, fresh.CpuAppliedPercent, fresh.GpuAppliedPercent));
+            : new FanSensors(fresh.CpuTempC, fresh.GpuTempC, fresh.CpuAppliedPercent, fresh.GpuAppliedPercent), fresh);
         history.Record(status, now);
         DrainEvents();
 
@@ -122,13 +122,13 @@ public sealed class FanWorker(
 
     private FanSnapshot? _lastSnapshot;
 
-    private void WriteHeartbeat(FanSensors? sensors = null)
+    private void WriteHeartbeat(FanSensors? sensors = null, FanSnapshot? read = null)
     {
         try
         {
             var status = loop.Status;
             FanHeartbeat.Write(runtime.HeartbeatPath, new HeartbeatRecord(++_sequence, DateTimeOffset.Now, status.HoldsFans,
-                Environment.ProcessId, sensors, status.WritePath == FanWritePath.Wmi));
+                Environment.ProcessId, sensors, status.WritePath == FanWritePath.Wmi, read?.CpuTarget, read?.GpuTarget));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

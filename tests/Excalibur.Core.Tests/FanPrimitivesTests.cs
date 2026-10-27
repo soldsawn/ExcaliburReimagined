@@ -82,6 +82,27 @@ public class FanHeartbeatTests
     }
 
     [Fact]
+    public void Targets_round_trip()
+    {
+        var beat = new HeartbeatRecord(7, At, true, 1234, new FanSensors(96, 34, 80, 79),
+            CpuTarget: FanTarget.FromPercent(100), GpuTarget: FanTarget.Auto);
+        FanHeartbeat.Write(_path, beat);
+        Assert.Equal(beat, FanHeartbeat.Read(_path));
+        File.Delete(_path);
+    }
+
+    [Fact]
+    public void A_40_byte_beat_reads_its_sensors_without_targets()
+    {
+        FanHeartbeat.Write(_path, new HeartbeatRecord(9, At, true, 1234, new FanSensors(50, 45, 30, 30), CpuTarget: FanTarget.Auto));
+        using (var fs = new FileStream(_path, FileMode.Open)) fs.SetLength(40);
+        var beat = FanHeartbeat.Read(_path)!.Value;
+        Assert.Equal(new FanSensors(50, 45, 30, 30), beat.Sensors);
+        Assert.Null(beat.CpuTarget);
+        File.Delete(_path);
+    }
+
+    [Fact]
     public void The_wmi_flag_round_trips_beside_holding()
     {
         foreach (var (holds, wmi) in new[] { (true, true), (false, true), (true, false) })

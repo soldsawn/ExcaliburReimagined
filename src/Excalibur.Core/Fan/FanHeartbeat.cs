@@ -5,8 +5,10 @@ namespace Excalibur.Core.Fan;
 /// <param name="Sensors">What the service read in the tick that wrote it (null when that tick read nothing): the guardian
 /// uses these instead of asking the firmware itself.</param>
 /// <param name="WmiFans">The fans are written through the BIOS (WMI SET 0x0205), so that is how they are handed back.</param>
+/// <param name="CpuTarget">The targets of the tick that read <see cref="Sensors"/> (null with them): a fan still spinning up
+/// to a high target is not the service misbehaving.</param>
 public readonly record struct HeartbeatRecord(long Sequence, DateTimeOffset At, bool HoldsFans, int ProcessId, FanSensors? Sensors = null,
-    bool WmiFans = false);
+    bool WmiFans = false, FanTarget? CpuTarget = null, FanTarget? GpuTarget = null);
 
 /// <summary>
 /// The fan service writes this small file every tick; the guardian reads it. If it goes
@@ -14,11 +16,12 @@ public readonly record struct HeartbeatRecord(long Sequence, DateTimeOffset At, 
 /// fan target still in the EC (which the EC never undoes), and the guardian hands the fans
 /// back. Layout: u64 sequence, i64 unix ms, u32 flags (bit 0 holdsFans, bit 1 WMI fans; an older guardian reads any
 /// non-zero value as holding), i32 pid, then i32 CPU C, GPU C, CPU %, GPU % (CPU C = -1:
-/// no sensors); 40 bytes, little-endian. A 24-byte file (written by an older service) reads without sensors.
+/// no sensors), then i32 CPU and GPU target as the EC byte (-1: none); 48 bytes, little-endian. A 24-byte file (written
+/// by an older service) reads without sensors, a 40-byte one without targets; an older guardian reads the first 40.
 /// </summary>
 public static class FanHeartbeat
 {
-    private const int Size = 40, OldSize = 24;
+    private const int Size = 48, NoTargetsSize = 40, OldSize = 24;
 
     public static string DefaultPath { get; } = Path.Combine(FanPaths.DataDirectory, "heartbeat.bin");
 
@@ -33,7 +36,9 @@ public static class FanHeartbeat
         BinaryPrimitives.WriteInt32LittleEndian(b[28..], r.Sensors?.GpuTempC ?? 0);
         BinaryPrimitives.WriteInt32LittleEndian(b[32..], r.Sensors?.CpuAppliedPercent ?? 0);
         BinaryPrimitives.WriteInt32LittleEndian(b[36..], r.Sensors?.GpuAppliedPercent ?? 0);
-        // Overwrite in place: a 40-byte write is one sector, so a reader never sees half of it.
+        BinaryPrimitives.WriteInt32LittleEndian(b[40..], r.CpuTarget?.Value ?? -1);
+        BinaryPrimitives.WriteInt32LittleEndian(b[44..], r.GpuTarget?.Value ?? -1);
+        // Overwrite in place: a 48-byte write is one sector, so a reader never sees half of it.
         using var fs = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read);
         fs.Write(b);
         fs.SetLength(Size);
@@ -47,8 +52,8 @@ public static class FanHeartbeat
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             Span<byte> b = stackalloc byte[Size];
             int read = fs.Read(b);
-            if (read != Size && read != OldSize) return null;
-            int cpuC = read == Size ? BinaryPrimitives.ReadInt32LittleEndian(b[24..]) : -1;
+            if (read != Size && read != NoTargetsSize && read != OldSize) return null;
+            int cpuC = read >= NoTargetsSize ? BinaryPrimitives.ReadInt32LittleEndian(b[24..]) : -1;
             uint flags = BinaryPrimitives.ReadUInt32LittleEndian(b[16..]);
             return new HeartbeatRecord(
                 BinaryPrimitives.ReadInt64LittleEndian(b),
@@ -57,11 +62,16 @@ public static class FanHeartbeat
                 BinaryPrimitives.ReadInt32LittleEndian(b[20..]),
                 cpuC < 0 ? null : new FanSensors(cpuC, BinaryPrimitives.ReadInt32LittleEndian(b[28..]),
                     BinaryPrimitives.ReadInt32LittleEndian(b[32..]), BinaryPrimitives.ReadInt32LittleEndian(b[36..])),
-                (flags & 2) != 0);
+                (flags & 2) != 0,
+                read == Size ? Target(b[40..]) : null,
+                read == Size ? Target(b[44..]) : null);
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
     }
+
+    private static FanTarget? Target(ReadOnlySpan<byte> b) =>
+        BinaryPrimitives.ReadInt32LittleEndian(b) is var v and >= 0 and <= 0xFF ? FanTarget.FromRaw((byte)v) : null;
 }
 
 public static class FanPaths
