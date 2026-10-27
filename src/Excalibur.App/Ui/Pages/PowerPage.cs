@@ -137,8 +137,8 @@ internal sealed class PowerPage : UserControl
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 12, 0),
         };
         _gpuSlider.SetResourceReference(StyleProperty, "ThinSlider");
-        _gpuSlider.ValueChanged += (_, _) => { if (!_rendering) _gpuDirty = true; _gpuText.Text = $"{_gpuSlider.Value:0} W"; };
         _gpuText = InfoPage.Text($"{_gpuSlider.Value:0} W", "Body");
+        _gpuSlider.ValueChanged += (_, _) => { if (!_rendering) _gpuDirty = true; _gpuText.Text = $"{_gpuSlider.Value:0} W"; };
         _gpuNote = InfoPage.Text("", "Caption", top: 6);
         _gpuError = ErrorText();
         var gpuApply = new Button { Content = "Uygula", Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 110 };
