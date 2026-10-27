@@ -79,7 +79,25 @@ public class FanControlLoopTests
     public void Start_on_a_known_ec_hands_back_without_reading()
     {
         _loop.Start(Balanced, T0);
-        Assert.Equal(1, _hw.StartHandBacks);
+        Assert.Equal(1, _hw.UnreadHandBacks);
+    }
+
+    [Fact]
+    public void Stop_on_a_known_ec_hands_back_without_reading()
+    {
+        _loop.Start(Balanced, T0);
+        _loop.Stop(T0.AddSeconds(1));
+        Assert.Equal(2, _hw.UnreadHandBacks);
+        Assert.Equal(FanTarget.Auto, _hw.Writes[^1].Target);
+    }
+
+    [Fact]
+    public void Stop_on_an_unverified_ec_keeps_the_read_back()
+    {
+        _hw.EcVersion = "X001A0";
+        _loop.Start(Balanced, T0);
+        _loop.Stop(T0.AddSeconds(1));
+        Assert.Equal(0, _hw.UnreadHandBacks);
     }
 
     [Fact]
@@ -87,7 +105,7 @@ public class FanControlLoopTests
     {
         _hw.EcVersion = "X001A0";
         _loop.Start(Balanced, T0);
-        Assert.Equal(0, _hw.StartHandBacks);
+        Assert.Equal(0, _hw.UnreadHandBacks);
         Assert.Equal(FanLoopMode.MonitorOnly, _loop.Status.Mode);
     }
 

@@ -84,12 +84,12 @@ public sealed class FakeFanHardware : IFanHardware
 
     public string? ReadEcVersion() => EcVersion;
 
-    /// <summary>How often the loop took the start's no-read hand-back.</summary>
-    public int StartHandBacks { get; private set; }
+    /// <summary>How often the loop took the no-read hand-back (start or stop on a verified EC).</summary>
+    public int UnreadHandBacks { get; private set; }
 
-    public void ResetToAutoAtStart()
+    public void ResetToAutoUnread()
     {
-        StartHandBacks++;
+        UnreadHandBacks++;
         this.ResetToAuto();
     }
 

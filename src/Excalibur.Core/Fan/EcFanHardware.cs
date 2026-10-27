@@ -314,11 +314,11 @@ public sealed class EcFanHardware : IFanHardware
     }
 
     /// <summary>
-    /// Hands both fans to the EC without reading anything: the start on a verified EC, whose first tick writes the
-    /// profile's targets right after (checked by the RPM). The reads this used to make fell on ACPI 15 warnings at
-    /// every start (2026-10-25 13:05:14.120, 10-26 13:32:02.229).
+    /// Hands both fans to the EC without reading anything, on a verified EC: at start, whose first tick writes the
+    /// profile's targets right after (checked by the RPM), and at stop. The reads this used to make fell on ACPI 15
+    /// warnings at every start (2026-10-25 13:05:14.120, 10-26 13:32:02.229) and at stops (2026-10-27).
     /// </summary>
-    public void ResetToAutoAtStart()
+    public void ResetToAutoUnread()
     {
         if (WritePath == FanWritePath.Wmi)
         {

@@ -22,10 +22,10 @@ public interface IFanHardware
     string? ReadEcVersion();
 
     /// <summary>
-    /// Hands both fans to the EC at start on a verified EC, whose first tick writes the profile's targets right after;
-    /// the real hardware then reads nothing back (<see cref="EcFanHardware.ResetToAutoAtStart"/>).
+    /// Hands both fans to the EC on a verified EC, at start (whose first tick writes the profile's targets right after)
+    /// and at stop; the real hardware then reads nothing back (<see cref="EcFanHardware.ResetToAutoUnread"/>).
     /// </summary>
-    void ResetToAutoAtStart() => this.ResetToAuto();
+    void ResetToAutoUnread() => this.ResetToAuto();
 }
 
 public static class FanHardwareExtensions

@@ -166,7 +166,7 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
             bool known = _ecVersion is not null && _known.Contains(_ecVersion);
             hardware.WritePath = known && _wmi.Contains(_ecVersion!) ? FanWritePath.Wmi : FanWritePath.Ec;
             // An unverified EC keeps the look before writing (0xFF is written only when not already there).
-            ForceAuto(now, "start", atStart: known);
+            ForceAuto(now, "start", unread: known);
             _grace.Begin(now);
             _mode = known ? FanLoopMode.Running : FanLoopMode.MonitorOnly;
             Log(now, _mode == FanLoopMode.Running
@@ -183,7 +183,9 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         {
             if (_trial?.Status.State == EcTrialState.Running) Log(now, "EC trial stopped");
             _trial?.Abort();
-            ForceAuto(now, "stop");
+            // Running means a verified EC: the stop writes 0xFF without the read-back that fell on ACPI 15 warnings
+            // (2026-10-27 21:03:43.692 and 21:04:43.986, the same millisecond as the write and its reads).
+            ForceAuto(now, "stop", unread: _mode == FanLoopMode.Running);
             _mode = FanLoopMode.Stopped;
             Publish();
         }
@@ -403,12 +405,12 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
         ForceAuto(now, "fault");
     }
 
-    private void ForceAuto(DateTimeOffset now, string why, bool atStart = false)
+    private void ForceAuto(DateTimeOffset now, string why, bool unread = false)
     {
         ResetSmoothing();
         try
         {
-            if (atStart) hardware.ResetToAutoAtStart();
+            if (unread) hardware.ResetToAutoUnread();
             else hardware.ResetToAuto();
             _holdsFans = false;
             _applied = FanDecision.BothAuto;
