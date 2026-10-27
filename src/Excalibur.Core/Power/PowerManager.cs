@@ -50,7 +50,8 @@ public sealed record PowerStatus(
     int? GpuPowerWatts = null,
     CpuLimit? CpuLimit = null,
     int? GpuLimitWatts = null,
-    int? GpuLockMhz = null);
+    int? GpuLockMhz = null,
+    IReadOnlyList<ModeWatts>? Modes = null);
 
 /// <summary>
 /// The service's power logic (docs/09 A3). It decides, the hardware does:
@@ -89,13 +90,19 @@ public sealed class PowerManager
     // A running program's rule: its mode and CPU limit, and the mode in effect before it (to go back to when nothing is chosen).
     private PowerMode? _appMode, _beforeApp;
     private CpuLimitOverride? _appLimit;
+    private readonly PowerModeWatts _modes;
+    // A mode just sent is measured from this poll on (the limits follow it within a few seconds), once two reads agree.
+    private const int MeasureAfterPolls = 3;
+    private int _measureFrom = int.MaxValue;
+    private int? _measureLast;
 
     /// <param name="switchProfile">(fan profile name, <c>FanSource</c>) — switches the fan profile the way a user command does.</param>
     /// <param name="settle">How long a change of power source waits before the mode and the profile follow: the EC is busy with
     /// the charger then (ACPI 13 at 19:20:58 on 2026-10-23, 5 s after the plug and the mode command). Zero acts at once.</param>
     public PowerManager(IPowerHardware hardware, ServiceSettingsStore settings, Action<string, string> switchProfile, Action<string>? log = null,
-        TimeSpan settle = default)
+        TimeSpan settle = default, PowerModeWatts? modes = null)
     {
+        _modes = modes ?? new PowerModeWatts();
         _settle = settle;
         _hw = hardware;
         _settings = settings;
@@ -112,7 +119,7 @@ public sealed class PowerManager
                 var source = _source ?? new PowerSource(false, null, false);
                 return new PowerStatus(Effective(), _settings.Current.PowerMode, source, _gpuWatts, LockOf(source),
                     _settings.Current.PowerAutomation.Enabled, _cpu, _gpuPower, _settings.Current.CpuLimit,
-                    _settings.Current.GpuLimitWatts, _gpuLock);
+                    _settings.Current.GpuLimitWatts, _gpuLock, _modes.All);
             }
         }
     }
@@ -134,6 +141,7 @@ public sealed class PowerManager
             _cpu = SafeCpuPower();
             if (_polls++ % CpuLimitCheckEvery == 0) ApplyCpuLimit(EffectiveLimit());
             ApplyGpuLimit(_settings.Current.GpuLimitWatts);
+            MeasureMode(source);
             if (_pending is not null && !EcQuiet.IsQuiet)
             {
                 _pending = null;
@@ -265,6 +273,18 @@ public sealed class PowerManager
         }
     }
 
+    /// <summary>On the wall, a few seconds after a mode was sent: what it allows here (<see cref="PowerModeWatts"/>).</summary>
+    private void MeasureMode(PowerSource source)
+    {
+        if (_polls < _measureFrom || _applied is not { } mode) return;
+        if (!source.CanRunFast) { _measureFrom = int.MaxValue; return; } // battery limits are not the mode's
+        if (_gpuWatts is not { } gpu) return;
+        if (_measureLast != gpu) { _measureLast = gpu; return; }
+        _measureFrom = int.MaxValue;
+        int? cpu = _cpu?.ModePl1Watts;
+        if (_modes.Learn(mode, gpu, cpu)) _log($"power: {mode} allows GPU {gpu} W, CPU {cpu?.ToString() ?? "-"} W here");
+    }
+
     private bool ApplyGpuLimit(int? watts)
     {
         int? before = _gpuLock;
@@ -274,7 +294,8 @@ public sealed class PowerManager
             _log($"power: could not lock the GPU clock ({ex.Message})");
             return false;
         }
-        if (_gpuLock != before) _log(_gpuLock is { } mhz ? $"power: GPU clock locked at {mhz} MHz ({_gpuPower} W)" : "power: GPU clock free");
+        // When the limit starts or ends holding the GPU back; the lock moves every few seconds in a game.
+        if ((_gpuLock is null) != (before is null)) _log(_gpuLock is { } mhz ? $"power: GPU clock locked at {mhz} MHz ({_gpuPower} W)" : "power: GPU clock free");
         return true;
     }
 
@@ -317,6 +338,8 @@ public sealed class PowerManager
         {
             _hw.SetMode(mode);
             _applied = mode;
+            _measureFrom = _polls + MeasureAfterPolls;
+            _measureLast = null;
             _log($"power: mode {mode} sent");
             return PowerResult.Success;
         }
@@ -330,13 +353,13 @@ public sealed class PowerManager
     /// <summary>The mode in effect as far as we know: what we last sent, or what the GPU limit says.</summary>
     private PowerMode? Effective()
     {
-        if (_gpuWatts is { } w && PowerModeInfo.FromGpuWatts(w) is { } fromGpu) return fromGpu;
+        if (_gpuWatts is { } w && _modes.FromGpuWatts(w) is { } fromGpu) return fromGpu;
         return _applied;
     }
 
     /// <summary>True only when the GPU limit positively shows Gaming or High performance (70 W is the driver default, not a mode).</summary>
     private bool FasterModeActive() =>
-        SafeGpuWatts() is { } w && PowerModeInfo.FromGpuWatts(w) is PowerMode.Gaming or PowerMode.HighPerformance;
+        SafeGpuWatts() is { } w && _modes.FromGpuWatts(w) is PowerMode.Gaming or PowerMode.HighPerformance;
 
     private static PowerLock LockOf(PowerSource s) =>
         s.OnBattery ? PowerLock.OnBattery : s.UsbCAdapter ? PowerLock.UsbCAdapter : PowerLock.None;

@@ -15,7 +15,7 @@ public enum PowerMode
 
 public static class PowerModeInfo
 {
-    /// <summary>GPU power limit the firmware sets for each mode, measured with NVML/nvidia-smi.</summary>
+    /// <summary>GPU power limit the firmware sets for each mode, measured with NVML/nvidia-smi (the G870's; see <see cref="PowerModeWatts"/>).</summary>
     public static int GpuWatts(PowerMode mode) => mode switch
     {
         PowerMode.HighPerformance => 100,
@@ -30,14 +30,6 @@ public static class PowerModeInfo
         PowerMode.Gaming => 45,
         _ => 35,
     };
-
-    /// <summary>The mode whose GPU limit is <paramref name="watts"/> (within 2 W), or null when it matches none.</summary>
-    public static PowerMode? FromGpuWatts(int watts)
-    {
-        foreach (var mode in Enum.GetValues<PowerMode>())
-            if (Math.Abs(GpuWatts(mode) - watts) <= 2) return mode;
-        return null;
-    }
 
     /// <summary>
     /// Gaming and High performance need the wall adapter: the stock software forces Office on

@@ -19,16 +19,18 @@ internal sealed class PowerPage : UserControl
     ];
 
     private const string Pl1Tip = "İşlemcinin dakikalarca sürdürebileceği güç. Isıyı ve fan sesini en çok bu belirler. " +
-        "Güç modu bunu ayarlar: Ofis 35 W, Oyun 45 W, Yüksek performans 55 W.";
+        "Güç modu bunu ayarlar; her modun değeri mod düğmelerinde yazar.";
     private const string Pl2Tip = "İşlemcinin birkaç saniyelik ani yüklerde çıkabileceği en yüksek güç. Programlar daha çabuk açılır, " +
         "ama kısa süreli ısınmaya ve fanın birden hızlanmasına yol açar.";
-    private const string GpuTip = "Ekran kartının çekebileceği en yüksek güç. Güç modu belirler: Ofis 75 W, Oyun 85 W, Yüksek performans 100 W.";
+    private const string GpuTip = "Ekran kartının çekebileceği en yüksek güç. Güç modu belirler; her modun değeri mod düğmelerinde yazar.";
     private const string GpuLimitTip = "Ekran kartı bu gücün üstüne çıkmasın diye hızı birkaç saniyede bir ayarlanır. " +
         "Boştayken etkisi yoktur; ağır oyunlarda sınıra kadar çıkar.";
     private const string NowTip = "Şu an çekilen güç. Boştayken düşüktür, oyunlarda ve ağır işlerde sınıra yaklaşır.";
 
     private readonly FanConnection _connection;
     private readonly Dictionary<PowerMode, RadioButton> _buttons = [];
+    // What each mode allows on this laptop, as the service measured it (another model's card differs from the G870's).
+    private readonly Dictionary<PowerMode, TextBlock> _modeWatts = [];
     private readonly TextBlock _now, _note, _error;
     private readonly TextBlock _cpuWatts, _cpuPl1, _cpuPl2, _gpuWatts, _gpuLimit;
     private readonly BlockBar _cpuBar = new() { Margin = new Thickness(0, 6, 0, 0) }, _gpuBar = new() { Margin = new Thickness(0, 6, 0, 0) };
@@ -60,7 +62,7 @@ internal sealed class PowerPage : UserControl
                 Children =
                 {
                     new TextBlock { Text = label, FontWeight = FontWeights.SemiBold },
-                    InfoPage.Text($"işlemci {PowerModeInfo.CpuWatts(mode)} W · ekran kartı {PowerModeInfo.GpuWatts(mode)} W", "Caption", top: 2),
+                    (_modeWatts[mode] = InfoPage.Text("", "Caption", top: 2)),
                 },
             };
             b.SetResourceReference(StyleProperty, "Segment");
@@ -158,16 +160,17 @@ internal sealed class PowerPage : UserControl
                     InfoPage.Text("Ekran kartının ve işlemcinin çekebileceği gücü belirler. Daha yüksek mod daha hızlı ama daha sıcak ve daha gürültülüdür.", "Caption"),
                     buttons, _now, _note, _error),
                 InfoPage.Card("Anlık güç", meters),
-                InfoPage.Card("İşlemci güç sınırı",
-                    InfoPage.Text("İşlemcinin gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, ağır işlerde biraz daha yavaş çalışma. " +
-                                  "Güç modunun sınırından yüksek bir değer etkisizdir.", "Caption"),
-                    new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _byMode, _own } },
-                    _ownPanel, _limitError),
-                InfoPage.Card("Ekran kartı güç sınırı",
-                    InfoPage.Text("Ekran kartının gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı. " +
-                                  "USB-C şarj aletiyle oynarken de işe yarar.", "Caption"),
-                    new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _gpuByMode, _gpuOwn } },
-                    _gpuPanel, _gpuError),
+                SideBySide(
+                    InfoPage.Card("İşlemci güç sınırı",
+                        InfoPage.Text("İşlemcinin gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, ağır işlerde biraz daha yavaş çalışma. " +
+                                      "Güç modunun sınırından yüksek bir değer etkisizdir.", "Caption"),
+                        new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _byMode, _own } },
+                        _ownPanel, _limitError),
+                    InfoPage.Card("Ekran kartı güç sınırı",
+                        InfoPage.Text("Ekran kartının gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı. " +
+                                      "USB-C şarj aletiyle oynarken de işe yarar.", "Caption"),
+                        new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _gpuByMode, _gpuOwn } },
+                        _gpuPanel, _gpuError)),
             },
         };
 
@@ -185,6 +188,16 @@ internal sealed class PowerPage : UserControl
         return t;
     }
 
+    /// <summary>Two cards in one row, the same height.</summary>
+    private static Grid SideBySide(UIElement left, UIElement right)
+    {
+        var grid = new Grid { ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition { Width = new GridLength(14) }, new ColumnDefinition() } };
+        Grid.SetColumn(right, 2);
+        grid.Children.Add(left);
+        grid.Children.Add(right);
+        return grid;
+    }
+
     /// <summary>A caption line whose text changes, followed by its (i).</summary>
     private static (StackPanel Row, TextBlock Text) Term(string tip)
     {
@@ -196,7 +209,7 @@ internal sealed class PowerPage : UserControl
     {
         var b = new RadioButton
         {
-            GroupName = group, Margin = new Thickness(0, 0, 8, 8), MinWidth = 210, Height = 58,
+            GroupName = group, Margin = new Thickness(0, 0, 8, 8), MinWidth = 180, Height = 58,
             Content = new StackPanel { Children = { new TextBlock { Text = label, FontWeight = FontWeights.SemiBold }, InfoPage.Text(detail, "Caption", top: 2) } },
         };
         b.SetResourceReference(StyleProperty, "Segment");
@@ -291,6 +304,10 @@ internal sealed class PowerPage : UserControl
             bool allowed = power is not null && (mode == PowerMode.Office || power.Lock == PowerLock.None);
             button.IsEnabled = allowed;
             button.IsChecked = power?.Mode == mode;
+            var w = power?.Modes?.FirstOrDefault(x => x.Mode == mode);
+            _modeWatts[mode].Text = w is { GpuWatts: { } g }
+                ? w.CpuWatts is { } c ? $"işlemci {c} W · ekran kartı {g} W" : $"ekran kartı {g} W"
+                : "seçilince ölçülür";
         }
         _rendering = false;
 
@@ -338,7 +355,7 @@ internal sealed class PowerPage : UserControl
         SliderTexts();
         _ownPanel.Visibility = _own.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
-        int? modeLimit = power?.Mode is { } m ? PowerModeInfo.CpuWatts(m) : null;
+        int? modeLimit = power?.Mode is { } m ? power.Modes?.FirstOrDefault(x => x.Mode == m)?.CpuWatts : null;
         _limitNote.Text = modeLimit is { } ml && _pl1.Value > ml
             ? $"Şu anki güç modunda uzun süreli sınır en çok {ml} W; daha yüksek değer etkisiz kalır."
             : power?.CpuLimit is { } on && !_limitDirty ? $"Uygulanıyor: uzun süreli {on.Pl1Watts} W, kısa süreli {on.Pl2Watts} W."

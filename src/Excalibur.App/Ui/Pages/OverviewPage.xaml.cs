@@ -171,6 +171,7 @@ public partial class OverviewPage : UserControl
         (PowerMode.Office, "Ofis", "Ofis modu"), (PowerMode.Gaming, "Oyun", "Oyun modu"), (PowerMode.HighPerformance, "Yüksek", "Yüksek performans"),
     ];
     private readonly Dictionary<PowerMode, RadioButton> _powerButtons = [];
+    private readonly Dictionary<PowerMode, TextBlock> _powerWatts = [];
     private bool _renderingPower;
 
     private void BuildPowerButtons()
@@ -181,17 +182,17 @@ public partial class OverviewPage : UserControl
             var b = new RadioButton
             {
                 GroupName = group, MinWidth = 0, Height = 52,
-                ToolTip = $"{full}: işlemci en çok {PowerModeInfo.CpuWatts(mode)} W, ekran kartı en çok {PowerModeInfo.GpuWatts(mode)} W",
+                ToolTip = full,
                 Content = new StackPanel
                 {
                     Children =
                     {
                         new TextBlock { Text = label, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
-                        new TextBlock
+                        (_powerWatts[mode] = new TextBlock
                         {
-                            Text = $"{PowerModeInfo.CpuWatts(mode)}/{PowerModeInfo.GpuWatts(mode)} W", Style = (Style)FindResource("Caption"),
+                            Text = "–", Style = (Style)FindResource("Caption"),
                             HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0),
-                        },
+                        }),
                     },
                 },
             };
@@ -221,6 +222,13 @@ public partial class OverviewPage : UserControl
         {
             button.IsEnabled = power is not null && (mode == PowerMode.Office || power.Lock == PowerLock.None);
             button.IsChecked = power?.Mode == mode;
+            // What the mode allows on this laptop, as the service measured it; nothing until it has.
+            var w = power?.Modes?.FirstOrDefault(x => x.Mode == mode);
+            string full = PowerModes.First(x => x.Mode == mode).Full;
+            _powerWatts[mode].Text = w is { GpuWatts: { } g } ? $"{w.CpuWatts?.ToString() ?? "–"}/{g} W" : "–";
+            button.ToolTip = w is { GpuWatts: { } gw }
+                ? $"{full}: {(w.CpuWatts is { } cw ? $"işlemci en çok {cw} W, " : "")}ekran kartı en çok {gw} W"
+                : $"{full}: seçilince ölçülür";
         }
         _renderingPower = false;
         PowerHint.Text = power?.Lock switch

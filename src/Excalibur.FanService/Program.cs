@@ -131,7 +131,8 @@ builder.Services.AddSingleton(sp =>
 {
     var switcher = sp.GetRequiredService<ProfileSwitcher>();
     return new PowerManager(powerHardware, settingsStore, (profile, source) => switcher.Switch(profile, source),
-        m => fileLog.Write(DateTimeOffset.Now, m), simulate ? TimeSpan.Zero : EcQuiet.AfterCharger);
+        m => fileLog.Write(DateTimeOffset.Now, m), simulate ? TimeSpan.Zero : EcQuiet.AfterCharger,
+        new PowerModeWatts(Path.Combine(runtimeDir, PowerModeWatts.FileName)));
 });
 builder.Services.AddSingleton(new BatteryMonitor(batteryHardware, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddSingleton(new BatteryRecorder(batteryMeter));

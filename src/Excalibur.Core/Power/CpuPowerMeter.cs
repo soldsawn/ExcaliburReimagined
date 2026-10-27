@@ -4,8 +4,9 @@ namespace Excalibur.Core.Power;
 /// The CPU package now: the power it draws (null until two readings exist) and the limits in force,
 /// in whole watts. A limit is the lower of its MSR and MCHBAR copies: the power modes set PL1 in the
 /// MCHBAR copy (Office 35, Gaming 45, High performance 55 W on the G870) and leave the MSR at 65 W.
+/// <see cref="ModePl1Watts"/> is the MCHBAR copy alone: the power mode's, without the user's own limit.
 /// </summary>
-public sealed record CpuPower(int? Watts, int? Pl1Watts, int? Pl2Watts);
+public sealed record CpuPower(int? Watts, int? Pl1Watts, int? Pl2Watts, int? ModePl1Watts = null);
 
 /// <summary>The registers <see cref="CpuPowerMeter"/> reads; the real ones go through PawnIO's IntelMSR and IntelMCHBAR modules.</summary>
 public interface ICpuPowerRegisters
@@ -41,7 +42,7 @@ public sealed class CpuPowerMeter(ICpuPowerRegisters registers)
 
         var (msr1, msr2) = Limits(registers.ReadMsr(PackageLimitMsr), watt);
         var (mmio1, mmio2) = registers.ReadMchbarLimit() is { } mmio ? Limits(mmio, watt) : (null, null);
-        return new CpuPower(watts, Lower(msr1, mmio1), Lower(msr2, mmio2));
+        return new CpuPower(watts, Lower(msr1, mmio1), Lower(msr2, mmio2), mmio1);
     }
 
     private static (double Watt, double Joule) Units(ulong raw) =>

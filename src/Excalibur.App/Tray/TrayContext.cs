@@ -33,9 +33,9 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ContextMenuStrip _menu = new() { Font = new Font("Segoe UI", 9f) };
     private static readonly (PowerMode Mode, string Label)[] PowerModes =
     [
-        (PowerMode.Office, "Ofis modu · 75 W"),
-        (PowerMode.Gaming, "Oyun modu · 85 W"),
-        (PowerMode.HighPerformance, "Yüksek performans · 100 W"),
+        (PowerMode.Office, "Ofis modu"),
+        (PowerMode.Gaming, "Oyun modu"),
+        (PowerMode.HighPerformance, "Yüksek performans"),
     ];
     private readonly List<ToolStripMenuItem> _powerItems = [];
     private readonly ToolStripMenuItem _stateItem = new() { Tag = "state" };
@@ -344,6 +344,9 @@ internal sealed class TrayContext : ApplicationContext
             item.Checked = Connected && s?.Power?.Mode == mode;
             // On battery or a weak USB-C adapter only Office is allowed (the laptop forces it).
             item.Enabled = Connected && (mode == PowerMode.Office || s?.Power is not { Lock: not PowerLock.None });
+            // The graphics card's limit in that mode on this laptop, once the service has measured it.
+            string label = PowerModes.First(x => x.Mode == mode).Label;
+            item.Text = s?.Power?.Modes?.FirstOrDefault(x => x.Mode == mode) is { GpuWatts: { } gpu } ? $"{label} · {gpu} W" : label;
         }
     }
 

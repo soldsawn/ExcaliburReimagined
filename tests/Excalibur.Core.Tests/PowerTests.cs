@@ -272,10 +272,73 @@ public sealed class PowerTests : IDisposable
     [InlineData(85, PowerMode.Gaming)]
     [InlineData(75, PowerMode.Office)]
     [InlineData(76, PowerMode.Office)]
-    public void Gpu_watts_map_to_modes(int watts, PowerMode expected) => Assert.Equal(expected, PowerModeInfo.FromGpuWatts(watts));
+    public void Gpu_watts_map_to_modes(int watts, PowerMode expected) => Assert.Equal(expected, new PowerModeWatts().FromGpuWatts(watts));
 
     [Fact]
-    public void Gpu_watts_between_modes_match_none() => Assert.Null(PowerModeInfo.FromGpuWatts(70));
+    public void Gpu_watts_between_modes_match_none() => Assert.Null(new PowerModeWatts().FromGpuWatts(70));
+
+    // ---- what each mode allows here ----------------------------------------------------------
+
+    private void PollMany(int count)
+    {
+        for (int i = 0; i < count; i++) _power.Poll();
+    }
+
+    [Fact]
+    public void A_mode_is_measured_a_few_seconds_after_it_was_sent_on_the_wall()
+    {
+        Poll(Wall);
+        _hw.Cpu = new CpuPower(20, 30, 115, ModePl1Watts: 60);
+        Assert.True(_power.SetMode(PowerMode.Gaming).Ok);
+        _hw.GpuWatts = 140; // another laptop's card
+        PollMany(6);
+        Assert.Equal(new ModeWatts(PowerMode.Gaming, 60, 140), _power.Status.Modes!.Single(m => m.Mode == PowerMode.Gaming));
+        Assert.Equal(PowerMode.Gaming, _power.Status.Mode);
+        // Not a G870: the modes not measured yet show nothing rather than the G870's watts.
+        Assert.Equal(new ModeWatts(PowerMode.Office, null, null), _power.Status.Modes!.Single(m => m.Mode == PowerMode.Office));
+    }
+
+    [Fact]
+    public void A_g870_shows_its_known_watts_once_one_mode_matched_them()
+    {
+        Assert.All(_power.Status.Modes!, m => Assert.Null(m.GpuWatts)); // nothing measured yet
+        Poll(Wall);
+        Assert.True(_power.SetMode(PowerMode.Gaming).Ok);
+        _hw.GpuWatts = 85;
+        _hw.Cpu = new CpuPower(20, 45, 115, ModePl1Watts: 45);
+        PollMany(6);
+        Assert.Equal(
+            [new ModeWatts(PowerMode.HighPerformance, 55, 100), new ModeWatts(PowerMode.Gaming, 45, 85), new ModeWatts(PowerMode.Office, 35, 75)],
+            _power.Status.Modes);
+    }
+
+    [Fact]
+    public void Battery_limits_are_not_taken_for_the_mode()
+    {
+        Poll(Battery);
+        Assert.True(_power.SetMode(PowerMode.Office).Ok);
+        _hw.GpuWatts = 50;
+        PollMany(6);
+        Assert.All(_power.Status.Modes!, m => Assert.Null(m.GpuWatts));
+    }
+
+    [Fact]
+    public void A_measured_mode_wins_over_the_g870_value_it_shares()
+    {
+        // A card whose Office is 100 W: that is not High performance here.
+        var modes = new PowerModeWatts();
+        modes.Learn(PowerMode.Office, 100, 45);
+        Assert.Equal(PowerMode.Office, modes.FromGpuWatts(100));
+        Assert.Null(modes.FromGpuWatts(140));
+    }
+
+    [Fact]
+    public void Measurements_are_kept_in_their_file()
+    {
+        string path = Path.Combine(_dir, PowerModeWatts.FileName);
+        new PowerModeWatts(path).Learn(PowerMode.Gaming, 140, null);
+        Assert.Equal(new ModeWatts(PowerMode.Gaming, null, 140), new PowerModeWatts(path).All.Single(m => m.Mode == PowerMode.Gaming));
+    }
 
     [Fact]
     public void Power_settings_round_trip_and_bad_parts_fall_back_one_by_one()

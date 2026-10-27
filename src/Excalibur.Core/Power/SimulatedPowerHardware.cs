@@ -21,7 +21,7 @@ public sealed class SimulatedPowerHardware : IPowerHardware
     public CpuPower? ReadCpuPower()
     {
         int pl1 = PowerModeInfo.CpuWatts(_mode ?? PowerMode.Gaming);
-        return new CpuPower(12 + Random.Shared.Next(0, 8), Math.Min(pl1, _cpuLimit?.Pl1Watts ?? pl1), Math.Min(115, _cpuLimit?.Pl2Watts ?? 115));
+        return new CpuPower(12 + Random.Shared.Next(0, 8), Math.Min(pl1, _cpuLimit?.Pl1Watts ?? pl1), Math.Min(115, _cpuLimit?.Pl2Watts ?? 115), pl1);
     }
 
     public int? ReadGpuPowerWatts() => 8 + Random.Shared.Next(0, 6);

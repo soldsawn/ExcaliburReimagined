@@ -35,7 +35,7 @@ public static class FanPipe
     ///     choices; none = the program closed), status AppProgram; profile changes it makes have Source "app".
     /// 12: + status WritePath (Ec / Wmi: how the fans are written), Trial WmiFollows / Path, settings WmiFanEcVersions.
     /// 13: + setGpuLimit(gpuLimitWatts) (none = the power mode decides; response Code gpu_limit_invalid / gpu_limit_failed),
-    ///     status Power GpuLimitWatts / GpuLockMhz, settings GpuLimitWatts.
+    ///     status Power GpuLimitWatts / GpuLockMhz / Modes (what each power mode allows here, measured), settings GpuLimitWatts.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
     public const int ProtocolVersion = 13;
@@ -105,11 +105,12 @@ public sealed record PowerStatusDto(
     int? GpuPowerWatts = null,
     CpuLimit? CpuLimit = null,
     int? GpuLimitWatts = null,
-    int? GpuLockMhz = null)
+    int? GpuLockMhz = null,
+    IReadOnlyList<ModeWatts>? Modes = null)
 {
     public static PowerStatusDto From(PowerStatus s) =>
         new(s.Mode, s.Preferred, s.Source.OnBattery, s.Source.BatteryPercent, s.Source.UsbCAdapter, s.GpuWatts, s.Lock, s.AutomationEnabled,
-            s.Cpu?.Watts, s.Cpu?.Pl1Watts, s.Cpu?.Pl2Watts, s.GpuPowerWatts, s.CpuLimit, s.GpuLimitWatts, s.GpuLockMhz);
+            s.Cpu?.Watts, s.Cpu?.Pl1Watts, s.Cpu?.Pl2Watts, s.GpuPowerWatts, s.CpuLimit, s.GpuLimitWatts, s.GpuLockMhz, s.Modes);
 }
 
 /// <summary>
