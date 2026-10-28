@@ -267,6 +267,16 @@ public sealed class PowerTests : IDisposable
         Assert.Equal(PowerLock.OnBattery, _power.Status.Lock);
     }
 
+    [Fact]
+    public void The_mode_sent_is_shown_while_the_gpu_limit_wanders()
+    {
+        Poll(Wall);
+        Assert.True(_power.SetMode(PowerMode.Gaming).Ok);
+        _hw.GpuWatts = 75; // Dynamic Boost holding Gaming down to Office's limit
+        _power.Poll();
+        Assert.Equal(PowerMode.Gaming, _power.Status.Mode);
+    }
+
     [Theory]
     [InlineData(100, PowerMode.HighPerformance)]
     [InlineData(85, PowerMode.Gaming)]
@@ -330,6 +340,20 @@ public sealed class PowerTests : IDisposable
         modes.Learn(PowerMode.Office, 100, 45);
         Assert.Equal(PowerMode.Office, modes.FromGpuWatts(100));
         Assert.Null(modes.FromGpuWatts(140));
+    }
+
+    [Fact]
+    public void A_mode_keeps_the_highest_limits_measured()
+    {
+        Poll(Wall);
+        Assert.True(_power.SetMode(PowerMode.Gaming).Ok);
+        _hw.GpuWatts = 85;
+        _hw.Cpu = new CpuPower(20, 45, 115, ModePl1Watts: 45);
+        PollMany(6);
+        _hw.GpuWatts = 73; // held down under load
+        _hw.Cpu = new CpuPower(20, 35, 115, ModePl1Watts: 35);
+        PollMany(6);
+        Assert.Equal(new ModeWatts(PowerMode.Gaming, 45, 85), _power.Status.Modes!.Single(m => m.Mode == PowerMode.Gaming));
     }
 
     [Fact]

@@ -273,14 +273,16 @@ public sealed class PowerManager
         }
     }
 
-    /// <summary>On the wall, a few seconds after a mode was sent: what it allows here (<see cref="PowerModeWatts"/>).</summary>
+    /// <summary>
+    /// On the wall, from a few seconds after a mode was sent until the next one: what it allows here (<see cref="PowerModeWatts"/>
+    /// keeps the highest; the limits drop below it with load and heat).
+    /// </summary>
     private void MeasureMode(PowerSource source)
     {
         if (_polls < _measureFrom || _applied is not { } mode) return;
         if (!source.CanRunFast) { _measureFrom = int.MaxValue; return; } // battery limits are not the mode's
         if (_gpuWatts is not { } gpu) return;
         if (_measureLast != gpu) { _measureLast = gpu; return; }
-        _measureFrom = int.MaxValue;
         int? cpu = _cpu?.ModePl1Watts;
         if (_modes.Learn(mode, gpu, cpu)) _log($"power: {mode} allows GPU {gpu} W, CPU {cpu?.ToString() ?? "-"} W here");
     }
@@ -350,11 +352,14 @@ public sealed class PowerManager
         }
     }
 
-    /// <summary>The mode in effect as far as we know: what we last sent, or what the GPU limit says.</summary>
+    /// <summary>
+    /// The mode in effect as far as we know: what we last sent, else what the GPU limit says. The limit alone flips the shown
+    /// mode: Dynamic Boost moves it (76–85 W within 12 s in Gaming on 2026-10-28), across another mode's value.
+    /// </summary>
     private PowerMode? Effective()
     {
-        if (_gpuWatts is { } w && _modes.FromGpuWatts(w) is { } fromGpu) return fromGpu;
-        return _applied;
+        if (_applied is { } applied) return applied;
+        return _gpuWatts is { } w ? _modes.FromGpuWatts(w) : null;
     }
 
     /// <summary>True only when the GPU limit positively shows Gaming or High performance (70 W is the driver default, not a mode).</summary>

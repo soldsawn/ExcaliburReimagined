@@ -20,13 +20,21 @@ public sealed class PowerModeWatts(string? path = null)
     private readonly Dictionary<PowerMode, (int? Cpu, int Gpu)> _measured = Load(path);
     private readonly object _gate = new();
 
-    /// <summary>Stores a measurement; true when it was new or changed.</summary>
+    /// <summary>
+    /// Stores a measurement, keeping the highest seen: Dynamic Boost and heat hold the limits below what the mode allows (Gaming
+    /// read 55, 73 and 85 W GPU on 2026-10-27/28). True when it raised a value.
+    /// </summary>
     public bool Learn(PowerMode mode, int gpuWatts, int? cpuWatts)
     {
         lock (_gate)
         {
-            if (_measured.TryGetValue(mode, out var known) && known == (cpuWatts, gpuWatts)) return false;
-            _measured[mode] = (cpuWatts, gpuWatts);
+            (int? Cpu, int Gpu) next = (cpuWatts, gpuWatts);
+            if (_measured.TryGetValue(mode, out var known))
+            {
+                next = (known.Cpu is { } c && !(cpuWatts > c) ? c : cpuWatts, Math.Max(known.Gpu, gpuWatts));
+                if (next == known) return false;
+            }
+            _measured[mode] = next;
             Save();
             return true;
         }
