@@ -85,7 +85,7 @@ public sealed class GuardianWorker(EcFanHardware hardware, FanFileLog log, ILogg
             {
                 // The way the service writes them (the last heartbeat says): WMI fans may not answer the EC's registers.
                 hardware.WritePath = heartbeat is { WmiFans: true } ? FanWritePath.Wmi : FanWritePath.Ec;
-                hardware.ResetToAuto();
+                hardware.ResetToAutoUnread();
                 _monitor.HandedBack(now);
                 // Say it once per distinct reason, not every 2 s while a target keeps reappearing.
                 if (verdict.Reason != _lastResetReason) Log($"RESET fans to EC automatic: {verdict.Reason}");

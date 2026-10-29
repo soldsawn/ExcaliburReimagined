@@ -19,6 +19,7 @@ public sealed class GmWmiGateway : ISmiChannel
     private const string Scope = @"root\wmi";
     private const string ClassName = "RW_GMWMI";
     private readonly object _gate = new();
+    private readonly StallGuard _guard = new(StallGuard.DefaultTimeout, m => SlowOps.Report?.Invoke(m));
 
     /// <summary>True when the WMI class exists on this machine.</summary>
     public bool IsAvailable()
@@ -45,21 +46,27 @@ public sealed class GmWmiGateway : ISmiChannel
             // The handler reads the EC through Windows' driver, so a collision stalls this call.
             // Taking the EC lock keeps our other process's raw EC access out meanwhile; when it is
             // not free within 2 s a command goes ahead anyway (power mode and lighting must not be lost).
+            // A call that hangs gives the lock back after 5 s (StallGuard); while it hangs nothing waits for the lock.
+            string what = $"wmi 0x{request.A1:X4}";
+            _guard.ThrowIfStalled(what);
             using var ecLock = EcLock.TryAcquire();
             if (skipWhenBusy && !ecLock.Held) return null;
-            var sw = Stopwatch.StartNew();
-            try
+            return _guard.Run(what, () =>
             {
-                using var instance = GetInstance()
-                    ?? throw new InvalidOperationException($"{ClassName} is not present on this system.");
-                instance["BufferBytes"] = request.ToBytes();
-                instance.Put();
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    using var instance = GetInstance()
+                        ?? throw new InvalidOperationException($"{ClassName} is not present on this system.");
+                    instance["BufferBytes"] = request.ToBytes();
+                    instance.Put();
 
-                using var reply = GetInstance()
-                    ?? throw new InvalidOperationException($"{ClassName} disappeared after write.");
-                return SmiCommand.FromBytes((byte[])reply["BufferBytes"]);
-            }
-            finally { SlowOps.Check($"wmi 0x{request.A1:X4}", sw.Elapsed); }
+                    using var reply = GetInstance()
+                        ?? throw new InvalidOperationException($"{ClassName} disappeared after write.");
+                    return SmiCommand.FromBytes((byte[])reply["BufferBytes"]);
+                }
+                finally { SlowOps.Check(what, sw.Elapsed); }
+            });
         }
     }
 

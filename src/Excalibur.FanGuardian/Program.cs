@@ -41,5 +41,13 @@ builder.Services.AddSingleton(fileLog);
 builder.Services.AddHostedService<GuardianWorker>();
 
 using var host = builder.Build();
-host.Run();
+try
+{
+    host.Run();
+}
+catch (OperationCanceledException)
+{
+    // The stop's time ran out while a check was still inside a call (it crashed the process, 2026-10-29 02:31:15).
+    fileLog.Write(DateTimeOffset.Now, "guardian stopped (a call was still running)");
+}
 return 0;

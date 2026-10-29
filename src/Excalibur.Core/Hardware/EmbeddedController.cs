@@ -123,10 +123,13 @@ public sealed class EmbeddedController : IDisposable
     /// attempt, no retry: if the handshake times out we let the bus settle and stop, rather than
     /// risk re-sending bytes into a half-finished transaction; the caller decides what follows.
     /// Callers must restrict which addresses they pass; this method does not.
+    /// With <paramref name="lockOptional"/> it writes even when the EC lock is not free within 2 s: for handing the fans
+    /// back, which must not wait on a holder that hangs (a WMI call held it 42 min, 2026-10-29).
     /// </summary>
-    public void WriteByte(byte address, byte value)
+    public void WriteByte(byte address, byte value, bool lockOptional = false)
     {
-        using var ecLock = EcLock.Acquire();
+        using var ecLock = lockOptional ? EcLock.TryAcquire() : EcLock.Acquire();
+        string what = ecLock.Held ? $"ec write 0x{address:X2}" : $"ec write 0x{address:X2} unlocked";
         var sw = Stopwatch.StartNew();
         try
         {
@@ -145,7 +148,7 @@ public sealed class EmbeddedController : IDisposable
             SettleAfterTimeout();
             throw;
         }
-        finally { SlowOps.Check($"ec write 0x{address:X2}", sw.Elapsed); }
+        finally { SlowOps.Check(what, sw.Elapsed); }
     }
 
     /// <summary>Raw EC status byte (port 0x66): bit0 = OBF, bit1 = IBF. Diagnostic only.</summary>

@@ -46,6 +46,7 @@ public sealed class EcFanHardware : IFanHardware
     // 17:44, 19:10, 19:46); the CPU temperature, which the curves and safety rules follow closely, stays live (MSR).
     private static readonly TimeSpan MinWmiInterval = TimeSpan.FromSeconds(1.5);
     private bool _reused;
+    private bool _withoutWmi;
     private GpuTempSource _gpuSource = GpuTempSource.Ec;
 
     /// <summary>
@@ -195,14 +196,20 @@ public sealed class EcFanHardware : IFanHardware
         if (_reused) return LastWmi();
         SmiCommand? reply;
         try { reply = wmi.TryExecute(SmiCommand.Get(0x0200)); }
+        catch (WmiStalledException ex) { return WithoutWmi(ex.Message); }
         catch (Exception ex) { throw new FanReadException("WMI sensor read failed.", ex); }
         // Our other process holds the EC (its own call is stalling): do not pile a second one on top.
         if (reply is not { } sensors)
         {
             if (_lastWmi is null || _sinceWmi.Elapsed >= MaxReuse)
-                throw new FanReadException("WMI sensor read skipped: the EC lock is held elsewhere.");
+                return WithoutWmi("WMI sensor read skipped: the EC lock is held elsewhere.");
             _reused = true;
             return LastWmi();
+        }
+        if (_withoutWmi)
+        {
+            Log?.Invoke("sensors: from WMI again");
+            _withoutWmi = false;
         }
 
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
@@ -234,6 +241,25 @@ public sealed class EcFanHardware : IFanHardware
         // The CPU temperature does not come from the EC (MSR): it stays live.
         if (cpuTemperature?.Invoke() is { } live and >= 1 and <= MaxTempC) last = last with { CpuC = live };
         return last;
+    }
+
+    /// <summary>
+    /// While WMI does not answer: the CPU temperature from the CPU itself, the GPU's from the NVIDIA driver (else the CPU's,
+    /// as when the GPU is off), the fan speeds as last read. The curves and safety rules follow the temperatures, so the
+    /// fans stay under control; without the CPU's sensor or a first WMI read the read fails as before.
+    /// </summary>
+    private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) WithoutWmi(string why)
+    {
+        int? cpuC = cpuTemperature?.Invoke();
+        if (_lastWmi is not { } last || cpuC is not (>= 1 and <= MaxTempC)) throw new FanReadException(why);
+        int gpuC = Power.Nvml.TemperatureC() is { } g and >= 1 and <= MaxTempC ? g : cpuC.Value;
+        if (!_withoutWmi)
+        {
+            Log?.Invoke($"sensors: {why} Until WMI answers: CPU temperature from the CPU, GPU from the NVIDIA driver, fan speeds as last read");
+            _withoutWmi = true;
+        }
+        _reused = true;
+        return last with { CpuC = cpuC.Value, GpuC = gpuC };
     }
 
     /// <summary>
@@ -317,6 +343,8 @@ public sealed class EcFanHardware : IFanHardware
     /// Hands both fans to the EC without reading anything, on a verified EC: at start, whose first tick writes the
     /// profile's targets right after (checked by the RPM), and at stop. The reads this used to make fell on ACPI 15
     /// warnings at every start (2026-10-25 13:05:14.120, 10-26 13:32:02.229) and at stops (2026-10-27).
+    /// Also the guardian's hand-back: it writes even when the EC lock is not free within 2 s, and reads nothing (with the
+    /// lock held elsewhere the read-back's retries made each attempt take ~40 s and fail, 2026-10-29 00:40-02:26).
     /// </summary>
     public void ResetToAutoUnread()
     {
@@ -330,7 +358,7 @@ public sealed class EcFanHardware : IFanHardware
         {
             try
             {
-                ec.WriteByte(FanRegisters.TargetOf(fan), FanTarget.Auto.Value);
+                ec.WriteByte(FanRegisters.TargetOf(fan), FanTarget.Auto.Value, lockOptional: true);
                 _follow.Wrote(fan, FanTarget.Auto, _lastPercent[(int)fan], _clock.Elapsed);
                 if (_ec is not null)
                     _ec = fan == FanId.Cpu ? _ec with { CpuTarget = FanTarget.Auto } : _ec with { GpuTarget = FanTarget.Auto };
