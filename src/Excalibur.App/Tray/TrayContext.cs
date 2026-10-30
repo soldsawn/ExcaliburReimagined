@@ -134,6 +134,10 @@ internal sealed class TrayContext : ApplicationContext
             if (item is ToolStripMenuItem) item.Padding = ItemPadding;
             else if (item is ToolStripSeparator) { item.AutoSize = false; item.Height = 2 * ThemedMenuRenderer.CardPadding + 6; }
         }
+        // The status line sits lower and close to the first card: more room above it, a short gap below it
+        // (the menu's own top padding is not honoured, so the item carries it).
+        _stateItem.Padding = new Padding(ItemPadding.Left, 12, ItemPadding.Right, 4);
+        _menu.Items[_menu.Items.IndexOf(_stateItem) + 1].Height = ThemedMenuRenderer.CardPadding + 1;
         _menu.Padding = new Padding(0, ThemedMenuRenderer.CardPadding + 4, 0, 0);
         _menu.Opening += (_, _) => { TrayLog.Write("menu: opening"); ApplyMenuTheme(); RenderMenu(); _ = RefreshProfilesAsync(); };
         _menu.ItemClicked += (_, e) => TrayLog.Write($"menu: item clicked '{e.ClickedItem?.Text}'");

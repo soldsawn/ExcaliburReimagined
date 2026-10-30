@@ -81,7 +81,13 @@ internal sealed class ThemedMenuRenderer(Theme theme) : ToolStripRenderer
         // Without the image/check column the item lays its text out from its very edge; start every one at TextInset.
         float scale = e.Item.Owner?.DeviceDpi / 96f ?? 1f;
         var text = e.TextRectangle;
-        e.TextRectangle = new Rectangle((int)(TextInset * scale) - e.Item.Bounds.X, text.Y, text.Width, text.Height);
+        // The status line is a heading over the cards: centred on the menu, at the bottom of its (taller) row, near the first card.
+        bool heading = e.Item.Tag is "state";
+        int left = heading
+            ? ((e.Item.Owner?.Width ?? e.Item.Width) - TextRenderer.MeasureText(e.Text, e.TextFont).Width) / 2 - e.Item.Bounds.X
+            : (int)(TextInset * scale) - e.Item.Bounds.X;
+        int top = heading ? e.Item.Height - text.Height - (int)(5 * scale) : text.Y;
+        e.TextRectangle = new Rectangle(left, top, text.Width, text.Height);
         base.OnRenderItemText(e);
         if (e.Item is not ToolStripMenuItem { Checked: true }) return;
 
