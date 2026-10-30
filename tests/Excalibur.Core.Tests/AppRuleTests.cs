@@ -59,6 +59,9 @@ public sealed class AppRuleTests : IDisposable
         Assert.Equal(edited, t.Active);
         Assert.True(t.Update([Game], Running("cs2.exe", "code.exe"))); // the rule was deleted
         Assert.Equal(Game, t.Active);
+        // The last rule deleted: the tray no longer lists the programs, and the rule still ends.
+        Assert.True(t.Update([], Running()));
+        Assert.Null(t.Active);
     }
 
     [Fact]

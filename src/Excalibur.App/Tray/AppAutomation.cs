@@ -52,7 +52,9 @@ internal sealed class AppAutomation : IDisposable
     {
         if (_busy) return;
         var before = _tracker.Active;
-        if (!_tracker.Update(_settings.Current.AppRules, RunningPrograms())) return;
+        // Without rules nothing can be in force, so the programs are not listed (a rule just deleted still ends here).
+        var rules = _settings.Current.AppRules;
+        if (!_tracker.Update(rules, rules.Count == 0 ? NoPrograms : RunningPrograms())) return;
         var rule = _tracker.Active;
         bool rateChanged = ApplyRefresh(rule);
         var status = await SendAsync(rule);
@@ -104,6 +106,8 @@ internal sealed class AppAutomation : IDisposable
             _busy = false;
         }
     }
+
+    private static readonly HashSet<string> NoPrograms = [];
 
     private static HashSet<string> RunningPrograms()
     {

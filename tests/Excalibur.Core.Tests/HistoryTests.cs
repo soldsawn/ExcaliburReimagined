@@ -34,6 +34,16 @@ public sealed class HistoryTests : IDisposable
     }
 
     [Fact]
+    public void Custom_profiles_share_one_code()
+    {
+        Assert.Equal(ProfileCode.Custom, ProfileCode.Of("Gece sessiz"));
+        Assert.Equal(ProfileCode.Custom, ProfileCode.Of("Oyun 2"));
+        Assert.Equal(2, ProfileCode.Of("Balanced"));
+        Assert.Equal(ProfileCode.Unknown, ProfileCode.Of(null));
+        Assert.Equal("Custom", ProfileCode.NameOf(ProfileCode.Custom));
+    }
+
+    [Fact]
     public void Status_without_a_reading_is_not_recorded()
     {
         var status = new FanStatus(FanLoopMode.Running, "Balanced", null, null, null, "P008B0", 0, false);

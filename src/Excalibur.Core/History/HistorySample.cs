@@ -82,16 +82,22 @@ public readonly record struct HistorySample(
     private static byte Byte(int v) => (byte)Math.Clamp(v, 0, 254);
 }
 
-/// <summary>Profiles as one byte in the history (custom profiles, A4, will use 16 and up).</summary>
+/// <summary>
+/// Profiles as one byte in the history. Every custom profile shares <see cref="Custom"/> (a name can be renamed or reused, so
+/// one code each would not stay true); files before 2026-10-30 hold <see cref="Unknown"/> for them.
+/// </summary>
 public static class ProfileCode
 {
     public const byte Unknown = 255;
-    private static readonly string[] Names = ["EcAuto", "Quiet", "Balanced", "Performance", "Manual"];
+    public const byte Custom = 5;
+    private static readonly string[] Names = ["EcAuto", "Quiet", "Balanced", "Performance", "Manual", "Custom"];
 
-    public static byte Of(string name)
+    /// <summary>A built-in profile's code; any other name is a custom profile.</summary>
+    public static byte Of(string? name)
     {
+        if (string.IsNullOrEmpty(name)) return Unknown;
         int i = Array.IndexOf(Names, name);
-        return i < 0 ? Unknown : (byte)i;
+        return i < 0 ? Custom : (byte)i;
     }
 
     public static string? NameOf(byte code) => code < Names.Length ? Names[code] : null;
