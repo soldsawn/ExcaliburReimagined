@@ -95,6 +95,9 @@ internal sealed class TrayContext : ApplicationContext
         if (snapshot is not null) SnapshotAfterFirstPoll(snapshot);
     }
 
+    // Room on the left for the renderer's pill in front of the checked item; the same on the right, so the text sits centred.
+    private static readonly Padding ItemPadding = new(ThemedMenuRenderer.TextInset, 6, ThemedMenuRenderer.TextInset, 6);
+
     private void BuildMenu()
     {
         _stateItem.Font = new Font(_menu.Font, FontStyle.Bold);
@@ -123,12 +126,15 @@ internal sealed class TrayContext : ApplicationContext
         });
         _menu.Items.Add(new ToolStripSeparator()); // empty tail: keeps the last card off the menu's bottom edge
         _menu.ShowItemToolTips = true;
+        // No image/check column: every text, the status line's too, starts at the same place (the pill is drawn by the renderer).
+        _menu.ShowImageMargin = false;
+        _menu.ShowCheckMargin = false;
         foreach (ToolStripItem item in _menu.Items)
         {
-            if (item is ToolStripMenuItem) item.Padding = new Padding(20, 6, 18, 6);
+            if (item is ToolStripMenuItem) item.Padding = ItemPadding;
             else if (item is ToolStripSeparator) { item.AutoSize = false; item.Height = 2 * ThemedMenuRenderer.CardPadding + 6; }
         }
-        _menu.Padding = new Padding(0, ThemedMenuRenderer.CardPadding + 1, 0, ThemedMenuRenderer.CardPadding + 8);
+        _menu.Padding = new Padding(0, ThemedMenuRenderer.CardPadding + 4, 0, 0);
         _menu.Opening += (_, _) => { TrayLog.Write("menu: opening"); ApplyMenuTheme(); RenderMenu(); _ = RefreshProfilesAsync(); };
         _menu.ItemClicked += (_, e) => TrayLog.Write($"menu: item clicked '{e.ClickedItem?.Text}'");
         _menu.Closed += (_, e) =>
@@ -149,7 +155,7 @@ internal sealed class TrayContext : ApplicationContext
         foreach (var (name, _) in _catalog.SlotButtons())
         {
             var item = new ToolStripMenuItem(ProfileNames.Label(name)) { Tag = name };
-            item.Padding = new Padding(20, 6, 18, 6);
+            item.Padding = ItemPadding;
             item.Click += (_, _) => _ = SendAsync(new FanRequest("setProfile", Profile: name));
             _profileItems.Add(item);
             _menu.Items.Insert(at++, item);

@@ -12,6 +12,10 @@ internal sealed class ThemedMenuRenderer(Theme theme) : ToolStripRenderer
 {
     /// <summary>How far a group's card extends above its first and below its last item (px at 96 dpi); the gaps between groups must exceed twice this.</summary>
     public const int CardPadding = 5;
+    /// <summary>The cards' and the hover highlight's distance from the menu's sides (px at 96 dpi), the same on both sides.</summary>
+    private const int CardInset = 6, HoverInset = 10;
+    /// <summary>Where every text starts (the items' left padding): past the hover edge and the pill.</summary>
+    public const int TextInset = 22;
 
     protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
     {
@@ -31,7 +35,8 @@ internal sealed class ThemedMenuRenderer(Theme theme) : ToolStripRenderer
             {
                 // The card reaches a little past its first and last item, so text never touches the edge.
                 int top = group.Min(i => i.Bounds.Top) - CardPadding, bottom = group.Max(i => i.Bounds.Bottom) + CardPadding;
-                using var path = TrayIconRenderer.RoundedRect(new RectangleF(5, top, e.ToolStrip.Width - 11, bottom - top), 8);
+                float k = e.ToolStrip.DeviceDpi / 96f;
+                using var path = TrayIconRenderer.RoundedRect(new RectangleF(CardInset * k, top, e.ToolStrip.Width - 2 * CardInset * k, bottom - top), 8 * k);
                 g.FillPath(card, path);
             }
             group.Clear();
@@ -61,7 +66,7 @@ internal sealed class ThemedMenuRenderer(Theme theme) : ToolStripRenderer
         // Measured from the menu, not the item (an item can be wider than what is visible), so it sits
         // the same distance inside the card on the left and on the right.
         float width = e.Item.Owner?.Width ?? e.Item.Width;
-        var r = new RectangleF(12 * k - e.Item.Bounds.X, 2 * k, width - 25 * k, e.Item.Height - 4 * k);
+        var r = new RectangleF(HoverInset * k - e.Item.Bounds.X, 2 * k, width - 2 * HoverInset * k, e.Item.Height - 4 * k);
         using var path = TrayIconRenderer.RoundedRect(r, 5 * k);
         using var fill = new SolidBrush(theme.CardHover);
         g.FillPath(fill, path);
@@ -73,6 +78,10 @@ internal sealed class ThemedMenuRenderer(Theme theme) : ToolStripRenderer
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
         e.TextColor = e.Item.Enabled || e.Item.Tag is "state" ? theme.Text : theme.SubText;
+        // Without the image/check column the item lays its text out from its very edge; start every one at TextInset.
+        float scale = e.Item.Owner?.DeviceDpi / 96f ?? 1f;
+        var text = e.TextRectangle;
+        e.TextRectangle = new Rectangle((int)(TextInset * scale) - e.Item.Bounds.X, text.Y, text.Width, text.Height);
         base.OnRenderItemText(e);
         if (e.Item is not ToolStripMenuItem { Checked: true }) return;
 
@@ -82,7 +91,7 @@ internal sealed class ThemedMenuRenderer(Theme theme) : ToolStripRenderer
         float k = e.Item.Owner?.DeviceDpi / 96f ?? 1f;
         float w = 4 * k, h = 16 * k;
         float center = e.TextRectangle.Top + e.TextRectangle.Height / 2f;
-        var pill = new RectangleF(17 * k - e.Item.Bounds.X, center - h / 2, w, h);
+        var pill = new RectangleF((HoverInset + 4) * k - e.Item.Bounds.X, center - h / 2, w, h);
         using var path = TrayIconRenderer.RoundedRect(pill, w / 2);
         using var fill = new SolidBrush(theme.Accent);
         g.FillPath(fill, path);
