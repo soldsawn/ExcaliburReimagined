@@ -19,8 +19,11 @@ public sealed record BatteryEstimate(PowerMode? Mode, string Profile, double Min
 public sealed class BatteryEstimates
 {
     public const double NeededMinutes = 30;
-    /// <summary>The CPU's average power up to which an interval counts as idle.</summary>
-    public const double IdleCpuWatts = 12;
+    /// <summary>
+    /// The CPU's average power up to which an interval counts as idle: light use with background programs ran at 12-14 W
+    /// on battery (2026-10-25/26), real load at 22 W and more (12 W kept 4 of 9 intervals; user's choice, 2026-10-30).
+    /// </summary>
+    public const double IdleCpuWatts = 15;
 
     private readonly object _gate = new();
     private readonly Dictionary<(PowerMode?, string), (double Minutes, double WattMinutes)> _sums = [];

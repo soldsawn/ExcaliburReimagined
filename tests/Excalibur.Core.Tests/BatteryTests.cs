@@ -251,9 +251,10 @@ public class BatteryTests
         e.Add(kept[0] with { CpuWatts = 20, Profile = "Quiet" });
         Assert.True(e.TryAddLine("2026-10-25 18:31:40,10.0,40.00,87,Office,Quiet,100,9.5"));
         Assert.True(e.TryAddLine("2026-10-25 18:41:40,10.0,40.00,87,Office,Quiet,100"));
+        Assert.True(e.TryAddLine("2026-10-26 00:43:14,10.0,50.00,26,Office,Quiet,100,14.4")); // light use still counts
         var idle = e.Idle;
-        Assert.Equal([("EcAuto", 10.0), ("Quiet", 10.0)], idle.Select(i => (i.Profile, i.Minutes)).OrderBy(x => x.Profile).ToList());
-        Assert.Equal(40.0, idle.Single(i => i.Profile == "Quiet").Watts);
+        Assert.Equal([("EcAuto", 10.0), ("Quiet", 20.0)], idle.Select(i => (i.Profile, i.Minutes)).OrderBy(x => x.Profile).ToList());
+        Assert.Equal(45.0, idle.Single(i => i.Profile == "Quiet").Watts);
     }
 
     [Fact]
