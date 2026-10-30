@@ -80,30 +80,30 @@
                 <ColumnDefinition Width="14" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Border Style="{StaticResource CardBox}">
+            <c:BracketCard Style="{StaticResource CardBox}">
                 <StackPanel>
                     <TextBlock Text="Fan profili" Style="{StaticResource CardTitle}" />
                     <TextBlock x:Name="ProfileHint" Style="{StaticResource Caption}" Margin="0,4,0,12" TextWrapping="Wrap" />
                     <ContentControl x:Name="ProfileHost" Focusable="False" />
                     <TextBlock x:Name="ProfileError" Style="{StaticResource Caption}" Foreground="{DynamicResource Bad}" Visibility="Collapsed" />
                 </StackPanel>
-            </Border>
-            <Border Grid.Column="2" Style="{StaticResource CardBox}">
+            </c:BracketCard>
+            <c:BracketCard Grid.Column="2" Style="{StaticResource CardBox}">
                 <StackPanel>
                     <TextBlock Text="Güç modu" Style="{StaticResource CardTitle}" />
                     <TextBlock x:Name="PowerHint" Style="{StaticResource Caption}" Margin="0,4,0,12" />
                     <WrapPanel x:Name="PowerButtons" />
                     <TextBlock x:Name="PowerError" Style="{StaticResource Caption}" Foreground="{DynamicResource Bad}" Visibility="Collapsed" Margin="0,6,0,0" />
                 </StackPanel>
-            </Border>
+            </c:BracketCard>
         </Grid>
 
         <!-- facts -->
-        <Border Style="{StaticResource CardBox}" Margin="0,14,0,0">
+        <c:BracketCard Style="{StaticResource CardBox}" Margin="0,14,0,0">
             <StackPanel>
                 <TextBlock Text="Sistem" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
                 <UniformGrid x:Name="Facts" Columns="4" />
             </StackPanel>
-        </Border>
+        </c:BracketCard>
     </StackPanel>
 </UserControl>

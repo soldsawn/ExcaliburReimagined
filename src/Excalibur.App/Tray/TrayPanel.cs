@@ -251,6 +251,14 @@ internal sealed class TrayPanel : Form
             using (var fill = new SolidBrush(t.Card)) g.FillPath(fill, path);
             using (var pen = new Pen(t.Border)) g.DrawPath(pen, path);
         }
+        // The window's card corners (BracketCard): an accent L on the top left and bottom right.
+        if (Theme.Settings.CornerMarks)
+        {
+            float arm = 10 * K, o = 0.75f * K;
+            using var accent = new Pen(t.Accent, 1.5f * K);
+            g.DrawLines(accent, [new PointF(r.Left + o, r.Top + arm), new PointF(r.Left + o, r.Top + o), new PointF(r.Left + arm, r.Top + o)]);
+            g.DrawLines(accent, [new PointF(r.Right - arm, r.Bottom - o), new PointF(r.Right - o, r.Bottom - o), new PointF(r.Right - o, r.Bottom - arm)]);
+        }
         int x = r.X + (int)(12 * K);
         TextRenderer.DrawText(g, name, label, new Point(x, r.Y + (int)(10 * K)), t.SubText, TextFormatFlags.NoPadding);
         string temp = _connected && tempC is { } c ? $"{c}°C" : "–";

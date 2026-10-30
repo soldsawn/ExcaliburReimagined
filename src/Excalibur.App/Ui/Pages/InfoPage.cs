@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using Excalibur.App.Ui.Controls;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Settings;
 
@@ -105,7 +106,7 @@ internal static class InfoPage
         var stack = new StackPanel();
         stack.Children.Add(Text(title, "CardTitle", bottom: 8));
         foreach (var c in content) stack.Children.Add(c);
-        var card = new Border { Child = stack, Margin = new Thickness(0, 0, 0, 14) };
+        var card = new BracketCard { Child = stack, Margin = new Thickness(0, 0, 0, 14) };
         card.SetResourceReference(FrameworkElement.StyleProperty, "CardBox");
         return card;
     }

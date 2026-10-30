@@ -71,7 +71,7 @@ internal static class AppearanceCard
         var checks = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
         checks.Children.Add(Check("Profil değişince ekranın altında kısa bildirim göster", s.Osd, on => Save(x => x with { Osd = on })));
         checks.Children.Add(Check("Kartların köşelerinde vurgu çizgileri", s.CornerMarks, on => Save(x => x with { CornerMarks = on })));
-        checks.Children.Add(Check("Soğutma grafiğinde kayan ve nefes alan noktalar", s.Motion, on => Save(x => x with { Motion = on })));
+        checks.Children.Add(Check("Soğutma grafiğinde parlayan, yumuşak kayan noktalar", s.Motion, on => Save(x => x with { Motion = on })));
 
         return InfoPage.Card("Görünüm",
             InfoPage.Text("Değişiklikler hemen uygulanır; hızlı panel ve menü bir sonraki açılışta yeni görünümü alır.", "Caption", bottom: 14),
@@ -99,7 +99,7 @@ internal static class AppearanceCard
         return box;
     }
 
-    /// <summary>Eight round swatches and "any colour", which opens the colour wheel below them.</summary>
+    /// <summary>Eight round swatches and "Özel renk", which opens the colour wheel below them.</summary>
     private static (WrapPanel Row, FrameworkElement Wheel) AccentPicker(string current, Action<string> chosen)
     {
         var row = new WrapPanel();
@@ -127,7 +127,7 @@ internal static class AppearanceCard
             row.Children.Add(swatch);
         }
 
-        var any = new Button { Content = "Dilediğin renk", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var any = new Button { Content = "Özel renk", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         any.SetResourceReference(FrameworkElement.StyleProperty, "PlainButton");
         any.Click += (_, _) => wheelBox.Visibility = wheelBox.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
         row.Children.Add(any);

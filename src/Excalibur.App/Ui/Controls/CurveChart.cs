@@ -226,10 +226,14 @@ internal sealed class CurveChart : FrameworkElement
         if (shown is not { } s) return null;
         var at = At(s.C, s.P);
         var color = ((SolidColorBrush)brush).Color;
-        double pulse = TryFindResource("Motion") is false ? 0.5 : 0.5 + 0.5 * Math.Sin(_clock.Elapsed.TotalSeconds * 2.4);
-        var halo = new RadialGradientBrush(
-            Color.FromArgb((byte)(70 + 50 * pulse), color.R, color.G, color.B), Color.FromArgb(0, color.R, color.G, color.B));
-        dc.DrawEllipse(halo, null, at, 15 + 3 * pulse, 15 + 3 * pulse);
+        // Motion off in Settings: no halo at all (a still one read as unchanged, 2026-10-30).
+        if (TryFindResource("Motion") is not false)
+        {
+            double pulse = 0.5 + 0.5 * Math.Sin(_clock.Elapsed.TotalSeconds * 2.4);
+            var halo = new RadialGradientBrush(
+                Color.FromArgb((byte)(70 + 50 * pulse), color.R, color.G, color.B), Color.FromArgb(0, color.R, color.G, color.B));
+            dc.DrawEllipse(halo, null, at, 15 + 3 * pulse, 15 + 3 * pulse);
+        }
         dc.DrawEllipse(null, new Pen(brush, 1.6), at, 8, 8);
         dc.DrawEllipse(brush, new Pen(Res("Card"), 1.5), at, 4.5, 4.5);
         return at;

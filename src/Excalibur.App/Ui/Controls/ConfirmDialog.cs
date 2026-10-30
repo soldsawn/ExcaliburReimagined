@@ -43,7 +43,7 @@ internal sealed class ConfirmDialog : Window
         panel.Children.Add(body);
         panel.Children.Add(buttons);
 
-        var card = new Border { Child = panel };
+        var card = new BracketCard { Child = panel };
         card.SetResourceReference(StyleProperty, "CardBox");
         Content = card;
 

@@ -15,13 +15,13 @@
             </DockPanel>
         </Border>
 
-        <Border Style="{StaticResource CardBox}">
+        <c:BracketCard Style="{StaticResource CardBox}">
             <StackPanel>
                 <TextBlock Text="Profil" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
                 <ContentControl x:Name="ProfileHost" Focusable="False" />
                 <TextBlock x:Name="CommandError" Style="{StaticResource Caption}" Foreground="{DynamicResource Bad}" Visibility="Collapsed" />
             </StackPanel>
-        </Border>
+        </c:BracketCard>
 
         <c:BracketCard Style="{StaticResource CardBox}" Margin="0,14,0,0">
             <StackPanel>
@@ -82,7 +82,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Style="{StaticResource CardBox}">
+            <c:BracketCard Style="{StaticResource CardBox}">
                 <StackPanel>
                     <TextBlock Text="Fanları elle ayarla" Style="{StaticResource CardTitle}" />
                     <TextBlock Text="Seçtiğiniz hız, süre dolana kadar geçerli; sonra önceki profile döner. Isınırsa fanlar yine güvenlik için hızlanır."
@@ -111,9 +111,9 @@
                         <WrapPanel x:Name="Durations" />
                     </DockPanel>
                 </StackPanel>
-            </Border>
+            </c:BracketCard>
 
-            <Border Grid.Column="2" Style="{StaticResource CardBox}">
+            <c:BracketCard Grid.Column="2" Style="{StaticResource CardBox}">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Son olaylar" Style="{StaticResource CardTitle}" />
                     <TextBlock DockPanel.Dock="Top" Text="Profil değişiklikleri, ısınma uyarıları ve sorunlar."
@@ -132,7 +132,7 @@
                         </ItemsControl>
                     </ScrollViewer>
                 </DockPanel>
-            </Border>
+            </c:BracketCard>
         </Grid>
     </StackPanel>
 </UserControl>
