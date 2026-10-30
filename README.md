@@ -61,6 +61,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 |---|---|---|---|---|
 | Casper Excalibur G870 | CQ141 | `P008B0` | Geliştirildiği cihaz, tüm özellikler | doğrudan EC |
 | Casper Excalibur G870 | CP211 | `P009C0` | Deneme geçti (iki fan da uydu) | BIOS fan komutu (WMI) |
+| Casper Excalibur G870 | CQ131 | `P007B0` | Deneme geçti (iki fan da uydu) | doğrudan EC |
 | Casper Excalibur G770 | CP221 | `P003K0` | Deneme geçti (iki fan da uydu) | doğrudan EC |
 
 Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirsiniz (bkz. [Katkıda Bulunma](#katkıda-bulunma)).
@@ -68,7 +69,7 @@ Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirs
 Uygulama açılışta dizüstünün fan yazılımı (EC) sürümünü okur:
 - **`P008B0` (G870):** doğrudan fan kontrolü.
 - **Bilinmeyen bir sürüm:** fanlar yalnızca izlenir. Panelde onay isteyen kısa bir deneme başlatılabilir: uygulama fanlara kısa süre bir hız yazar ve fanların gerçekten uyup uymadığına bakar. Önce BIOS'un kendi fan komutu (WMI) denenir; fanlar buna uyarsa o bilgisayarda fanlar hep BIOS üzerinden yönetilir ve denetleyiciye (EC) doğrudan hiç yazılmaz. Uymazsa doğrudan EC denenir. Fanlar uyarsa o sürüm o bilgisayar için açılır; uymazsa fanlar hemen dizüstünün kendi ayarına bırakılır. Hangi yolun kullanıldığı Soğutma sayfasında ve Ayarlar > Hakkında'da yazar; "Bilgileri kopyala" ile denemenin sonucu paylaşılabilir.
-- **Başka bir bilgisayarda denemesi geçmiş sürümler** tek tıkla "kısa bir ayar" olarak sunulur: şu an **`P003K0`** (G770, BIOS CP221) ve **`P009C0`** (G870, BIOS CP211).
+- **Başka bir bilgisayarda denemesi geçmiş sürümler** tek tıkla "kısa bir ayar" olarak sunulur: şu an **`P003K0`** (G770, BIOS CP221), **`P009C0`** (G870, BIOS CP211) ve **`P007B0`** (G870, BIOS CQ131).
 - Her fanın yüzde başına devri kullanım sırasında öğrenilir. G870 dışındaki modeller deneme sonrası dizüstünün kendi fan ayarıyla başlar; G870 fan eğrileri bu modellerde gereğinden gürültülü olabilir.
 
 ---
@@ -146,9 +147,9 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **`v0.1.6`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770) and `P009C0` (G870), which are offered as a one-click calibration. Use at your own risk.
+> **`v0.1.6`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. Use at your own risk.
 
-**Tested devices:** G870 · BIOS CQ141 · EC `P008B0` (developed on, fans through the EC) · G870 · BIOS CP211 · EC `P009C0` (trial passed, fans through the BIOS/WMI) · G770 · BIOS CP221 · EC `P003K0` (trial passed, fans through the EC).
+**Tested devices:** G870 · BIOS CQ141 · EC `P008B0` (developed on, fans through the EC) · G870 · BIOS CP211 · EC `P009C0` (trial passed, fans through the BIOS/WMI) · G870 · BIOS CQ131 · EC `P007B0` (trial passed, fans through the EC) · G770 · BIOS CP221 · EC `P003K0` (trial passed, fans through the EC).
 
 **Features:**
 - Custom fan curves with separate CPU/GPU targets.

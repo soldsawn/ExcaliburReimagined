@@ -42,12 +42,13 @@ public sealed record FanLoopOptions
     /// worded as a short calibration. One that passes on 2-3 different machines moves to <see cref="KnownEcVersions"/>.
     /// </summary>
     /// P009C0: two G870s (2026-10-21 a tester's CPU fan; 2026-10-25 a user's trial, both fans followed).
-    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0", "P009C0" };
+    /// P007B0: a G870 with BIOS CQ131 (GitHub issue #1, 2026-10-30: 0.1.6 trial passed, WMI 0x0205 not followed, both fans through the EC).
+    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0", "P009C0", "P007B0" };
     /// <summary>
     /// EC versions the built-in curves suit (tuned on the G870's P008B0); a machine with another one starts on EC automatic after its
-    /// trial. P009C0 has only been seen on G870s, the same laptop and fans.
+    /// trial. P009C0 and P007B0 have only been seen on G870s, the same laptop and fans.
     /// </summary>
-    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009C0" };
+    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009C0", "P007B0" };
     /// <summary>Trusted EC versions whose fans are written through the BIOS (WMI SET 0x0205): their trial passed that way.</summary>
     public IReadOnlySet<string> WmiEcVersions { get; init; } = new HashSet<string>();
     public int MaxReadFailures { get; init; } = 3;

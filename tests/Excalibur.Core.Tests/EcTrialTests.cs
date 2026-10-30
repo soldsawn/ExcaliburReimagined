@@ -70,12 +70,16 @@ public class EcTrialTests
         Assert.False(t._hw.CpuTarget.IsAuto); // the profile now runs
     }
 
-    [Fact]
-    public void P009C0_keeps_the_g870_curves_after_its_trial() => Assert.Contains("P009C0", new FanLoopOptions().CurveEcVersions);
+    [Theory]
+    [InlineData("P009C0")]
+    [InlineData("P007B0")]
+    public void G870_versions_keep_the_g870_curves_after_their_trial(string version) =>
+        Assert.Contains(version, new FanLoopOptions().CurveEcVersions);
 
     [Theory]
     [InlineData("P003K0", true)]
     [InlineData("P009C0", true)]
+    [InlineData("P007B0", true)]
     [InlineData("P010A0", false)]
     public void A_version_seen_on_another_machine_is_flagged_while_unverified(string version, bool expected)
     {
