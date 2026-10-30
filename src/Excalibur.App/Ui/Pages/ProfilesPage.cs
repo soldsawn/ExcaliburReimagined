@@ -349,10 +349,9 @@ internal sealed class ProfilesPage : UserControl
     private async Task DeleteAsync()
     {
         if (_draft is not { BuiltIn: false, IsNew: false } d) return;
-        var answer = MessageBox.Show($"\"{d.Name}\" profili silinsin mi?" +
+        if (!ConfirmDialog.Ask(this, "Profili sil", $"\"{d.Name}\" profili silinsin mi?" +
             (string.Equals(_connection.Status?.Profile, d.Name, StringComparison.OrdinalIgnoreCase) ? "\nŞu an bu profil kullanılıyor; silince Dengeli'ye geçilir." : ""),
-            "Profili sil", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (answer != MessageBoxResult.Yes) return;
+            "Sil", danger: true)) return;
         var r = await _connection.RequestAsync(new FanRequest("deleteProfile", Profile: d.Name));
         if (r is null) { Fail("Fan servisine ulaşılamadı."); return; }
         if (!r.Ok) { Fail("Profil silinemedi."); return; }

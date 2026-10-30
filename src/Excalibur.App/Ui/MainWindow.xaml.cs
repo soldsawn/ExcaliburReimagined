@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Excalibur.App.Ui.Controls;
 using Excalibur.App.Ui.Pages;
 using Excalibur.Core.Fan;
 
@@ -157,6 +158,12 @@ public partial class MainWindow : Window
                     Save(Root, Path.ChangeExtension(path, ".history-hover.png"));
                 }
             }
+            var confirm = new ConfirmDialog("Profili sil", "\"Deneme\" profili silinsin mi?\nŞu an bu profil kullanılıyor; silince Dengeli'ye geçilir.",
+                "Sil", danger: true) { Owner = this };
+            confirm.Show();
+            confirm.UpdateLayout();
+            Save((FrameworkElement)confirm.Content, Path.ChangeExtension(path, ".confirm.png"));
+            confirm.Close();
             Close();
         };
         Loaded += (_, _) => timer.Start();

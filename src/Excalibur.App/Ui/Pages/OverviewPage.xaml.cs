@@ -123,13 +123,13 @@ public partial class OverviewPage : UserControl
     {
         string firmware = _connection.Status?.EcVersion ?? "?";
         // A version that already passed elsewhere: the card says what happens and its button is the consent.
-        var answer = _connection.Status?.EcSeenElsewhere == true ? MessageBoxResult.Yes : MessageBox.Show(
+        bool start = _connection.Status?.EcSeenElsewhere == true || ConfirmDialog.Ask(this, "Fan kontrolünü dene",
             $"Bu fan yazılımı sürümü ({firmware}) henüz denenmedi.\n\n" +
             "Deneme en çok bir dakika sürer: fanlar önce birlikte BIOS üzerinden, olmazsa tek tek doğrudan birkaç saniye farklı hızda döner " +
             "ve hızın gerçekten değişip değişmediğine bakılır. Her denemeden sonra fanlar orijinal ayara döner. Dizüstü 75 °C'nin altındayken başlar, " +
             "80 °C'yi geçerse durur.\n\nDenemeyi başlatmak istiyor musunuz?",
-            "Fan kontrolünü dene", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (answer != MessageBoxResult.Yes) return;
+            "Denemeyi başlat");
+        if (!start) return;
         _trialError = await _connection.SendAsync(new FanRequest("trialEc"));
         CopyInfo.Content = "Bilgileri kopyala";
         Render();
