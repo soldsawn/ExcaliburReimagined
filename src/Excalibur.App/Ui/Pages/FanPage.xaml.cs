@@ -94,11 +94,11 @@ public partial class FanPage : UserControl
             ? FanProfile.Manual(mc, mg)
             : s.Profile == "EcAuto" ? FanProfile.EcAuto : _connection.Catalog.Find(s.Profile);
         bool separateGpu = profile is { IsEcAuto: false } p && !p.CpuCurve.Points.SequenceEqual(p.GpuCurve.Points);
-        GpuLegend.Visibility = GpuLegendText.Visibility = separateGpu ? Visibility.Visible : Visibility.Collapsed;
+        GpuLegend.Visibility = separateGpu ? Visibility.Visible : Visibility.Collapsed;
+        // Original settings draw no profile curve: the legend's gray line already says which one is theirs.
+        CpuLegend.Visibility = profile?.IsEcAuto == true ? Visibility.Collapsed : Visibility.Visible;
         CpuLegendText.Text = separateGpu ? "İşlemci eğrisi" : "Profil eğrisi";
-        CurveTitle.Text = profile?.IsEcAuto == true
-            ? "Eğri — Orijinal ayar seçili (gri kesik çizgi)"
-            : $"Eğri — {ProfileNames.Label(s.Profile, s.ManualUntil)}";
+        CurveTitle.Text = $"Eğri — {ProfileNames.Label(s.Profile, s.ManualUntil)}";
         Chart.Show(profile, s);
 
         if (!ReferenceEquals(_shownEvents, _connection.Events))
