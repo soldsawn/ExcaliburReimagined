@@ -287,8 +287,9 @@ public partial class OverviewPage : UserControl
         tempText.Text = temp is { } t ? $"{t}°C" : "–";
         tempText.Foreground = Palette.Temperature(this, temp);
         fan.Text = rpm is { } r ? $"{r} rpm" : "–";
-        int? percent = target is null ? null : applied ?? target;
-        duty.Text = rpm is null ? "" : percent is { } p ? $"%{p}" : "EC";
+        // Under the EC's own control there is no target, but the speed worked out from the RPM still fills the bar.
+        int? percent = applied ?? target;
+        duty.Text = rpm is null ? "" : (percent is { } p ? $"%{p}" : "") + (target is null ? (percent is null ? "orijinal" : " · orijinal") : "");
         bar.Percent = percent;
         bar.Fill = Palette.Temperature(this, temp);
     }

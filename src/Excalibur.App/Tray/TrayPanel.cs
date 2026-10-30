@@ -257,11 +257,13 @@ internal sealed class TrayPanel : Form
         TextRenderer.DrawText(g, temp, big, new Point(x - (int)(2 * K), r.Y + (int)(26 * K)),
             _connected ? Theme.Temperature(tempC, t.Value) : t.SubText, TextFormatFlags.NoPadding);
 
-        int? percent = target is null ? null : applied ?? target;
+        // Under the EC's own control there is no target, but the speed worked out from the RPM still fills the bar
+        // (the panel names the profile, so the narrow tile shows only the percent).
+        int? percent = applied ?? target;
         string fan = !_connected ? "bağlantı yok" : $"{rpm?.ToString() ?? "–",4} rpm " + (percent is { } p ? $"%{p}" : "orijinal");
         TextRenderer.DrawText(g, fan, mono, new Point(x, r.Bottom - (int)(36 * K)), t.SubText, TextFormatFlags.NoPadding);
 
-        // fan duty as a block bar (the EC curve when the EC drives it: hollow blocks)
+        // fan duty as a block bar
         const int blocks = 14;
         float gap = 2 * K, bw = (r.Width - 24 * K - (blocks - 1) * gap) / blocks, by = r.Bottom - 16 * K, bh = 6 * K;
         int lit = _connected && percent is { } q ? (int)Math.Round(q / 100.0 * blocks) : 0;
