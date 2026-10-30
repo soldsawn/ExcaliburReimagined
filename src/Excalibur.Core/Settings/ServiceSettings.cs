@@ -16,6 +16,8 @@ public enum HistoryMode
     /// <summary>The last hour in memory only; nothing written to disk.</summary>
     Hour1,
     Off,
+    /// <summary>As <see cref="Days7"/>, the last 30 days kept (about 6 MB).</summary>
+    Days30,
 }
 
 /// <summary>

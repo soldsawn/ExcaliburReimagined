@@ -173,7 +173,7 @@ internal sealed class TrayPanel : Form
         using var tag = MakeFont(11, weight: "Semibold");
         using var small = MakeFont(12);
         // Big readings in the narrow DIN face, as on the tray icon and in the main window.
-        using var big = new Font("Bahnschrift SemiBold", 32 * K, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var big = new Font(Theme.NumberFontName, 32 * K, FontStyle.Regular, GraphicsUnit.Pixel);
         using var label = MakeFont(12, weight: "Semibold");
         using var mono = new Font("Consolas", 12 * K, GraphicsUnit.Pixel);
 

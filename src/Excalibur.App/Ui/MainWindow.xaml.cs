@@ -113,11 +113,35 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        // Windows 11: rounded corners and a dark frame to match the theme; ignored elsewhere.
+        SetFrame();
+    }
+
+    /// <summary>Windows 11: rounded corners and a dark frame to match the theme; ignored elsewhere.</summary>
+    private void SetFrame()
+    {
         var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
         int round = 2, dark = (bool)FindResource("IsDark") ? 1 : 0;
         DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));
         DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
+    }
+
+    /// <summary>
+    /// After the palette was swapped (the appearance settings changed): resource references follow by themselves, but what
+    /// draws itself (charts, card corners) and brushes looked up once are redone, on hidden pages too.
+    /// </summary>
+    internal void ApplyAppearance()
+    {
+        SetFrame();
+        Redraw(Root);
+        foreach (var page in _pages.Values) Redraw(page);
+        RenderStatus();
+
+        static void Redraw(DependencyObject node)
+        {
+            if (node is UIElement element) element.InvalidateVisual();
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) Redraw(VisualTreeHelper.GetChild(node, i));
+        }
     }
 
     /// <summary>Development: after the first data arrives, save each built page as a PNG and exit.</summary>

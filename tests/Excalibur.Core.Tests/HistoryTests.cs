@@ -142,6 +142,30 @@ public sealed class HistoryTests : IDisposable
         Assert.Equal(10, again.Samples(twoDaysAgo, today).Count);
     }
 
+    [Fact]
+    public void Days30_keeps_a_month_on_disk_and_going_back_to_7_days_trims_it()
+    {
+        var today = DateTime.UtcNow.Date;
+        string Day(int ago) => Path.Combine(_dir, today.AddDays(-ago).ToString("yyyyMMdd") + ".bin.gz");
+        Directory.CreateDirectory(_dir);
+        foreach (int ago in new[] { 9, 29, 32 }) File.WriteAllBytes(Day(ago), [1, 2, 3]);
+
+        using (var rec = new HistoryRecorder(_dir, HistoryMode.Days30))
+        {
+            Assert.True(File.Exists(Day(9)));
+            Assert.True(File.Exists(Day(29)));
+            Assert.False(File.Exists(Day(32)));
+
+            var tenDaysAgo = today.AddDays(-10).AddHours(12);
+            Assert.Empty(rec.Samples(tenDaysAgo, today)); // reads the disk (the stub files hold no records) without failing
+            rec.Record(Sample(DateTime.UtcNow.AddSeconds(-1)));
+            Assert.True(File.Exists(Path.Combine(_dir, today.ToString("yyyyMMdd") + ".bin")));
+
+            rec.Mode = HistoryMode.Days7;
+        }
+        Assert.False(File.Exists(Day(9)));
+    }
+
     // ---- reduction ------------------------------------------------------------------------
 
     [Fact]

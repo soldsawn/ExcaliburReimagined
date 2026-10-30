@@ -1,4 +1,5 @@
 using System.Windows;
+using Excalibur.Core.Settings;
 
 namespace Excalibur.App.Ui;
 
@@ -20,7 +21,8 @@ internal static class MainWindowHost
         }
 
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
-        app.Resources.MergedDictionaries.Add(Palette.Build(Palette.SystemIsDark()));
+        using var settings = new UserSettingsStore();
+        app.Resources.MergedDictionaries.Add(Palette.Build(settings.Current));
         app.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
             Source = new Uri("pack://application:,,,/ExcaliburReimagined;component/Ui/Styles.xaml"),
@@ -28,6 +30,12 @@ internal static class MainWindowHost
 
         var connection = new FanConnection(sim);
         var window = new MainWindow(connection);
+        // Settings' Appearance card saves the file; every change shows at once (the palette is the first dictionary).
+        settings.Changed += s => app.Dispatcher.BeginInvoke(() =>
+        {
+            app.Resources.MergedDictionaries[0] = Palette.Build(s);
+            window.ApplyAppearance();
+        });
         if (snapshot is not null) window.SnapshotAndClose(snapshot);
         app.Run(window);
         connection.Dispose();

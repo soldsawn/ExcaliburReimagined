@@ -9,9 +9,9 @@ namespace Excalibur.Core.History;
 /// Keeps the fan history the service records once a second (docs/09 A2):
 /// <list type="bullet">
 ///   <item>the last hour always in memory (a ring), so the UI's recent trail never touches the disk;</item>
-///   <item>in <see cref="HistoryMode.Days7"/> also on disk: one file per UTC day, <c>yyyyMMdd.bin</c> while
-///   it is written (buffered, flushed every <see cref="FlushEvery"/> samples), gzipped to <c>.bin.gz</c>
-///   once the day is over, deleted after <see cref="Retention"/>.</item>
+///   <item>in <see cref="HistoryMode.Days7"/> and <see cref="HistoryMode.Days30"/> also on disk: one file per UTC day,
+///   <c>yyyyMMdd.bin</c> while it is written (buffered, flushed every <see cref="FlushEvery"/> samples), gzipped to
+///   <c>.bin.gz</c> once the day is over, deleted after <see cref="RetentionOf"/> the mode.</item>
 /// </list>
 /// Disk problems are reported through the log callback and never thrown: history must not take the
 /// fan loop down. Thread-safe.
@@ -20,7 +20,16 @@ public sealed class HistoryRecorder : IDisposable
 {
     public const int RingSeconds = 3600;
     public const int FlushEvery = 30;
-    public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
+
+    /// <summary>How long a mode keeps its days on disk; null = nothing on disk.</summary>
+    public static TimeSpan? RetentionOf(HistoryMode mode) => mode switch
+    {
+        HistoryMode.Days7 => TimeSpan.FromDays(7),
+        HistoryMode.Days30 => TimeSpan.FromDays(30),
+        _ => null,
+    };
+
+    private static bool OnDisk(HistoryMode mode) => RetentionOf(mode) is not null;
     private static readonly byte[] Header = "EXRH"u8.ToArray().Concat(new byte[] { 1, HistorySample.Size, 0, 0 }).ToArray();
 
     private readonly string _dir;
@@ -40,7 +49,7 @@ public sealed class HistoryRecorder : IDisposable
         _dir = directory;
         _log = log;
         _mode = mode;
-        if (mode == HistoryMode.Days7) Maintain(DateTime.UtcNow);
+        if (OnDisk(mode)) Maintain(DateTime.UtcNow);
     }
 
     public HistoryMode Mode
@@ -52,11 +61,11 @@ public sealed class HistoryRecorder : IDisposable
             {
                 if (value == _mode) return;
                 _mode = value;
-                if (value != HistoryMode.Days7) CloseFile();
+                if (!OnDisk(value)) CloseFile();
                 if (value == HistoryMode.Off) _ringCount = 0;
                 _diskFailed = false;
             }
-            if (value == HistoryMode.Days7) Maintain(DateTime.UtcNow);
+            if (OnDisk(value)) Maintain(DateTime.UtcNow);
         }
     }
 
@@ -77,7 +86,7 @@ public sealed class HistoryRecorder : IDisposable
             if (_ringCount < RingSeconds) _ringCount++;
             else _ringStart = (_ringStart + 1) % RingSeconds;
 
-            if (_mode != HistoryMode.Days7 || _diskFailed) return;
+            if (!OnDisk(_mode) || _diskFailed) return;
             try
             {
                 if (_file is null || _fileDay != sample.AtUtc.Date)
@@ -113,7 +122,7 @@ public sealed class HistoryRecorder : IDisposable
                 .Where(s => s.AtUtc >= fromUtc && s.AtUtc < toUtc).ToList();
             ringFrom = _ringCount > 0 ? _ring[_ringStart].AtUtc : DateTime.MaxValue;
         }
-        if (mode != HistoryMode.Days7 || fromUtc >= ringFrom) return recent;
+        if (!OnDisk(mode) || fromUtc >= ringFrom) return recent;
 
         var older = new List<HistorySample>();
         DateTime diskTo = toUtc < ringFrom ? toUtc : ringFrom;
@@ -182,11 +191,14 @@ public sealed class HistoryRecorder : IDisposable
     {
         try
         {
-            if (!Directory.Exists(_dir)) return;
+            // Read under the lock, as a mode change may run it meanwhile; a mode with no disk keeps the files as they are.
+            TimeSpan? retention;
+            lock (_gate) retention = RetentionOf(_mode);
+            if (retention is null || !Directory.Exists(_dir)) return;
             foreach (string path in Directory.EnumerateFiles(_dir, "*.bin*"))
             {
                 if (DayOf(path) is not { } day) continue;
-                if (nowUtc.Date - day > Retention)
+                if (nowUtc.Date - day > retention)
                 {
                     File.Delete(path);
                 }

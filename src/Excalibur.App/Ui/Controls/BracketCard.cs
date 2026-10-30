@@ -15,6 +15,7 @@ internal sealed class BracketCard : Border
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        if (TryFindResource("CornerMarks") is false) return; // turned off in Settings
         if (TryFindResource("Accent") is not Brush accent || ActualWidth < 2 * Arm || ActualHeight < 2 * Arm) return;
         var pen = new Pen(accent, Thickness) { StartLineCap = PenLineCap.Square, EndLineCap = PenLineCap.Square, LineJoin = PenLineJoin.Miter };
         double w = ActualWidth, h = ActualHeight, o = Thickness / 2;

@@ -61,7 +61,9 @@ internal sealed class CurveChart : FrameworkElement
         double dt = (now - _lastFrame).TotalSeconds;
         if (dt < 0.033) return;
         _lastFrame = now;
-        double kc = 1 - Math.Exp(-Math.Min(dt, 0.2) / 1.2), kp = 1 - Math.Exp(-Math.Min(dt, 0.2) / 0.35);
+        // Motion off in Settings: the dots jump straight to each reading.
+        bool still = TryFindResource("Motion") is false;
+        double kc = still ? 1 : 1 - Math.Exp(-Math.Min(dt, 0.2) / 1.2), kp = still ? 1 : 1 - Math.Exp(-Math.Min(dt, 0.2) / 0.35);
         _shownCpu = Ease(_shownCpu, _targetCpu, kc, kp);
         _shownGpu = Ease(_shownGpu, _targetGpu, kc, kp);
         if (IsVisible) InvalidateVisual();
@@ -224,7 +226,7 @@ internal sealed class CurveChart : FrameworkElement
         if (shown is not { } s) return null;
         var at = At(s.C, s.P);
         var color = ((SolidColorBrush)brush).Color;
-        double pulse = 0.5 + 0.5 * Math.Sin(_clock.Elapsed.TotalSeconds * 2.4);
+        double pulse = TryFindResource("Motion") is false ? 0.5 : 0.5 + 0.5 * Math.Sin(_clock.Elapsed.TotalSeconds * 2.4);
         var halo = new RadialGradientBrush(
             Color.FromArgb((byte)(70 + 50 * pulse), color.R, color.G, color.B), Color.FromArgb(0, color.R, color.G, color.B));
         dc.DrawEllipse(halo, null, at, 15 + 3 * pulse, 15 + 3 * pulse);

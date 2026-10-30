@@ -67,8 +67,10 @@ internal sealed class TrayContext : ApplicationContext
         _panel.ClearFaultClicked += () => _ = SendAsync(new FanRequest("clearFault"));
         // The main window saves appearance settings; follow them (the event comes on a pool thread).
         var ui = SynchronizationContext.Current;
-        _userSettings.Changed += _ => ui?.Post(_ =>
+        Theme.Settings = _userSettings.Current;
+        _userSettings.Changed += s => ui?.Post(_ =>
         {
+            Theme.Settings = s; // the panel, menu and notice read it when next shown
             Render();
             _refresh?.RuleChanged();
         }, null);

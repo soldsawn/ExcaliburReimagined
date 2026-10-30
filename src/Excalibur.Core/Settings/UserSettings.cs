@@ -12,6 +12,14 @@ public enum TrayFont
     PixelBold,
 }
 
+/// <summary>The face of the big readings (temperatures, watts) in the window and the quick panel.</summary>
+public enum NumberFont
+{
+    /// <summary>The narrow DIN face, as on the tray icon (default).</summary>
+    Bahnschrift,
+    SegoeUi,
+}
+
 public enum ThemeMode
 {
     /// <summary>Follow the Windows app theme (light/dark).</summary>
@@ -74,7 +82,7 @@ public sealed record WindowsPowerRules
 /// <summary>
 /// Per-user appearance settings of the app (tray and main window), in
 /// %AppData%\ExcaliburReimagined\settings.json. They never reach the service or the EC, so the
-/// apps write them directly. The personalization page (docs/08 5.8) edits them.
+/// apps write them directly. Settings' Appearance card edits them (B8).
 /// </summary>
 public sealed record UserSettings
 {
@@ -88,6 +96,11 @@ public sealed record UserSettings
     /// <summary>Accent color as #RRGGBB.</summary>
     public string Accent { get; init; } = DefaultAccent;
     public ThemeMode Theme { get; init; } = ThemeMode.System;
+    /// <summary>The accent L brackets on two corners of the cards.</summary>
+    public bool CornerMarks { get; init; } = true;
+    /// <summary>Gliding and breathing dots on the cooling chart; off = they jump straight to each reading.</summary>
+    public bool Motion { get; init; } = true;
+    public NumberFont NumberFont { get; init; } = NumberFont.Bahnschrift;
     /// <summary>The screen refresh rate on the charger and on battery; applied by the tray.</summary>
     public RefreshRateRule RefreshRate { get; init; } = new();
     /// <summary>What runs while a program is open (A6); the tray watches the programs and applies them.</summary>
@@ -113,6 +126,7 @@ public sealed record UserSettings
         {
             TrayFont = Enum.IsDefined(s.TrayFont) ? s.TrayFont : d.TrayFont,
             Theme = Enum.IsDefined(s.Theme) ? s.Theme : d.Theme,
+            NumberFont = Enum.IsDefined(s.NumberFont) ? s.NumberFont : d.NumberFont,
             Accent = IsColor(s.Accent) ? s.Accent : d.Accent,
             RefreshRate = s.RefreshRate is { IsValid: true } ? s.RefreshRate : d.RefreshRate,
             AppRules = CleanRules(s.AppRules),
@@ -136,7 +150,8 @@ public sealed record UserSettings
     // Value equality over the rule list (a record would compare it by reference), so a reload that changed nothing stays quiet.
     public bool Equals(UserSettings? other) =>
         other is not null && Version == other.Version && TrayFont == other.TrayFont && Osd == other.Osd && Accent == other.Accent
-        && Theme == other.Theme && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules)
+        && Theme == other.Theme && CornerMarks == other.CornerMarks && Motion == other.Motion && NumberFont == other.NumberFont
+        && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules)
         && WindowsPower == other.WindowsPower;
 
     public override int GetHashCode() => HashCode.Combine(Version, TrayFont, Osd, Accent, Theme, RefreshRate, AppRules.Count);

@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Excalibur.Core.Fan;
+using Excalibur.Core.Settings;
 using Microsoft.Win32;
 
 namespace Excalibur.App.Tray;
@@ -10,16 +11,19 @@ namespace Excalibur.App.Tray;
 /// Colors for the panel, OSD and tray icon. Same family as the user's SawnTask app (dark base,
 /// thin-bordered cards, colored numbers) but its own gaming accent: crimson (the user's desk
 /// theme) instead of blue, with cyan for live values so the accent never reads as "hot".
-/// Follows the Windows app theme (light/dark). Personalization (docs/08 5.8) will replace the accent.
+/// Light/dark and the accent follow <see cref="Settings"/> (the user's appearance settings), as the main window does.
 /// </summary>
 internal sealed record Theme(Color Back, Color Card, Color CardHover, Color Text, Color SubText, Color Accent, Color AccentText,
     Color Border, Color Value)
 {
+    /// <summary>The appearance settings in force; the tray sets it at start and whenever the settings file changes.</summary>
+    public static UserSettings Settings { get; set; } = new();
+
     public static readonly Theme Dark = new(
         Color.FromArgb(27, 27, 30), Color.FromArgb(37, 37, 41), Color.FromArgb(48, 48, 54),
         Color.FromArgb(237, 237, 237), Color.FromArgb(154, 154, 162),
         Color.FromArgb(215, 30, 52), Color.FromArgb(255, 255, 255), Color.FromArgb(54, 54, 60),
-        Color.FromArgb(79, 195, 247));
+        Color.FromArgb(79, 195, 247)) { IsDark = true };
 
     public static readonly Theme Light = new(
         Color.FromArgb(243, 243, 245), Color.FromArgb(255, 255, 255), Color.FromArgb(234, 234, 238),
@@ -27,23 +31,40 @@ internal sealed record Theme(Color Back, Color Card, Color CardHover, Color Text
         Color.FromArgb(196, 20, 42), Color.FromArgb(255, 255, 255), Color.FromArgb(218, 218, 224),
         Color.FromArgb(0, 120, 180));
 
+    /// <summary>Read again at every open, so a switch of the Windows theme (when followed) is picked up.</summary>
     public static Theme Current
     {
         get
         {
-            try
+            var s = Settings;
+            bool dark = s.Theme switch
             {
-                using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-                return key?.GetValue("AppsUseLightTheme") is int light && light == 0 ? Dark : Light;
-            }
-            catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException)
-            {
-                return Light;
-            }
+                ThemeMode.Dark => true,
+                ThemeMode.Light => false,
+                _ => SystemIsDark(),
+            };
+            var (r, g, b) = AccentColor.Readable(s.Accent, dark);
+            return (dark ? Dark : Light) with { Accent = Color.FromArgb(r, g, b), IsDark = dark };
         }
     }
 
-    public bool IsDark => this == Dark;
+    private static bool SystemIsDark()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public bool IsDark { get; private init; }
+
+    /// <summary>The face of the big temperatures in the quick panel (<see cref="UserSettings.NumberFont"/>).</summary>
+    public static string NumberFontName => Settings.NumberFont == NumberFont.SegoeUi ? "Segoe UI Semibold" : "Bahnschrift SemiBold";
 
     /// <summary>Same thresholds as the test window: orange from 65 C, red from the hot rule (80 C).</summary>
     public static Color Temperature(int? tempC, Color normal) =>

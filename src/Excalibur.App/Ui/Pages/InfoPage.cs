@@ -34,9 +34,7 @@ internal static class InfoPage
         string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
         string? fanFirmware = connection.Status?.EcVersion;
         return Page("Ayarlar", "Uygulamanın görünümü ve hakkında bilgiler.",
-            Card("Görünüm",
-                Text("Tema Windows'un açık/koyu ayarını izliyor, vurgu rengi kırmızı.", "Body"),
-                Text("Yakında: vurgu rengi ve tema seçimi, tepsi simgesindeki rakamların yazı tipi, hızlı panelde görünecek profiller.", "Caption", top: 6)),
+            AppearanceCard.Create(connection),
             BatteryPage.IntervalCard(connection),
             WindowsPowerCard.Create(),
             Card("Hakkında",

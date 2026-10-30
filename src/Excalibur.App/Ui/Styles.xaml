@@ -7,8 +7,7 @@
     <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
     <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
-    <!-- Big readings: a narrow DIN face, as on the tray icon (docs/09). -->
-    <FontFamily x:Key="NumberFont">Bahnschrift, Segoe UI</FontFamily>
+    <!-- Big readings: NumberFont comes from the palette (Palette.Build): a narrow DIN face as on the tray icon, or Segoe UI. -->
 
     <Style x:Key="CardBox" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Card}" />
@@ -51,7 +50,7 @@
     </Style>
 
     <Style x:Key="BigValue" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource NumberFont}" />
+        <Setter Property="FontFamily" Value="{DynamicResource NumberFont}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="46" />
         <Setter Property="Foreground" Value="{DynamicResource Value}" />

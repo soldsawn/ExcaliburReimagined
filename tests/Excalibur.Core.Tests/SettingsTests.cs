@@ -171,6 +171,37 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal(UserSettings.DefaultAccent, s.Accent);
     }
 
+    [Fact]
+    public void Appearance_extras_default_on_and_survive_a_round_trip()
+    {
+        var d = new UserSettings();
+        Assert.True(d.CornerMarks);
+        Assert.True(d.Motion);
+        Assert.Equal(NumberFont.Bahnschrift, d.NumberFont);
+
+        var s = d with { CornerMarks = false, Motion = false, NumberFont = NumberFont.SegoeUi, Theme = ThemeMode.Light, Accent = "#2F6FE0" };
+        Assert.Equal(s, UserSettings.Parse(JsonSerializer.Serialize(s, UserSettings.Json)));
+        Assert.NotEqual(d, s with { Accent = d.Accent, Theme = d.Theme, CornerMarks = true, Motion = true });
+        Assert.Equal(NumberFont.Bahnschrift, UserSettings.Parse("""{"numberFont":42}""").NumberFont);
+    }
+
+    [Fact]
+    public void An_accent_keeps_its_hue_and_reads_on_both_themes()
+    {
+        // The default red and the presets are fine on a dark theme as they are.
+        foreach (var (hex, _) in AccentColor.Presets)
+            Assert.Equal(AccentColor.Parse(hex), AccentColor.Readable(hex, dark: true));
+        // Near-black and near-white are pulled into range; a gray stays gray.
+        Assert.Equal((102, 102, 102), AccentColor.Readable("#050505", dark: true));
+        Assert.Equal((115, 115, 115), AccentColor.Readable("#FAFAFA", dark: false));
+        // The default red comes out darker on a light theme, close to its former light red (196, 20, 42).
+        var (r, g, b) = AccentColor.Readable(UserSettings.DefaultAccent, dark: false);
+        Assert.InRange(r, 190, 205);
+        Assert.InRange(g, 15, 35);
+        Assert.InRange(b, 35, 55);
+        Assert.Equal(AccentColor.Parse(UserSettings.DefaultAccent), AccentColor.Readable("not a colour", dark: true));
+    }
+
     [Theory]
     [InlineData("""{"refreshRate":{"enabled":true,"onAcHz":10,"onBatteryHz":60}}""")]
     [InlineData("""{"refreshRate":{"enabled":true,"onAcHz":144,"onBatteryHz":0}}""")]
