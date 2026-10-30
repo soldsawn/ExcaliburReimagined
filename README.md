@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.6-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.7-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -47,10 +47,11 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - ⌨️ **Klavye Işığı:** Üç bölge için renk, parlaklık ve efekt; belirli bir süre boşta kalınca ışığı kapatma. Klavyedeki ışık tuşuyla yapılan değişiklikler de izlenir.
 - 🔌 **Akıllı Otomasyon:** Şarj kablosu takıldığında veya çıkarıldığında belirlediğiniz güç modu, fan profili ve ekran yenileme hızı (Hz) otomatik olarak devreye girer.
 - 🎮 **Program Kuralları:** Seçtiğiniz bir program ya da oyun açıkken kendi fan profili, güç modu ve işlemci sınırı devreye girer; kapanınca önceki ayarlar geri gelir.
-- 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan 7 günlük sıcaklık/fan geçmişi (15 dakikadan 7 güne kadar aralıklar).
+- 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan sıcaklık/fan geçmişi (7 ya da 30 gün; 15 dakikadan 7 güne kadar aralıklar).
+- 🎨 **Görünüm:** Koyu/açık tema (ya da Windows'u izleme), 8 hazır vurgu rengi ya da dilediğiniz renk, büyük sayıların ve tepsi simgesinin yazı tipi, kart köşe çizgileri ve grafikteki hareket; değişiklikler hemen uygulanır.
 - 🔄 **Güncelleme Denetimi:** Ayarlar'daki düğmeye basınca GitHub'da yeni sürüm olup olmadığına bakar. Kendiliğinden internete bağlanmaz, veri göndermez, kendi kendine indirmez.
 
-> **🛠️ Planlanan Özellikler:** Görünüm kişiselleştirme, klavye kısayolları ve İngilizce dil seçeneği.
+> **🛠️ Planlanan Özellikler:** Klavye kısayolları, İngilizce dil seçeneği ve Casper'ın arka plan programlarını kapatma.
 
 <a id="diğer-modeller"></a>
 ### 🧪 Diğer Modeller ve EC Sürümleri
@@ -76,9 +77,19 @@ Uygulama açılışta dizüstünün fan yazılımı (EC) sürümünü okur:
 <a id="kurulum"></a>
 ## 🚀 Kurulum
 
-Henüz tek tıklamalı bir kurulum dosyası (`.exe`) bulunmamaktadır. Kurulumu kod üzerinden birkaç saniyede yapabilirsiniz:
+### Kolay yol: kurulum dosyası
 
-### Gereksinimler
+1. [Son sürüm](https://github.com/soldsawn/ExcaliburReimagined/releases/latest) sayfasından **`ExcaliburReimagined-<sürüm>-setup.exe`** dosyasını indirip çalıştırın.
+2. Kurulum her şeyi kendisi yapar: .NET dosyanın içinde gelir; [PawnIO](https://pawnio.eu) sürücüsü kurulu değilse resmî dosyasını indirir, doğrular ve kurar. Bittiğinde simge saatin yanında, pencere Başlat menüsündedir.
+3. Kaldırmak için: **Ayarlar > Uygulamalar > Excalibur Reimagined > Kaldır**. Ayarlarınızın ve fan geçmişinin silinip silinmeyeceği sorulur (varsayılan: saklanır).
+
+> **Windows uyarısı:** Kurulum dosyası imzalı olmadığı için Windows "bilinmeyen yayımcı" diyebilir. **Ek bilgi > Yine de çalıştır** ile devam edebilirsiniz.
+
+Sürüm sayfasında ayrıca **`ExcaliburReimagined-<sürüm>-zip-kurulum.zip`** de vardır: zip'i bir klasöre çıkarıp `1-Kur.cmd` ile kurar, `2-Kaldir.cmd` ile kaldırırsınız (kurulum dosyasıyla aynı işi yapar).
+
+### Kod üzerinden kurulum (geliştiriciler için)
+
+#### Gereksinimler
 - Windows 11 ve Casper Excalibur G870
 - [.NET 9 Runtime ve Windows Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0)
 - [PawnIO](https://pawnio.eu) sürücüsü: Fan servisinin donanıma (EC) güvenle erişmesini sağlayan, imzalı bir sürücüdür. Kurulum betiği PawnIO'yu **kendisi kurmaz**; yoksa kurulumu durdurur. Önce yönetici PowerShell'de şunu çalıştırın (ya da resmî siteden indirip kurun):
@@ -87,7 +98,7 @@ Henüz tek tıklamalı bir kurulum dosyası (`.exe`) bulunmamaktadır. Kurulumu 
 winget install namazso.PawnIO
 ```
 
-### Adımlar
+#### Adımlar
 
 1. Başlat menüsüne sağ tıklayıp **Terminal (Yönetici)** veya **PowerShell (Yönetici)** seçeneğini açın.
 2. Aşağıdaki komutları sırasıyla kopyalayıp yapıştırın ve Enter'a basın:
@@ -147,7 +158,7 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **`v0.1.6`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. Use at your own risk.
+> **`v0.1.7`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. Use at your own risk.
 
 **Tested devices:** G870 · BIOS CQ141 · EC `P008B0` (developed on, fans through the EC) · G870 · BIOS CP211 · EC `P009C0` (trial passed, fans through the BIOS/WMI) · G870 · BIOS CQ131 · EC `P007B0` (trial passed, fans through the EC) · G770 · BIOS CP221 · EC `P003K0` (trial passed, fans through the EC).
 
@@ -159,12 +170,15 @@ A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Co
 - Smart automation based on AC/Battery status (auto-switch profiles and refresh rates).
 - Program rules: a fan profile, power mode and CPU limit while a chosen program or game runs.
 - Update check on demand (Settings): reads the GitHub release list only when you press the button.
-- Zero telemetry, low background resource usage, and local temperature history.
+- Appearance: dark/light theme (or follow Windows), 8 accent colours or any colour, number and tray-icon fonts, card corner marks and chart motion, applied at once.
+- Zero telemetry, low background resource usage, and local temperature history (7 or 30 days).
 
 **Safety First:**
 Hardcoded limits ensure fans never go below 25% (30% when they are set through the BIOS). Automatic overrides kick in when temperatures stay above 70°C (80% fan) or 78°C (90% fan) for 3 seconds, and force 100% fan speed above 80°C for 3 seconds (or two readings above 92°C). For the first 60 seconds after a start or wake only lasting heat counts (Windows starting up spikes the CPU to 80-97°C): 100% after 90°C for 6 seconds. A background "Guardian" service constantly monitors the main process; if it crashes, fan control is immediately returned to the factory BIOS.
 
-**Installation (Elevated PowerShell):**
+**Installation:** download **`ExcaliburReimagined-<version>-setup.exe`** from the [latest release](https://github.com/soldsawn/ExcaliburReimagined/releases/latest) and run it. .NET comes inside it, and if the PawnIO driver is missing it downloads the official setup, checks its hash and installs it. Uninstall from Windows Settings > Apps (you are asked whether to keep your settings and fan history; by default they are kept). The setup is not signed, so Windows may warn about an unknown publisher (More info > Run anyway). The release also has a `-zip-kurulum.zip` with the same install as a folder (`1-Kur.cmd` / `2-Kaldir.cmd`).
+
+**From source (elevated PowerShell):**
 ```powershell
 winget install namazso.PawnIO   # the PawnIO driver (https://pawnio.eu); the installer below does not install it
 powershell -ExecutionPolicy Bypass -File tools\scripts\get-pawnio-module.ps1
