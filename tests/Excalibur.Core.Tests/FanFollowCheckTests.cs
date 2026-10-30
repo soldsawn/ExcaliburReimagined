@@ -35,6 +35,22 @@ public class FanFollowCheckTests
         Assert.Equal(FanFollow.None, Check(now, 5));
     }
 
+    [Theory]
+    [InlineData(93, 93)] // already near the top when written (the hot start, 2026-10-30 13:33)
+    [InlineData(80, 90)]
+    public void A_fan_at_its_top_speed_follows_a_full_target(int start, int now)
+    {
+        _c.Wrote(FanId.Cpu, FanTarget.FromPercent(100), start, S(0));
+        Assert.Equal(FanFollow.None, Check(now, 5));
+    }
+
+    [Fact]
+    public void A_fan_well_below_its_top_speed_does_not_follow_a_full_target()
+    {
+        _c.Wrote(FanId.Cpu, FanTarget.FromPercent(100), 85, S(0));
+        Assert.Equal(FanFollow.Rewrite, Check(88, 5));
+    }
+
     [Fact]
     public void A_fan_that_does_not_follow_is_written_again_then_confirmed_once()
     {

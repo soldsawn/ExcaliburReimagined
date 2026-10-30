@@ -170,9 +170,14 @@ public sealed class EcFanHardware : IFanHardware
                 ec.WriteByte(reg, target.Value);
                 return;
             }
-            // Fn+1 pressed before we started (no event seen) runs the fans at full speed whatever the target says.
-            _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
-            if (_boost) return;
+            // Fn+1 pressed before we started (no event seen) runs the fans at full speed whatever the target says, so it can
+            // only explain a fan faster than its target: 0xC3 is not read for a slower one (that read took 445 + 335 ms on
+            // five ACPI 15 warnings, 2026-10-30 13:33:00.943).
+            if (percent > target.Percent)
+            {
+                _boost = (ec.ReadStable(FanRegisters.CoolingBoost) & 1) != 0;
+                if (_boost) return;
+            }
             var held = FanTarget.FromRaw(ec.ReadStable(reg));
             Log?.Invoke($"!! {fan} fan runs at {percent}% and does not follow its target {target}; the EC holds {held?.ToString() ?? "an invalid value"}");
             // Let the loop see what is really there, so it writes the target again if needed.

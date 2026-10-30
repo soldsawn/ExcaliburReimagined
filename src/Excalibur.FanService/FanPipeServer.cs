@@ -123,7 +123,8 @@ public sealed class FanPipeServer(
         FanRequest? req;
         try { req = JsonSerializer.Deserialize<FanRequest>(line, FanPipe.Json); }
         catch (JsonException) { return new FanResponse(false, "invalid JSON"); }
-        if (req is null) return new FanResponse(false, "empty request");
+        // A request without "cmd" deserialises with Cmd null despite its type, and dropped the connection.
+        if (req?.Cmd is null) return new FanResponse(false, "empty request");
 
         var now = DateTimeOffset.Now;
         try

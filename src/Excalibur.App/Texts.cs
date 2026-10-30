@@ -100,6 +100,10 @@ internal static class Texts
             return "Sorun giderildi, fan kontrolü yeniden başladı";
         if (message.Contains("did not read back", StringComparison.Ordinal))
             return "Fan hızı ayarlanamadı, yeniden deneniyor";
+        if ((m = Regex.Match(message, @"^!! (Cpu|Gpu) fan runs at (\d+)% and does not follow its target (\d+)%")).Success)
+            return $"Uyarı: {(m.Groups[1].Value == "Cpu" ? "işlemci" : "ekran kartı")} fanı %{m.Groups[2].Value}'te kaldı, istenen %{m.Groups[3].Value}";
+        if (message.StartsWith("!! wmi", StringComparison.Ordinal))
+            return "Uyarı: Windows'un sensör hizmeti yanıt vermiyor; fanlar yedek sensörlerle yönetiliyor";
         if (message.StartsWith("!!", StringComparison.Ordinal))
             return "Uyarı: fanlar orijinal ayara bırakılamadı; koruma hizmeti yeniden deneyecek";
         return message;

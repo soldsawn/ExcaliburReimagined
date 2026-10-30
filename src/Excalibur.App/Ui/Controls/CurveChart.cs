@@ -19,15 +19,21 @@ internal sealed class CurveChart : FrameworkElement
     private const int MinC = 30, MaxC = 100, WarmC = 65;
     // Measured stock EC CPU-fan steps (docs/07 A.2): <58 C 66%, 58-64 C 86%, >=65 C ~94%.
     private static readonly (int C, int P)[] Stock = [(MinC, 66), (58, 66), (58, 86), (65, 86), (65, 94), (MaxC, 94)];
-    // Safety floors: 25% always, 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
-    internal static readonly (int C, int P)[] Floors =
+    // Safety floors: 25% always (30% through WMI), 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
+    internal static readonly (int C, int P)[] Floors = FloorsFrom(SafetyPolicy.AbsoluteFloor);
+
+    private static (int C, int P)[] FloorsFrom(int lowest) =>
     [
-        (MinC, SafetyPolicy.AbsoluteFloor), (70, SafetyPolicy.AbsoluteFloor), (70, 80), (78, 80),
+        (MinC, lowest), (70, lowest), (70, 80), (78, 80),
         (78, 90), (HotTracker.HotC, 90), (HotTracker.HotC, 100), (MaxC, 100),
     ];
 
+    private static readonly (int C, int P)[] WmiFloors = FloorsFrom(FanControlLoop.WmiFloor);
+
     private FanProfile? _profile;
     private FanStatusDto? _status;
+    private bool ThroughWmi => _status?.WritePath == FanWritePath.Wmi;
+    private int Lowest => ThroughWmi ? FanControlLoop.WmiFloor : SafetyPolicy.AbsoluteFloor;
     private HistorySeries? _trail;
     private Point? _mouse;
     private Rect _plot;
@@ -109,7 +115,7 @@ internal sealed class CurveChart : FrameworkElement
         Zones(dc);
         Grid(dc);
         Polyline(dc, Stock, new Pen(Res("SubText"), 1.5) { DashStyle = DashStyles.Dash });
-        Polyline(dc, Floors, new Pen(Res("Bad"), 1.2) { DashStyle = DashStyles.Dot });
+        Polyline(dc, ThroughWmi ? WmiFloors : Floors, new Pen(Res("Bad"), 1.2) { DashStyle = DashStyles.Dot });
         Trail(dc);
 
         if (_profile is { IsEcAuto: false } profile)
@@ -238,18 +244,18 @@ internal sealed class CurveChart : FrameworkElement
         var lines = new List<(string, Brush)> { ($"{c} °C", Res("Text")) };
         if (_profile is { IsEcAuto: false } profile)
         {
-            int cpu = Math.Max(profile.CpuCurve.Evaluate(c), SafetyPolicy.AbsoluteFloor);
+            int cpu = Math.Max(profile.CpuCurve.Evaluate(c), Lowest);
             if (SameCurve(profile))
                 lines.Add(($"Profil: %{cpu}  (~{Texts.Rpm(cpu)} rpm)", Res("Accent")));
             else
             {
-                int gpu = Math.Max(profile.GpuCurve.Evaluate(c), SafetyPolicy.AbsoluteFloor);
+                int gpu = Math.Max(profile.GpuCurve.Evaluate(c), Lowest);
                 lines.Add(($"İşlemci fanı: %{cpu}  (~{Texts.Rpm(cpu)} rpm)", Res("Accent")));
                 lines.Add(($"Ekran kartı fanı: %{gpu}  (~{Texts.Rpm(gpu)} rpm)", Res("Ok")));
             }
         }
         lines.Add(($"Orijinal ayar: %{StepAt(Stock, c)}", Res("SubText")));
-        lines.Add(($"İndirilemeyen alt sınır: %{StepAt(Floors, c)}", Res("Bad")));
+        lines.Add(($"İndirilemeyen alt sınır: %{StepAt(ThroughWmi ? WmiFloors : Floors, c)}", Res("Bad")));
         Box(dc, lines, At(c, 100).X + 10, _plot.Top + 6, m.X);
     }
 
@@ -299,7 +305,7 @@ internal sealed class CurveChart : FrameworkElement
     /// <summary>The value of a step polyline (stock EC, floors) at a temperature: the last point at or below it.</summary>
     private static int StepAt((int C, int P)[] steps, int c) => steps.Last(s => s.C <= Math.Max(c, MinC)).P;
 
-    // Through the curve's own corners (and where it crosses the absolute floor), not one rounded percent per degree:
+    // Through the curve's own corners (and where it crosses the lowest percent), not one rounded percent per degree:
     // a flat stretch (Balanced: 5 points over 12 C) drew as a shaky staircase.
     private void Curve(DrawingContext dc, FanCurve curve, Pen pen)
     {
@@ -307,14 +313,15 @@ internal sealed class CurveChart : FrameworkElement
         corners.AddRange(curve.Points.Where(p => p.TempC > MinC && p.TempC < MaxC).Select(p => ((double)p.TempC, (double)p.Percent)));
         corners.Add((MaxC, curve.Evaluate(MaxC)));
         var points = new List<Point>();
+        int lowest = Lowest;
         for (int i = 0; i < corners.Count; i++)
         {
-            if (i > 0 && (corners[i - 1].P < SafetyPolicy.AbsoluteFloor) != (corners[i].P < SafetyPolicy.AbsoluteFloor))
+            if (i > 0 && (corners[i - 1].P < lowest) != (corners[i].P < lowest))
             {
                 var (a, b) = (corners[i - 1], corners[i]);
-                points.Add(At(a.C + (SafetyPolicy.AbsoluteFloor - a.P) / (b.P - a.P) * (b.C - a.C), SafetyPolicy.AbsoluteFloor));
+                points.Add(At(a.C + (lowest - a.P) / (b.P - a.P) * (b.C - a.C), lowest));
             }
-            points.Add(At(corners[i].C, Math.Max(corners[i].P, SafetyPolicy.AbsoluteFloor)));
+            points.Add(At(corners[i].C, Math.Max(corners[i].P, lowest)));
         }
         var geometry = new StreamGeometry();
         using (var g = geometry.Open())
