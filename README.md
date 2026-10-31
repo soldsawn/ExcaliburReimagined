@@ -6,11 +6,11 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.8-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
-[![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.9-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
+[![Platform](https://img.shields.io/badge/Platform-Windows_11_%7C_Linux-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
-[Özellikler](#özellikler) • [Kurulum](#kurulum) • [Teknik Detaylar](#teknik-detaylar-ve-güvenlik) • [BIOS Bulguları](#bios) • [English](#english)
+[Özellikler](#özellikler) • [Kurulum](#kurulum) • [Linux](#linux) • [Teknik Detaylar](#teknik-detaylar-ve-güvenlik) • [BIOS Bulguları](#bios) • [English](#english)
 
 </div>
 
@@ -53,7 +53,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 🔄 **Güncelleme Denetimi:** GitHub'da yeni sürüm olup olmadığı kontrolü.
 - 🧹 **Casper Programlarını Kapatma:** Control Center'ın arka planda çalışan sürücüsü, açılış görevleri ve programları tek tuşla durdurulup devre dışı bırakılır; hiçbir şey silinmez, "Geri al" eski hâline döndürür (Ayarlar). Fan denetleyicisini kullanan başka programlar (NoteBook FanControl, WinRing0) uyarı olarak gösterilir.
 - ⌨️ **Kısayol Tuşları:** Her yerden fan profilini (Ctrl+Alt+F) ve güç modunu (Ctrl+Alt+M) değiştirme, pencereyi açma (Ctrl+Alt+E); birleşimler Ayarlar'dan değiştirilebilir.
-> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği.
+> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux sürümüne pencereli arayüz, güç modu ve klavye ışığı.
 
 <a id="diğer-modeller"></a>
 ### 🧪 Diğer Modeller ve EC Sürümleri
@@ -96,6 +96,43 @@ Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirs
 > **Windows uyarısı:** Kurulum dosyası imzalı olmadığı için Windows "bilinmeyen yayımcı" diyebilir. **Ek bilgi > Yine de çalıştır** ile devam edebilirsiniz.
 
 Sürüm sayfasında ayrıca **`ExcaliburReimagined-<sürüm>-zip-kurulum.zip`** de vardır: zip'i bir klasöre çıkarıp `1-Kur.cmd` ile kurar, `2-Kaldir.cmd` ile kaldırırsınız (kurulum dosyasıyla aynı işi yapar).
+
+<a id="linux"></a>
+### 🐧 Linux (ilk sürüm)
+
+Sürüm sayfasındaki **`ExcaliburReimagined-<sürüm>-linux-x64.tar.gz`** Linux içindir. Bu ilk sürüm **fan kontrolü ve komut satırından** oluşur: Windows'takiyle aynı profiller (Sessiz, Dengeli, Performans, Orijinal), aynı güvenlik kuralları ve EC sürüm denemesi. Servis durunca, çökünce ya da bilgisayar uykuya geçince fanlar dizüstünün kendi ayarına döner.
+
+**Şart:** BIOS'ta **Secure Boot kapalı** olmalı (açılışta F2 > Security). Açıkken Linux EC'ye yazmaya izin vermez; uygulama bunu söyler ve fanlara dokunmaz.
+
+```bash
+tar -xzf ExcaliburReimagined-*-linux-x64.tar.gz
+cd ExcaliburReimagined-*-linux-x64
+sudo bash install.sh
+```
+
+| Komut | Ne yapar |
+|---|---|
+| `exr status` | Sıcaklıklar, fan yüzdeleri, devirler, profil |
+| `exr profile sessiz` | Profil değiştirir (`dengeli`, `performans`, `orijinal`); yeniden başlatmada korunur |
+| `exr trial` | Tanınmayan EC sürümünde onaylı kısa deneme |
+| `exr report` | Sorun bildirmek için günlükleri bir zip'e koyar |
+
+(`exr`, `excalibur-reimagined` komutunun kısa yoludur.) Kaldırmak için: `sudo /opt/excalibur-reimagined/uninstall.sh`
+
+**Hangi dağıtımlarda çalışır?** Uygulama EC'ye çekirdeğin `ec_sys` modülüyle ulaşır ve servis için systemd kullanır; bunlar dağıtıma göre değişir.
+
+| Dağıtım | Durum |
+|---|---|
+| Ubuntu (26.04, G870 / CQ212) | ✅ Denendi |
+| Linux Mint, Pop!_OS, Zorin OS, Debian | ✅ Büyük olasılıkla çalışır (aynı çekirdek modülü) |
+| Arch, Manjaro, EndeavourOS, openSUSE | 🟡 Denenmedi |
+| Fedora | ❌ Büyük olasılıkla çalışmaz (çekirdeğinde `ec_sys` yok gibi görünüyor) |
+| Bazzite, SteamOS, Fedora Silverblue | ❌ Sistem klasörleri yazılamadığı için kurulum yapılamaz |
+| systemd kullanmayan dağıtımlar | ❌ Servis kurulamaz |
+
+Desteklenmeyen bir dağıtımda hiçbir şey bozulmaz: uygulama EC'ye ulaşamazsa fanlara dokunmaz ve `exr status` nedenini söyler. Denediğiniz dağıtımın sonucunu `exr report` zip'iyle bir Issue olarak paylaşırsanız tabloyu güncelleriz.
+
+**Henüz Linux'ta olmayanlar:** pencereli arayüz, güç modu, klavye ışığı, Secure Boot açıkken çalışma, pil sayfası, geçmiş ve otomasyon. Sırayla eklenecek; Secure Boot ve Fedora desteği için kendi çekirdek modülümüz planlanıyor.
 
 ### Kod üzerinden kurulum (geliştiriciler için)
 
@@ -353,7 +390,7 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **`v0.1.8`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**; `P009B0` (BIOS CQ171/CQ212) and `P006B0` (BIOS CQ111) are supported the same way. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. A trial runs once per machine; afterwards the app starts without it, on the profile you last chose. Use at your own risk.
+> **`v0.1.9`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**; `P009B0` (BIOS CQ171/CQ212) and `P006B0` (BIOS CQ111) are supported the same way. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. A trial runs once per machine; afterwards the app starts without it, on the profile you last chose. Use at your own risk.
 
 **Tested devices:** G870 · BIOS CQ141 · EC `P008B0` (developed on, fans through the EC) · G870 · BIOS CQ212 · EC `P009B0` (trial passed, fans through the EC; now enabled without a trial) · G870 · BIOS CP211 · EC `P009C0` (trial passed, fans through the BIOS/WMI) · G870 · BIOS CQ131 · EC `P007B0` (trial passed, fans through the EC) · G870 · BIOS CQ111 · EC `P006B0` (trials passed on two machines, both fans through the EC; now enabled without a trial) · G770 · BIOS CP221 · EC `P003K0` (trial passed, fans through the EC).
 
@@ -376,6 +413,8 @@ Hardcoded limits ensure fans never go below 25% (30% when they are set through t
 **BIOS findings** (details in Turkish in [BIOS Bulguları](#bios)): press **F3** at power-on for the full hidden Aptio menu (works on BIOS CQ212/CQ171; CQ141 and older add a factory-data check that keeps it hidden). F11 at power-on starts the factory recovery. There is no charge limit in the BIOS or the EC; Battery Boost is written to the EC at boot but the `P008B0`/`P009B0` firmware never reads it. The stock fan table lives inside the EC firmware (identical in `P008B0` and `P009B0`), is chosen by power mode (High performance has stronger top steps: ≈84/94/100 % instead of 80/88/94 %) and the app's grey "original" line follows it.
 
 **Installation:** download **`ExcaliburReimagined-<version>-setup.exe`** from the [latest release](https://github.com/soldsawn/ExcaliburReimagined/releases/latest) and run it. .NET comes inside it, and if the PawnIO driver is missing it downloads the official setup, checks its hash and installs it. Uninstall from Windows Settings > Apps (you are asked whether to keep your settings and fan history; by default they are kept). The setup is not signed, so Windows may warn about an unknown publisher (More info > Run anyway). The release also has a `-zip-kurulum.zip` with the same install as a folder (`1-Kur.cmd` / `2-Kaldir.cmd`).
+
+**Linux (first version):** download `ExcaliburReimagined-<version>-linux-x64.tar.gz`, extract it and run `sudo bash install.sh`. It is the same fan control (profiles, safety rules, EC trial) as a systemd service with a command line: `exr status`, `exr profile sessiz|dengeli|performans|orijinal`, `exr trial`, `exr report`. It reaches the EC through the kernel's `ec_sys` module, so **Secure Boot must be off**; tested on Ubuntu 26.04 (G870, CQ212), expected to work on Ubuntu derivatives and Debian, likely not on Fedora (no `ec_sys`) or immutable distros. No GUI, power mode or keyboard light on Linux yet.
 
 **From source (elevated PowerShell):**
 ```powershell
