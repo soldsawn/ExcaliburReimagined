@@ -10,6 +10,8 @@
     <AssemblyName>excalibur-reimagined</AssemblyName>
     <RootNamespace>Excalibur.Linux</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- EcTrace (Windows event log) is linked but never started on Linux. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

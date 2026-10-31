@@ -1,0 +1,22 @@
+Excalibur Reimagined — Linux (ilk sürüm)
+
+Casper Excalibur için fan kontrolü: Sessiz, Dengeli, Performans profilleri ve dizüstünün kendi ayarı (Orijinal),
+Windows sürümüyle aynı güvenlik kuralları (fan en az %25; 70 °C'de en az %80, 78 °C'de %90; 80 °C'de 3 sn sürerse %100).
+
+ŞART: BIOS'ta Secure Boot KAPALI olmalı (açılışta F2 > Security > Secure Boot). Açıkken Linux EC'ye yazmaya izin vermez.
+
+KURULUM (paketi açtığınız klasörde terminal açın):
+    sudo bash install.sh
+
+KOMUTLAR:
+    excalibur-reimagined status          sıcaklıklar, fanlar, profil
+    excalibur-reimagined profile sessiz  (dengeli | performans | orijinal)
+    excalibur-reimagined report          sorun bildirmek için günlükler zip'e
+    Kısa yol: exr status
+
+KALDIRMA:
+    sudo /opt/excalibur-reimagined/uninstall.sh
+
+Bu ilk sürümde yok (sırayla gelecek): pencereli arayüz, güç modu, klavye ışığı, Secure Boot açıkken çalışma.
+Doğrulanmış EC sürümleri: P008B0, P009B0, P006B0. Diğerlerinde fanlar önce yalnız izlenir; "excalibur-reimagined trial" ile kısa bir deneme yapılır.
+Sorun: https://github.com/soldsawn/ExcaliburReimagined/issues

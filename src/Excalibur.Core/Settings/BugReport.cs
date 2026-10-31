@@ -17,8 +17,10 @@ public static class BugReport
 
     /// <param name="dataDirectory">The service's data folder (logs\ and the state files).</param>
     /// <param name="extra">Other files to add as (path, name in the zip): the tray log, the user settings.</param>
+    /// <param name="logDirectory">Where the logs are, when not in the data folder's logs\ (Linux: /var/log/...).</param>
     /// <returns>The zip's path.</returns>
-    public static string Create(string outputDirectory, string dataDirectory, string summary, IEnumerable<(string Path, string Name)> extra, DateTime now)
+    public static string Create(string outputDirectory, string dataDirectory, string summary, IEnumerable<(string Path, string Name)> extra, DateTime now,
+        string? logDirectory = null)
     {
         Directory.CreateDirectory(outputDirectory);
         string zipPath = Path.Combine(outputDirectory, $"ExcaliburReimagined-rapor-{now:yyyyMMdd-HHmm}.zip");
@@ -27,7 +29,7 @@ public static class BugReport
 
         Add(zip, "bilgi.txt", Clean(
             $"{summary}\nİşletim sistemi: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}\nRapor: {now:yyyy-MM-dd HH:mm}\n"));
-        string logs = Path.Combine(dataDirectory, "logs");
+        string logs = logDirectory ?? Path.Combine(dataDirectory, "logs");
         if (Directory.Exists(logs))
             foreach (var file in Directory.GetFiles(logs).Where(f => File.GetLastWriteTime(f) >= now.AddDays(-Days)).Order())
                 AddFile(zip, file, $"logs/{Path.GetFileName(file)}");
