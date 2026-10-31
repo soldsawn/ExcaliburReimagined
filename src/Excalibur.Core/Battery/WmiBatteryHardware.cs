@@ -7,7 +7,8 @@ namespace Excalibur.Core.Battery;
 /// <summary>
 /// The battery through Windows' battery driver (root\wmi BatteryStaticData, BatteryFullChargedCapacity, BatteryCycleCount).
 /// The static data needs administrator rights ("Generic failure" otherwise), so only the service reads it. The driver asks
-/// the firmware (ACPI _BIX, which reads the EC) when its copy is stale: the read is timed like any EC call.
+/// the firmware (ACPI _BIX, which reads the EC) when its copy is stale: the read is timed like any EC call, and taken under
+/// the EC lock so it never meets our own raw EC access (fan writes) halfway; when the lock is not free within 2 s it is skipped.
 /// </summary>
 public sealed class WmiBatteryHardware : IBatteryHardware, IBatteryMeter
 {
@@ -16,6 +17,8 @@ public sealed class WmiBatteryHardware : IBatteryHardware, IBatteryMeter
     public BatteryHealth? ReadHealth()
     {
         var watch = Stopwatch.StartNew();
+        using var ecLock = EcLock.TryAcquire();
+        if (!ecLock.Held) return null; // the health read is retried later
         try
         {
             var stat = First("BatteryStaticData", "DesignedCapacity", "Chemistry");
@@ -43,9 +46,12 @@ public sealed class WmiBatteryHardware : IBatteryHardware, IBatteryMeter
     {
         var watch = Stopwatch.StartNew();
         int? remaining;
-        try { remaining = First("BatteryStatus", "RemainingCapacity")?[0] is { } r ? Convert.ToInt32(r) : null; }
-        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException or InvalidCastException) { remaining = null; }
-        finally { SlowOps.Check("battery remaining", watch.Elapsed); }
+        using (var ecLock = EcLock.TryAcquire())
+        {
+            try { remaining = ecLock.Held && First("BatteryStatus", "RemainingCapacity")?[0] is { } r ? Convert.ToInt32(r) : null; }
+            catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException or InvalidCastException) { remaining = null; }
+            finally { SlowOps.Check("battery remaining", watch.Elapsed); }
+        }
         if (remaining is not { } mWh) return null;
         int? brightness;
         try { brightness = First("WmiMonitorBrightness", "CurrentBrightness")?[0] is { } b ? Convert.ToInt32(b) : null; }

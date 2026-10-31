@@ -27,6 +27,9 @@ public sealed class FanFollowCheck
     private sealed record Pending(FanTarget Target, int StartPercent, TimeSpan At, bool Rewritten, int LastPercent, TimeSpan WrittenAt);
     private readonly Pending?[] _pending = new Pending?[2];
 
+    /// <summary>True while a written target still waits for its check (the fan's RPM is wanted soon).</summary>
+    public bool AnyPending => _pending[0] is not null || _pending[1] is not null;
+
     /// <summary>A target was written; <paramref name="startPercent"/> is where the fan ran just before.</summary>
     public void Wrote(FanId fan, FanTarget target, int startPercent, TimeSpan now)
         => _pending[(int)fan] = target.IsAuto ? null : new Pending(target, startPercent, now, false, startPercent, now);

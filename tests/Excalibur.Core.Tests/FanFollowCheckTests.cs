@@ -109,4 +109,24 @@ public class FanFollowCheckTests
         Assert.Equal(FanFollow.None, Check(30, 5));
         Assert.Equal(FanFollow.Rewrite, _c.Check(FanId.Gpu, 30, false, S(5), out _));
     }
+
+    [Theory]
+    [InlineData(55, 50, false, 4.0)]  // calm: the WMI block every 4 s
+    [InlineData(72, 50, false, 1.5)]  // warm CPU
+    [InlineData(55, 70, false, 1.5)]  // warm GPU
+    [InlineData(55, 50, true, 1.5)]   // a target waits for its check
+    [InlineData(null, 50, false, 1.5)] // no CPU sensor
+    public void The_WMI_sensor_block_is_read_less_often_while_calm(int? cpuC, int gpuC, bool pending, double seconds)
+        => Assert.Equal(TimeSpan.FromSeconds(seconds), EcFanHardware.WmiInterval(cpuC, gpuC, pending));
+
+    [Fact]
+    public void A_pending_target_is_reported_until_checked()
+    {
+        Assert.False(_c.AnyPending);
+        _c.Wrote(FanId.Gpu, FanTarget.FromPercent(60), 30, S(0));
+        Assert.True(_c.AnyPending);
+        Check(30, 1);
+        _c.Check(FanId.Gpu, 58, false, S(5), out _);
+        Assert.False(_c.AnyPending);
+    }
 }

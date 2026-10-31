@@ -45,6 +45,15 @@ public sealed class EcFanHardware : IFanHardware
     // through Windows' driver, and the ACPI 13 warnings under load came right after one stalled for 4 s (2026-10-25
     // 17:44, 19:10, 19:46); the CPU temperature, which the curves and safety rules follow closely, stays live (MSR).
     private static readonly TimeSpan MinWmiInterval = TimeSpan.FromSeconds(1.5);
+    // Each WMI 0x0200 call reads the EC through Windows' driver, and the rare ACPI 13 warnings left are such a call stalling
+    // 3-4 s (2026-10-30/31). While all is calm (below WarmC, no target waiting for its check) the block is read every
+    // SteadyWmiInterval: the CPU temperature stays live (MSR), the GPU temperature and the RPMs may be a few seconds old.
+    private static readonly TimeSpan SteadyWmiInterval = TimeSpan.FromSeconds(4);
+    public const int WarmC = 70;
+
+    /// <summary>How long a WMI sensor block is reused: short while warm or while a fan target waits for its check.</summary>
+    public static TimeSpan WmiInterval(int? cpuC, int lastGpuC, bool targetPending) =>
+        targetPending || cpuC is not (>= 1 and < WarmC) || lastGpuC >= WarmC ? MinWmiInterval : SteadyWmiInterval;
     private bool _reused;
     private bool _withoutWmi;
     private GpuTempSource _gpuSource = GpuTempSource.Ec;
@@ -197,7 +206,9 @@ public sealed class EcFanHardware : IFanHardware
 
     private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) ReadWmiSensors()
     {
-        _reused = _lastWmi is not null && (_sinceWmi.Elapsed < MinWmiInterval || EcQuiet.IsQuiet && _sinceWmi.Elapsed < MaxReuse);
+        _reused = _lastWmi is { } prev
+            && (_sinceWmi.Elapsed < WmiInterval(cpuTemperature?.Invoke(), prev.GpuC, _follow.AnyPending)
+                || EcQuiet.IsQuiet && _sinceWmi.Elapsed < MaxReuse);
         if (_reused) return LastWmi();
         SmiCommand? reply;
         try { reply = wmi.TryExecute(SmiCommand.Get(0x0200)); }
