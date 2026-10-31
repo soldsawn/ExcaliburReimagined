@@ -29,15 +29,16 @@ internal sealed class BatteryPage : UserControl
     private readonly Grid _table = new() { Margin = new Thickness(0, 10, 0, 0) };
     private readonly TextBlock _tableEmpty, _tableNote, _fanEffect;
     private string _tableKey = "";
+    private Border? _intervalCard;
 
-    /// <param name="openSettings">Shows the Settings page, where the read interval is changed.</param>
-    public BatteryPage(FanConnection connection, Action openSettings)
+    public BatteryPage(FanConnection connection)
     {
         _connection = connection;
         _average = InfoPage.Text("", "Body", top: 8);
         _interval = InfoPage.Text("", "Caption", top: 4);
         var change = new Hyperlink(new Run("değiştir"));
-        change.Click += (_, _) => openSettings();
+        // The read interval card is at the bottom of this page.
+        change.Click += (_, _) => _intervalCard?.BringIntoView();
         change.SetResourceReference(TextElement.ForegroundProperty, "Accent");
         _intervalText = new Run();
         _interval.Inlines.Add(_intervalText);
@@ -82,6 +83,7 @@ internal sealed class BatteryPage : UserControl
                     InfoPage.Text("Bilgisayar boştayken (işlemci az çalışırken) fanları uygulamanın yönetmesi, fanların orijinal ayarına göre pilden " +
                                   "ne kadar fazla ya da az harcıyor.", "Caption", bottom: 8),
                     _fanEffect),
+                (_intervalCard = IntervalCard(connection)),
             },
         };
 
@@ -253,7 +255,7 @@ internal sealed class BatteryPage : UserControl
             error.Text = r is null ? "Arka plan hizmetine ulaşılamadı." : r.Ok ? "" : "Ayar kaydedilemedi.";
             error.Visibility = error.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         };
-        return InfoPage.Card("Pil",
+        return InfoPage.Card("Okuma sıklığı",
             InfoPage.Text("Pildeyken ortalama gücü ölçmek için pil ne sıklıkla okunsun. Seyrek okuma yeterlidir ve dizüstüne daha az iş yükler.", "Caption"),
             combo, error);
     }

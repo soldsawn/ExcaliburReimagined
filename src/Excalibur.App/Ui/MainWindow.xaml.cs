@@ -34,13 +34,14 @@ public partial class MainWindow : Window
         [
             new("overview", "Panel", "\uE80F", () => new OverviewPage(_connection)),
             new("fan", "Soğutma", "\uE9CA", () => new FanPage(_connection)),
-            new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
+            // Ordered by use (2026-11-01): the profile editor next to cooling, the history last.
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
-            new("battery", "Pil", "", () => new BatteryPage(_connection, () => Open("settings"))),
+            new("battery", "Pil", "", () => new BatteryPage(_connection)),
             new("display", "Ekran", "", () => new DisplayPage()),
             new("lighting", "Aydınlatma", "\uE765", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
+            new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
             new("settings", "Ayarlar", "\uE713", () => InfoPage.Settings(_connection), Bottom: true),
         ];
         foreach (var def in _defs)
@@ -73,7 +74,6 @@ public partial class MainWindow : Window
 
     private readonly Dictionary<string, RadioButton> _buttons = [];
 
-    private void Open(string key) => _buttons[key].IsChecked = true;
 
     private void ShowPage(PageDef def)
     {
@@ -152,10 +152,9 @@ public partial class MainWindow : Window
         timer.Tick += async (_, _) =>
         {
             timer.Stop();
-            foreach (var (key, index) in new[] { ("overview", 0), ("fan", 1), ("history", 2), ("profiles", 3), ("power", 4), ("battery", 5), ("display", 6), ("lighting", 7), ("automation", 8), ("settings", -1) })
+            foreach (var key in _defs.Select(d => d.Key).ToList())
             {
-                var button = index >= 0 ? (RadioButton)Nav.Children[index] : (RadioButton)NavBottom.Children[0];
-                button.IsChecked = true;
+                _buttons[key].IsChecked = true;
                 await Task.Delay(1200); // pages that fetch on show (the fan page's trail) get their data
                 Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
                 UpdateLayout();

@@ -34,12 +34,10 @@ internal static class InfoPage
     {
         string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
         string? fanFirmware = connection.Status?.EcVersion;
-        return Page("Ayarlar", "Uygulamanın görünümü ve hakkında bilgiler.",
+        return Page("Ayarlar", "Uygulamanın görünümü, kısayol tuşları, Casper programları ve hakkında bilgiler.",
             AppearanceCard.Create(connection),
             HotkeysCard.Create(),
             CasperCard.Create(connection),
-            BatteryPage.IntervalCard(connection),
-            WindowsPowerCard.Create(),
             Card("Hakkında",
                 Text($"Excalibur Reimagined {version}", "Body"),
                 Text("Casper Excalibur G870 için, Control Center'ın yerine geçen hafif bir uygulama. Kendiliğinden internete bağlanmaz, " +

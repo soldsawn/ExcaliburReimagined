@@ -170,6 +170,7 @@ internal sealed class PowerPage : UserControl
                         InfoPage.Text("Ekran kartının gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı.", "Caption"),
                         new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _gpuByMode, _gpuOwn } },
                         _gpuPanel, _gpuError)),
+                WindowsPowerCard.Create(),
             },
         };
 
