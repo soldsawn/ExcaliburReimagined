@@ -47,6 +47,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly RefreshAutomation _refresh;
     private readonly AppAutomation? _apps;
     private readonly WindowsPowerMode? _windowsPower;
+    private readonly HotkeyListener? _hotkeys;
 
     private FanStatusDto? _status;
     private int _failures;
@@ -73,6 +74,7 @@ internal sealed class TrayContext : ApplicationContext
             Theme.Settings = s; // the panel, menu and notice read it when next shown
             Render();
             _refresh?.RuleChanged();
+            ApplyHotkeys();
         }, null);
         _refresh = new RefreshAutomation(_userSettings, (title, text) => Notify(title, text, ToolTipIcon.Warning));
         // Not while taking snapshots: those only read.
@@ -82,6 +84,9 @@ internal sealed class TrayContext : ApplicationContext
                 (title, subtitle) => { if (_userSettings.Current.Osd) _osd.Flash(title, subtitle, Theme.Ok); });
             _refresh.Held = () => _apps.HoldsRefreshRate;
             _windowsPower = new WindowsPowerMode(_userSettings);
+            _hotkeys = new HotkeyListener();
+            _hotkeys.Pressed += OnHotkey;
+            ApplyHotkeys();
         }
         _panel.DetailsClicked += OpenMainWindow;
         _panel.VisibleChanged += (_, _) => { _timer.Interval = _panel.Visible ? OpenMs : IdleMs; if (_panel.Visible) _ = PollAsync(); };
@@ -362,6 +367,50 @@ internal sealed class TrayContext : ApplicationContext
         }
     }
 
+    /// <summary>Registers the shortcuts from the settings; says so once when another program already holds one.</summary>
+    private void ApplyHotkeys()
+    {
+        if (_hotkeys?.Apply(_userSettings.Current.Hotkeys) is { Count: > 0 } taken)
+            Notify("Kısayol tuşu kullanılamıyor",
+                $"{string.Join(", ", taken)} başka bir program tarafından kullanılıyor. Ayarlar > Kısayol tuşları'ndan başka bir birleşim seçebilirsiniz.",
+                ToolTipIcon.Warning);
+    }
+
+    private void OnHotkey(HotkeyAction action)
+    {
+        TrayLog.Write($"hotkey: {action}");
+        switch (action)
+        {
+            case HotkeyAction.Window:
+                OpenMainWindow();
+                break;
+            case HotkeyAction.Profile when Connected && _status is { } s:
+                // The quick-access profiles in order, as in the panel and the menu.
+                var names = _catalog.SlotButtons().Select(b => b.Item1).ToList();
+                if (names.Count == 0) break;
+                int at = names.IndexOf(s.Profile);
+                _ = SendAsync(new FanRequest("setProfile", Profile: names[(at + 1) % names.Count]));
+                break;
+            case HotkeyAction.PowerMode when Connected && _status is { } s:
+                if (s.Power is not { } power) break;
+                if (power.Lock != PowerLock.None)
+                {
+                    if (_userSettings.Current.Osd) _osd.Flash("Ofis modu", "Pilde yalnızca Ofis modu kullanılabilir", Theme.Warn);
+                    break;
+                }
+                int i = Array.FindIndex(PowerModes, m => m.Mode == power.Mode);
+                var next = PowerModes[(i + 1) % PowerModes.Length];
+                _ = SendPowerModeAsync(next.Mode, next.Label);
+                break;
+        }
+    }
+
+    private async Task SendPowerModeAsync(PowerMode mode, string label)
+    {
+        await SendAsync(new FanRequest("setPowerMode", PowerMode: mode));
+        if (_status?.Power?.Mode == mode && _userSettings.Current.Osd) _osd.Flash(label, "Güç modu", Theme.Ok);
+    }
+
     private void Notify(string title, string text, ToolTipIcon icon) => _tray.ShowBalloonTip(5000, title, text, icon);
 
     private static int? Max(int? a, int? b) => a is null ? b : b is null ? a : Math.Max(a.Value, b.Value);
@@ -433,6 +482,7 @@ internal sealed class TrayContext : ApplicationContext
         _osd.Dispose();
         _menu.Dispose();
         _apps?.Dispose();
+        _hotkeys?.Dispose();
         _refresh.Dispose();
         _userSettings.Dispose();
         base.ExitThreadCore();

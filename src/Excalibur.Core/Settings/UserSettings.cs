@@ -109,6 +109,8 @@ public sealed record UserSettings
     public IReadOnlyList<AppRule> AppRules { get; init; } = [];
     /// <summary>The Windows power plan and power mode for each performance mode; off by default (many set them themselves).</summary>
     public WindowsPowerRules WindowsPower { get; init; } = new();
+    /// <summary>Global shortcuts the tray listens for (profile, power mode, window).</summary>
+    public HotkeySettings Hotkeys { get; init; } = new();
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -133,6 +135,7 @@ public sealed record UserSettings
             RefreshRate = s.RefreshRate is { IsValid: true } ? s.RefreshRate : d.RefreshRate,
             AppRules = CleanRules(s.AppRules),
             WindowsPower = s.WindowsPower is { IsValid: true } ? s.WindowsPower : d.WindowsPower,
+            Hotkeys = (s.Hotkeys ?? d.Hotkeys).Cleaned(),
         };
     }
 
@@ -154,7 +157,7 @@ public sealed record UserSettings
         other is not null && Version == other.Version && TrayFont == other.TrayFont && Osd == other.Osd && Accent == other.Accent
         && Theme == other.Theme && CornerMarks == other.CornerMarks && Motion == other.Motion && StockLine == other.StockLine && NumberFont == other.NumberFont
         && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules)
-        && WindowsPower == other.WindowsPower;
+        && WindowsPower == other.WindowsPower && Hotkeys == other.Hotkeys;
 
     public override int GetHashCode() => HashCode.Combine(Version, TrayFont, Osd, Accent, Theme, RefreshRate, AppRules.Count);
 

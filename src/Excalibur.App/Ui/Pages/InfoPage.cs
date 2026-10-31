@@ -36,6 +36,7 @@ internal static class InfoPage
         string? fanFirmware = connection.Status?.EcVersion;
         return Page("Ayarlar", "Uygulamanın görünümü ve hakkında bilgiler.",
             AppearanceCard.Create(connection),
+            HotkeysCard.Create(),
             BatteryPage.IntervalCard(connection),
             WindowsPowerCard.Create(),
             Card("Hakkında",
