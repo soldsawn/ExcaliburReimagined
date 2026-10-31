@@ -48,9 +48,8 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 🔌 **Akıllı Otomasyon:** Şarj kablosu takıldığında veya çıkarıldığında belirlediğiniz güç modu, fan profili ve ekran yenileme hızı (Hz) otomatik olarak devreye girer.
 - 🎮 **Program Kuralları:** Seçtiğiniz bir program ya da oyun açıkken kendi fan profili, güç modu ve işlemci sınırı devreye girer; kapanınca önceki ayarlar geri gelir.
 - 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan sıcaklık/fan geçmişi (7 ya da 30 gün; 15 dakikadan 7 güne kadar aralıklar).
-- 🎨 **Görünüm:** Koyu/açık tema (ya da Windows'u izleme), 8 hazır vurgu rengi ya da dilediğiniz renk, büyük sayıların ve tepsi simgesinin yazı tipi, kart köşe çizgileri ve grafikteki hareket; değişiklikler hemen uygulanır.
-- 🔄 **Güncelleme Denetimi:** Ayarlar'daki düğmeye basınca GitHub'da yeni sürüm olup olmadığına bakar. Kendiliğinden internete bağlanmaz, veri göndermez, kendi kendine indirmez.
-
+- 🎨 **Görünüm:** Koyu/açık tema , 8 hazır vurgu rengi ya da dilediğiniz renk, büyük sayıların ve tepsi simgesinin yazı tipi, kart köşe çizgileri ve grafikteki hareket.
+- 🔄 **Güncelleme Denetimi:** GitHub'da yeni sürüm olup olmadığı kontrolü.
 > **🛠️ Planlanan Özellikler:** Klavye kısayolları, İngilizce dil seçeneği ve Casper'ın arka plan programlarını kapatma.
 
 <a id="diğer-modeller"></a>
@@ -61,13 +60,13 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 | Model | BIOS | Fan yazılımı (EC) | Sonuç | Fanlar nasıl yönetiliyor | Uygulamadaki destek |
 |---|---|---|---|---|---|
 | Casper Excalibur G870 | CQ141 | `P008B0` | Geliştirildiği cihaz, tüm özellikler | doğrudan EC | ✅ Doğrulanmış |
-| Casper Excalibur G870 | CQ171 / CQ212 | `P009B0` | Deneme geçti, iki fan da uydu; geliştiricinin cihazında da kullanılıyor | doğrudan EC | ✅ Doğrulanmış |
+| Casper Excalibur G870 | CQ171 / CQ212 | `P009B0` | Deneme geçti, iki fan da uydu | doğrudan EC | ✅ Doğrulanmış |
 | Casper Excalibur G870 | CQ111 | `P006B0` | İki ayrı cihazda deneme geçti, iki fan da uydu | doğrudan EC | ✅ Doğrulanmış |
 | Casper Excalibur G870 | CP211 | `P009C0` | Deneme geçti, iki fan da uydu | BIOS fan komutu (WMI) | ⚡ Tek tıkla kısa ayar |
 | Casper Excalibur G870 | CQ131 | `P007B0` | Deneme geçti, iki fan da uydu | doğrudan EC | ⚡ Tek tıkla kısa ayar |
 | Casper Excalibur G770 | CP221 | `P003K0` | Deneme geçti, iki fan da uydu | doğrudan EC | ⚡ Tek tıkla kısa ayar |
 
-Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirsiniz (bkz. [Katkıda Bulunma](#katkıda-bulunma)). Uygulamada **Ayarlar > Hakkında > "Bilgileri kopyala"** gerekli bilgileri tek satırda verir.
+Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirsiniz (bkz. [Katkıda Bulunma](#katkıda-bulunma)). Deneme önerilen cihazlarda Panel'deki deneme kartında bulunan **"Bilgileri kopyala"** düğmesi gerekli bilgileri tek satırda verir; diğerlerinde model, BIOS ve fan yazılımı (EC) sürümü **Ayarlar > Hakkında**'da yazar.
 
 **Uygulama fan yazılımı (EC) sürümünü nasıl ele alır:**
 
@@ -148,8 +147,6 @@ Uygulama 3 ana bileşenden oluşur:
 
 Geliştiriciler, test yapmak için donanıma dokunmayan simülasyon modunu kullanabilir: `ExcaliburFanService.exe --simulate` (`--on-battery` pildeymiş gibi, `--ec <sürüm>` başka bir EC sürümüymüş gibi, `--wmi-fans` BIOS fan komutunu destekleyen bir bilgisayarmış gibi davranır).
 
-### EC ile Daha Az Konuşmak
-EC, Windows'un kendi pil ve sıcaklık okumalarıyla paylaşılır; iki taraf aynı anda konuşursa Windows olay günlüğünde ACPI 13/15 uyarıları görülebilir. Bu yüzden servis EC'yi gereksiz yere meşgul etmez: işlemci sıcaklığı doğrudan işlemciden okunur; yazılan fan hızları geri okunmaz, fan devriyle doğrulanır (EC yalnız bir fan hedefine uymazsa okunur); koruma hizmeti sensörleri ayrıca okumaz, ana servisten alır; denetleyici kendi işini yaparken (ışık tuşu, şarj kablosu) okumalar bekletilir; pil seyrek okunur. BIOS fan komutunu destekleyen bilgisayarlarda fanlar EC'ye hiç doğrudan yazılmaz. Yavaş çağrılar ve uyarı anları `C:\ProgramData\ExcaliburReimagined\logs` günlüğüne yazılır.
 
 ---
 <a id="bios"></a>
@@ -159,6 +156,9 @@ Bu uygulamayı yazarken G870'in BIOS'unu ve fan denetleyicisinin (EC) yazılım�
 
 > [!CAUTION]
 > BIOS ayarları ve BIOS güncellemesi bilgisayarın **açılmamasına** yol açabilir. Her şey sizin sorumluluğunuzdadır. Emin olmadığınız şeye dokunmayın.
+
+<details>
+<summary><b>Bulguları göster: gizli BIOS menüsü (F3), açılış tuşları, orijinal fan tablosu, pil ayarları, gizli menü ayar rehberi</b></summary>
 
 ### BIOS sürümü ve fan yazılımı (EC) eşleşmesi
 
@@ -187,12 +187,11 @@ G870'in BIOS'unda normal sekmelerin (Main, Advanced, Security, Boot, Info, Exit)
 | CQ171 | ✅ Açılması bekleniyor (BIOS kodu CQ212 ile aynı) |
 | CQ141 ve öncesi | ❌ Büyük olasılıkla açılmaz: bu sürümlerde F3 ek olarak fabrika kimlik bilgisindeki bir bayta bakar, satılan cihazlarda bu kapalıdır. CQ212'ye güncelleyince açılır. |
 
-İnternette dolaşan **Fn+Tab**, açılışta **"a"** tuşu ya da **F4-4-R-F-V** dizisi bu BIOS'ta işe yaramaz (sonuncusu başka bir BIOS üreticisine, InsydeH2O'ya aittir; bu BIOS AMI Aptio).
 
 <details>
 <summary><b>Nasıl bulundu? (teknik)</b></summary>
 
-BIOS'un menü programı (AMITSE) açılışta tam menünün altı sayfasını (form 0x2717–0x271C) önce gizler, sonra bir bayrak açıksa geri gösterir. Bayrağı, açılış tuşu döngüsündeki F3 (`BootFlow 0x1001`) koyar. CQ141'de bayrak yalnız flaştaki fabrika kimlik bloğunda (0x640436) bir bayt sıfır değilse açılır; CQ171/CQ212'de bu koşul yoktur. Menü ayarları Windows çalışırken okunamaz (Setup değişkenleri yalnız açılış öncesinde görünür; Windows "değişken bulunamadı" der), bu yüzden bu ayarları Windows'tan değiştiren bir uygulama yazmak mümkün değil.
+BIOS'un menü programı (AMITSE) açılışta tam menünün altı sayfasını (form 0x2717–0x271C) önce gizler, sonra bir bayrak açıksa geri gösterir. Bayrağı, açılış tuşu döngüsündeki F3 (`BootFlow 0x1001`) koyar. CQ141'de bayrak yalnız flaştaki fabrika kimlik bloğunda (0x640436) bir bayt sıfır değilse açılır; CQ171/CQ212'de bu koşul yoktur. 
 </details>
 
 ### Açılış tuşları
@@ -205,7 +204,6 @@ BIOS'un menü programı (AMITSE) açılışta tam menünün altı sayfasını (f
 | **F11** | ⚠️ **Fabrika kurtarması**: diskteki kurtarma bölümünden Windows'u fabrika hâline döndüren aracı başlatır. Yanlışlıkla basmayın. |
 | **Tab** | Logo yerine açılış mesajlarını gösterir |
 
-BIOS'ta başka modüllerin tuş eklemesi için bir yer var, ama bu sürümde boş: başka gizli açılış tuşu yok.
 
 ### Orijinal fan ayarı nasıl çalışıyor?
 
@@ -249,23 +247,17 @@ xychart-beta
 - Yani orijinal ayarda fanlar **boşta bile %52'nin altına inmez**; işlemci 55–65 °C arasına girince hızla %80–94'e çıkar. Uygulamanın profilleri bu yüzden boşta daha sessizdir.
 - Ekran kartı fanının tablosu aynı yüzdeleri kullanır, işlemci eşikleri biraz farklıdır (57/59/62/64/66 °C).
 - Denetleyicide başka bir donanım çeşidi için 8 kademeli, daha geç ısınan tablolar da var (66/69/72 °C); G870 bunları kullanmıyor.
-- Soğutma sayfasındaki gri kesik **"Orijinal ayar"** çizgisi bu tablodan çizilir ve seçili güç moduna göre değişir (Ayarlar > Görünüm'den gizlenebilir). Diğer modellerin tablosu farklı olabildiği ve Windows'tan okunamadığı için çizgi yalnız `P008B0` ve `P009B0`'da görünür.
+- Soğutma sayfasındaki gri kesik **"Orijinal ayar"** çizgisi bu tablodan çizilir ve seçili güç moduna göre değişir (Ayarlar > Görünüm'den gizlenebilir).
 
-### Neden %100'de 5400 değil ~5100 devir?
-
-Denetleyiciye yazılan fan yüzdesi aslında bir **devir hedefidir**: G870'te yüzde × 54 (işlemci fanı; ekran kartı fanı × 52). %100 = 5400 devir hedefi demektir. Denetleyici her adımda fanın ölçülen devrine bakar; hedefin altındaysa fana giden gücü (PWM) bir adım artırır, üstündeyse azaltır. Gücün tavanı PWM'in **tamamıdır** (%100 doluluk). G870'in fanları tam güçte ~5100–5200 devirde kalır; yani %100'de fan zaten sonuna kadar çalışıyor ve 5400 hiçbir yazılımla aşılamaz (yüzde 100'ün üstü de denetleyicide 100'e kırpılır). 5400, fanın gerçek hızı değil denetleyicinin hedefidir.
-
-<sub>Uygulamanın gösterdiği tahmini devir (~5400) bu yüzden %100'de gerçek devirden biraz yüksektir; gerçek devir Panel'de ölçülerek gösterilir.</sub>
 
 ### Pil ayarları: Battery Boost, şarj
 
-- **Şarj sınırı (ör. %80'de durdurma) bu dizüstünde yok.** BIOS'un Windows'a açtığı komutlarda da (WMI), denetleyicide de böyle bir ayar bulunmadı.
-- **Charging Method** (gizli menü, Advanced → Platform Settings) yalnız normal / hızlı şarj seçer; şarj sınırı değildir. Hızlı şarj pili daha çok ısıtır.
+- **Charging Method** (gizli menü, Advanced → Platform Settings) yalnız normal / hızlı şarj seçer. Hızlı şarj pili daha çok ısıtır.
 - **Battery Boost** (normal Advanced sekmesi, varsayılan açık): BIOS bu ayarı her açılışta denetleyiciye yazar, ama `P008B0` ve `P009B0` yazılımları bu değeri **hiç okumuyor** (aynı yolla yazılan Wake on LAN ve USB şarj ayarları ise kullanılıyor). Yani bu dizüstünde büyük olasılıkla hiçbir şey değiştirmiyor. Açık bırakmanın zararı yok.
 
 ### BIOS'un Windows'a açtığı komutlar (WMI)
 
-Casper'ın uygulamaları ve bu uygulama dizüstüyle BIOS'un küçük bir komut kümesi üzerinden konuşur. Komutlar sabittir: `0x0100` klavye ışığı, `0x0200–0x0205` sıcaklıklar, fanlar ve ekran kartı modu, `0x0300` güç modu. Başka gizli komut yok. Belgelerde fanları açıp kapatan gizli bir dal (`SET 0x0200`, ikinci değer 1) görünüyor, ama G870'in denetleyicisinde o adres başka bir şey (anakart sensörü sınırı) için kullanılıyor: **kullanmayın.**
+Casper'ın uygulamaları ve bu uygulama dizüstüyle BIOS'un küçük bir komut kümesi üzerinden konuşur. Komutlar sabittir: `0x0100` klavye ışığı, `0x0200–0x0205` sıcaklıklar, fanlar ve ekran kartı modu, `0x0300` güç modu. Belgelerde fanları açıp kapatan gizli bir dal (`SET 0x0200`, ikinci değer 1) görünüyor, ama G870'in denetleyicisinde o adres başka bir şey (anakart sensörü sınırı) için kullanılıyor: **kullanmayın.**
 
 <details>
 <summary><b>Gizli menüdeki ayarlar: ne işe yarar, hangisine dokunulmaz (rehber)</b></summary>
@@ -337,6 +329,8 @@ Ayarlar ve varsayılan değerler **BIOS CQ212**'den okundu (i5-12450H, RTX 4060)
 - EC belleği yalnız okuma için `0xFE400000 + adres` (H2RAM) üzerinden de görünür; bu yol 0x62/0x66 kanalını kullanmaz.
 - Fan tabloları (`P008B0`/`P009B0`): EC yazılım dosyasında 0x1040F–0x10696 (bank1 0x840F), satır başına 6 bayt `[işlemci çıkış, işlemci iniş, anakart çıkış, anakart iniş, yüzde, ikinci yüzde]`, 127 = son kademe; çalışma kopyası 0x500/0x510/0x940/0x950/0x520/0x8E0. Seçim: güç modu (0x395) ve bir gerilim ölçümünden çıkarılan donanım çeşidi (0x427; 3 ise 8 kademeli tablolar).
 - Battery Boost = Setup 0xCCD → EC ACPI `0xE6` bit0 (PrjDxe yazar; DSDT'de `SFHK`, kullanılmıyor; EC okumuyor).
+</details>
+
 </details>
 
 <a id="katkıda-bulunma"></a>
