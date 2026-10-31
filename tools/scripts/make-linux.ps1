@@ -7,6 +7,8 @@ $version = $props.Project.PropertyGroup.Version | Where-Object { $_ } | Select-O
 $name = "ExcaliburReimagined-$version-linux-x64"
 $out = Join-Path $repo "dist\$name"
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
+# A clean build every time (an incremental one shipped a stale version number in 0.1.9's first upload).
+foreach ($d in 'obj', 'bin') { Remove-Item (Join-Path $repo "src\Excalibur.Linux\$d") -Recurse -Force -ErrorAction SilentlyContinue }
 dotnet publish (Join-Path $repo 'src\Excalibur.Linux') -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $out -v q -nologo
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }

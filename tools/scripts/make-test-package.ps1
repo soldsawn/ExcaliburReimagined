@@ -29,7 +29,10 @@ if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
+foreach ($d in 'obj', 'bin') { Remove-Item (Join-Path $repo "src\Excalibur.Core\$d") -Recurse -Force -ErrorAction SilentlyContinue }
 foreach ($project in 'Excalibur.FanService', 'Excalibur.FanGuardian', 'Excalibur.App') {
+    # A clean build every time: an incremental one reused a build from an install-fan.ps1 run and shipped 0.1.8 inside 0.1.9.
+    foreach ($d in 'obj', 'bin') { Remove-Item (Join-Path $repo "src\$project\$d") -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host "publish $project"
     & dotnet publish (Join-Path $repo "src\$project") -c Release -r win-x64 --self-contained true -o (Join-Path $out "program\$project") --nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project" }
