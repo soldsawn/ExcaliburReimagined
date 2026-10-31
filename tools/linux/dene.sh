@@ -8,6 +8,8 @@ echo "== Excalibur Reimagined Linux denemesi $(date)"
 uname -a
 cat /sys/class/dmi/id/product_name /sys/class/dmi/id/bios_version 2>/dev/null
 echo "lockdown: $(cat /sys/kernel/security/lockdown 2>/dev/null)"
+# Linux keeps the hardware clock in UTC, Windows in local time: without this Windows boots 3 hours behind afterwards.
+sudo timedatectl set-local-rtc 1 2>/dev/null
 
 PKG=$(ls /cdrom/ExcaliburReimagined-*-linux-x64.tar.gz /media/*/*/ExcaliburReimagined-*-linux-x64.tar.gz /run/media/*/*/ExcaliburReimagined-*-linux-x64.tar.gz 2>/dev/null | head -1)
 if [ -z "$PKG" ]; then echo "!! Paket bulunamadı (USB'nin köküne kopyalandı mı?)"; exit 1; fi

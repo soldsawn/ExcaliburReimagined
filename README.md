@@ -130,6 +130,8 @@ sudo bash install.sh
 | Bazzite, SteamOS, Fedora Silverblue | ❌ Sistem klasörleri yazılamadığı için kurulum yapılamaz |
 | systemd kullanmayan dağıtımlar | ❌ Servis kurulamaz |
 
+Windows ile birlikte kullanıyorsanız Linux'ta bir kez `sudo timedatectl set-local-rtc 1` çalıştırın: Linux donanım saatini UTC tutar, yoksa Windows'a geçince saat 3 saat kayık görünür.
+
 Desteklenmeyen bir dağıtımda hiçbir şey bozulmaz: uygulama EC'ye ulaşamazsa fanlara dokunmaz ve `exr status` nedenini söyler. Denediğiniz dağıtımın sonucunu `exr report` zip'iyle bir Issue olarak paylaşırsanız tabloyu güncelleriz.
 
 **Henüz Linux'ta olmayanlar:** pencereli arayüz, güç modu, klavye ışığı, Secure Boot açıkken çalışma, pil sayfası, geçmiş ve otomasyon. Sırayla eklenecek; Secure Boot ve Fedora desteği için kendi çekirdek modülümüz planlanıyor.

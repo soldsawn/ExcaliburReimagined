@@ -19,4 +19,7 @@ KALDIRMA:
 
 Bu ilk sürümde yok (sırayla gelecek): pencereli arayüz, güç modu, klavye ışığı, Secure Boot açıkken çalışma.
 Doğrulanmış EC sürümleri: P008B0, P009B0, P006B0. Diğerlerinde fanlar önce yalnız izlenir; "excalibur-reimagined trial" ile kısa bir deneme yapılır.
+Windows ile birlikte kullanıyorsanız: Linux donanım saatini UTC tutar, Windows yerel saat; Windows'a geçince saat 3 saat
+kayık görünebilir. Linux'ta bir kez: sudo timedatectl set-local-rtc 1
+
 Sorun: https://github.com/soldsawn/ExcaliburReimagined/issues
