@@ -1,1 +1,1 @@
-Console.WriteLine("excalibur (Linux) — skeleton");
+Console.WriteLine("excalibur-reimagined (Linux) — skeleton");
