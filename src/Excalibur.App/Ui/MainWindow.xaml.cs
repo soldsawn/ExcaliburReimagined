@@ -34,14 +34,13 @@ public partial class MainWindow : Window
         [
             new("overview", "Panel", "\uE80F", () => new OverviewPage(_connection)),
             new("fan", "Soğutma", "\uE9CA", () => new FanPage(_connection)),
-            // Ordered by use (2026-11-01): the profile editor next to cooling, the history last.
+            new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
             new("battery", "Pil", "", () => new BatteryPage(_connection)),
             new("display", "Ekran", "", () => new DisplayPage()),
             new("lighting", "Aydınlatma", "\uE765", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
-            new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
             new("settings", "Ayarlar", "\uE713", () => InfoPage.Settings(_connection), Bottom: true),
         ];
         foreach (var def in _defs)
