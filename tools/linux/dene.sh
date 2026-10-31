@@ -17,19 +17,19 @@ cd /tmp/exr/ExcaliburReimagined-*-linux-x64 || exit 1
 
 echo; echo "== Kurulum"
 sudo bash install.sh
-echo; echo "ec_sys: $(ls /sys/kernel/debug/ec/ec0/io 2>/dev/null || echo yok) write_support=$(cat /sys/module/ec_sys/parameters/write_support 2>/dev/null)"
+echo; echo "ec_sys: $(sudo ls /sys/kernel/debug/ec/ec0/io 2>/dev/null || echo yok) write_support=$(cat /sys/module/ec_sys/parameters/write_support 2>/dev/null)"
 echo "coretemp: $(grep -l coretemp /sys/class/hwmon/*/name 2>/dev/null | head -1)"
 echo "EC ilk 256 bayt:"; sudo xxd /sys/kernel/debug/ec/ec0/io 2>/dev/null | head -16
 
 step() { echo; echo "== $1"; [ -n "$2" ] && exr profile "$2" >/dev/null; for i in 1 2 3 4; do sleep 5; exr status | grep -E "Fan kontrolü|Profil|İşlemci|Ekran kartı"; echo "--"; done; }
 step "Başlangıç (kayıtlı profil)" ""
-step "Performans: fanlar hızlanmalı" performans
+step "Performans (boştayken %45, 50 °C üstünde hızlanır)" performans
 step "Sessiz: fanlar yavaşlamalı" sessiz
 step "Orijinal: dizüstünün kendi ayarı" orijinal
 exr profile dengeli >/dev/null
 echo; echo "== Son durum"; exr status
 echo; echo "== Günlük"; sudo tail -40 /var/log/excalibur-reimagined/fan-*.log
-sudo exr report >/dev/null 2>&1; sudo cp /root/ExcaliburReimagined-rapor-*.zip "$OUT/" 2>/dev/null
+sudo exr report >/dev/null 2>&1; sudo sh -c "cp /root/ExcaliburReimagined-rapor-*.zip '$OUT/'" 2>/dev/null
 
 # Sonuçları USB'ye yaz (Ubuntu USB'yi salt okunur bağlar; yazılabilir yapmayı dener).
 USB=$(dirname "$PKG")

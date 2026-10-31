@@ -12,7 +12,7 @@ dotnet publish (Join-Path $repo 'src\Excalibur.Linux') -c Release -r linux-x64 -
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 foreach ($f in 'install.sh', 'uninstall.sh', 'BENI-OKU.txt') {
     # Linux line endings, whatever git checked out.
-    $text = (Get-Content (Join-Path $repo "tools\linux\$f") -Raw) -replace "`r`n", "`n"
+    $text = (Get-Content (Join-Path $repo "tools\linux\$f") -Raw -Encoding UTF8) -replace "`r`n", "`n"
     [IO.File]::WriteAllText((Join-Path $out $f), $text, (New-Object Text.UTF8Encoding $false))
 }
 $tar = Join-Path $repo "dist\$name.tar.gz"
