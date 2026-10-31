@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Linux version (L1, .scratch/linux/spec.md): the fan service and the `excalibur` command, built from Excalibur.Core's
+       portable sources (linked, not copied) plus a Linux hardware layer. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>excalibur</AssemblyName>
+    <RootNamespace>Excalibur.Linux</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EcTrace watches the Windows event log; on Linux it is linked but never started. -->
+    <PackageReference Include="System.Diagnostics.EventLog" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <CoreWindowsOnly Include="..\Excalibur.Core\Battery\WmiBatteryHardware.cs;..\Excalibur.Core\Battery\BatteryMonitor.cs" />
+    <CoreWindowsOnly Include="..\Excalibur.Core\Fan\EcFanHardware.cs;..\Excalibur.Core\Hardware\EmbeddedController.cs" />
+    <CoreWindowsOnly Include="..\Excalibur.Core\Hardware\GmWmiGateway.cs;..\Excalibur.Core\Hardware\PawnIoCpuPowerRegisters.cs;..\Excalibur.Core\Hardware\PawnIoSession.cs;..\Excalibur.Core\Power\EcPowerHardware.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Everything in Core except the Windows hardware layer (PawnIO, WMI, Windows' battery and power APIs). -->
+    <Compile Include="..\Excalibur.Core\**\*.cs" Exclude="..\Excalibur.Core\obj\**;..\Excalibur.Core\bin\**;@(CoreWindowsOnly)" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

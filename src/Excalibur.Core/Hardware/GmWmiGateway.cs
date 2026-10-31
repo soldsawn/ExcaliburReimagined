@@ -3,12 +3,6 @@ using System.Management;
 
 namespace Excalibur.Core.Hardware;
 
-/// <summary>Sends one firmware command and returns its response; <see cref="GmWmiGateway"/> on the machine, a fake in tests.</summary>
-public interface ISmiChannel
-{
-    SmiCommand Execute(SmiCommand request);
-}
-
 /// <summary>
 /// Talks to the firmware's ACPI WMI method <c>\_SB.GWMI</c>, exposed to Windows as
 /// <c>root\wmi:RW_GMWMI</c>. Writing <c>BufferBytes</c> runs the BIOS handler (WSAA);
