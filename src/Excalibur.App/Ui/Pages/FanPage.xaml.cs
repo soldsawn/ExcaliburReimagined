@@ -99,6 +99,7 @@ public partial class FanPage : UserControl
         CpuLegend.Visibility = profile?.IsEcAuto == true ? Visibility.Collapsed : Visibility.Visible;
         CpuLegendText.Text = separateGpu ? "İşlemci eğrisi" : "Profil eğrisi";
         StockLegend.Visibility = Chart.ShowsStock ? Visibility.Visible : Visibility.Collapsed;
+        StockLegendText.Text = Chart.StockLabel;
         CurveTitle.Text = $"Eğri — {ProfileNames.Label(s.Profile, s.ManualUntil)}";
         Chart.Show(profile, s);
 

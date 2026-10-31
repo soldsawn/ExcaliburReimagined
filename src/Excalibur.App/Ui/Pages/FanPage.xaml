@@ -48,7 +48,7 @@
                         </StackPanel>
                         <StackPanel x:Name="StockLegend">
                             <Rectangle Width="16" Height="2" Fill="{DynamicResource SubText}" VerticalAlignment="Center" />
-                            <TextBlock Text="Orijinal ayar" />
+                            <TextBlock x:Name="StockLegendText" Text="Orijinal ayar" />
                         </StackPanel>
                         <StackPanel>
                             <Rectangle Width="16" Height="2" Fill="{DynamicResource Bad}" VerticalAlignment="Center" />

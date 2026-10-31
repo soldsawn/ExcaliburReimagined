@@ -29,6 +29,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 </p>
 <p align="center">
   <img src="assets/screenshots/profiller.png" width="49%" alt="Profiller" />
+  <img src="assets/screenshots/hizli-panel.png" width="29%" alt="Hızlı panel" />
   <img src="assets/screenshots/tray-menu.png" width="18%" alt="Simge alanı menüsü" />
 </p>
 <p align="center">
@@ -247,7 +248,7 @@ xychart-beta
 - Yani orijinal ayarda fanlar **boşta bile %52'nin altına inmez**; işlemci 55–65 °C arasına girince hızla %80–94'e çıkar. Uygulamanın profilleri bu yüzden boşta daha sessizdir.
 - Ekran kartı fanının tablosu aynı yüzdeleri kullanır, işlemci eşikleri biraz farklıdır (57/59/62/64/66 °C).
 - Denetleyicide başka bir donanım çeşidi için 8 kademeli, daha geç ısınan tablolar da var (66/69/72 °C); G870 bunları kullanmıyor.
-- Soğutma sayfasındaki gri kesik **"Orijinal ayar"** çizgisi bu tablodan çizilir ve seçili güç moduna göre değişir (Ayarlar > Görünüm'den gizlenebilir).
+- Soğutma sayfasındaki gri kesik **"Orijinal ayar"** çizgisi bu tablodan çizilir ve seçili güç moduna göre değişir (Ayarlar > Görünüm'den gizlenebilir). Tablo yalnız `P008B0` ve `P009B0` için biliniyor; diğer sürümlerde çizgi "Orijinal ayar (G870 tablosu)" adıyla G870'inkini gösterir. Orijinal profildeyken fan noktaları bu çizgiye oturmuyorsa sizin modelinizin tablosu farklıdır: Ayarlar > Hakkında'daki fan yazılımı (EC) sürümüyle bir Issue açarsanız ekleriz.
 
 
 ### Pil ayarları: Battery Boost, şarj
