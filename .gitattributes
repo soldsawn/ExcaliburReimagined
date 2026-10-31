@@ -1,1 +1,3 @@
 * text=auto
+# Linux scripts keep Linux line endings.
+tools/linux/*.sh text eol=lf
