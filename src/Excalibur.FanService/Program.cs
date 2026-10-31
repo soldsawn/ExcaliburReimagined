@@ -142,6 +142,9 @@ builder.Services.AddSingleton(BatteryEstimates.Load(batteryDir, m => fileLog.Wri
 builder.Services.AddSingleton(new LightingManager(new KeyboardLight(firmware), settingsStore, m => fileLog.Write(DateTimeOffset.Now, m)));
 builder.Services.AddHostedService<FanWorker>();
 builder.Services.AddHostedService<PowerWorker>();
+// Casper Control Center parts (A8): the real system only for the real service; --simulate gets a pretend installation.
+builder.Services.AddSingleton(new Excalibur.Core.Casper.CasperCleaner(
+    simulate ? new Excalibur.Core.Casper.SimulatedCasperSystem() : new WindowsCasperSystem(), Path.Combine(runtimeDir, "casper-state.json")));
 builder.Services.AddHostedService<FanPipeServer>();
 builder.Services.AddHostedService<LightingWorker>();
 builder.Services.AddHostedService<BatteryWorker>();

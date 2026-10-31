@@ -71,9 +71,6 @@ internal sealed class AutomationPage : UserControl
                     InfoPage.Text("Şarj kablosu takılıp çıkarılınca güç modunu ve fan profilini kendiliğinden değiştirir. Boş bıraktığınız ayara dokunulmaz.", "Caption", bottom: 10),
                     _enabled, grid, recommended, _status, _error),
                 InfoPage.Card("Programlar", new AppRulesCard(connection)),
-                InfoPage.Card("Yakında",
-                    InfoPage.Text("• Kısayol tuşlarıyla profil değiştirme", "Caption"),
-                    InfoPage.Text("• Casper'ın arka planda çalışan programlarını kapatma (istenince geri açılabilir)", "Caption", top: 4)),
             },
         };
 

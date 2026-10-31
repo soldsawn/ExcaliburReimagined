@@ -51,8 +51,9 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 📊 **Geçmiş ve İzleme:** Görev çubuğunda canlı sıcaklık takibi, hızlı kontrol paneli, ekran bildirimleri (OSD) ve bilgisayarınızda tutulan sıcaklık/fan geçmişi (7 ya da 30 gün; 15 dakikadan 7 güne kadar aralıklar).
 - 🎨 **Görünüm:** Koyu/açık tema , 8 hazır vurgu rengi ya da dilediğiniz renk, büyük sayıların ve tepsi simgesinin yazı tipi, kart köşe çizgileri ve grafikteki hareket.
 - 🔄 **Güncelleme Denetimi:** GitHub'da yeni sürüm olup olmadığı kontrolü.
+- 🧹 **Casper Programlarını Kapatma:** Control Center'ın arka planda çalışan sürücüsü, açılış görevleri ve programları tek tuşla durdurulup devre dışı bırakılır; hiçbir şey silinmez, "Geri al" eski hâline döndürür (Ayarlar). Fan denetleyicisini kullanan başka programlar (NoteBook FanControl, WinRing0) uyarı olarak gösterilir.
 - ⌨️ **Kısayol Tuşları:** Her yerden fan profilini (Ctrl+Alt+F) ve güç modunu (Ctrl+Alt+M) değiştirme, pencereyi açma (Ctrl+Alt+E); birleşimler Ayarlar'dan değiştirilebilir.
-> **🛠️ Planlanan Özellikler:** Casper'ın arka plan programlarını kapatma ve İngilizce dil seçeneği.
+> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği.
 
 <a id="diğer-modeller"></a>
 ### 🧪 Diğer Modeller ve EC Sürümleri
@@ -362,6 +363,7 @@ A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Co
 - Smart automation based on AC/Battery status (auto-switch profiles and refresh rates).
 - Program rules: a fan profile, power mode and CPU limit while a chosen program or game runs.
 - Update check on demand (Settings): reads the GitHub release list only when you press the button.
+- Casper cleaner (Settings): stops and disables Control Center's background driver, startup tasks and programs; nothing is deleted and "Geri al" restores them. Other EC tools (NoteBook FanControl, WinRing0) are shown as a warning.
 - Global shortcuts: cycle the fan profile (Ctrl+Alt+F) and the power mode (Ctrl+Alt+M), open the window (Ctrl+Alt+E); changeable in Settings.
 - Appearance: dark/light theme (or follow Windows), 8 accent colours or any colour, number and tray-icon fonts, card corner marks and chart motion, applied at once.
 - Zero telemetry, low background resource usage, and local temperature history (7 or 30 days).

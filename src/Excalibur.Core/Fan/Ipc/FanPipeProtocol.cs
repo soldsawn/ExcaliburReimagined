@@ -36,9 +36,10 @@ public static class FanPipe
     /// 12: + status WritePath (Ec / Wmi: how the fans are written), Trial WmiFollows / Path, settings WmiFanEcVersions.
     /// 13: + setGpuLimit(gpuLimitWatts) (none = the power mode decides; response Code gpu_limit_invalid / gpu_limit_failed),
     ///     status Power GpuLimitWatts / GpuLockMhz / Modes (what each power mode allows here, measured), settings GpuLimitWatts.
+    /// 14: + casperScan, casperDisable, casperRestore (Casper Control Center parts off / back on; response Casper).
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 13;
+    public const int ProtocolVersion = 14;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -81,7 +82,7 @@ public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = n
 /// (power_battery, power_usbc, power_failed); <paramref name="Error"/> stays an English sentence for logs.</param>
 public sealed record FanResponse(bool Ok, string? Error = null, FanStatusDto? Status = null, IReadOnlyList<FanEventDto>? Events = null,
     ServiceSettings? Settings = null, HistorySeries? History = null, string? Code = null,
-    IReadOnlyList<ProfileInfoDto>? Profiles = null, IReadOnlyList<string>? Slots = null);
+    IReadOnlyList<ProfileInfoDto>? Profiles = null, IReadOnlyList<string>? Slots = null, Excalibur.Core.Casper.CasperReport? Casper = null);
 
 /// <summary>One profile as the editor needs it. Built-ins carry their curves so a copy can start from them; EcAuto has none.</summary>
 public sealed record ProfileInfoDto(string Name, bool BuiltIn, IReadOnlyList<CurvePoint>? Cpu, IReadOnlyList<CurvePoint>? Gpu);

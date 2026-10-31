@@ -32,6 +32,7 @@ public sealed class FanPipeServer(
     ProfileSwitcher switcher,
     IHostApplicationLifetime lifetime,
     FanFileLog fileLog,
+    Excalibur.Core.Casper.CasperCleaner casper,
     ILogger<FanPipeServer> logger) : BackgroundService
 {
     private const int MaxClients = 8;
@@ -212,6 +213,20 @@ public sealed class FanPipeServer(
                 case "clearfault":
                     loop.ClearFault(now);
                     break;
+                case "casperscan":
+                    return new FanResponse(true, Status: Status(), Casper: casper.Scan());
+                case "casperdisable":
+                {
+                    var r = casper.Disable();
+                    fileLog.Write(now, $"casper: turned off ({r.Items.Count(i => i.Kind != Excalibur.Core.Casper.CasperKind.Warning)} parts){(r.Error is null ? "" : $", errors: {r.Error}")}");
+                    return new FanResponse(true, Status: Status(), Casper: r);
+                }
+                case "casperrestore":
+                {
+                    var r = casper.Restore();
+                    fileLog.Write(now, $"casper: restored{(r.Error is null ? "" : $", errors: {r.Error}")}");
+                    return new FanResponse(true, Status: Status(), Casper: r);
+                }
                 default:
                     return new FanResponse(false, $"unknown command '{req.Cmd}'");
             }

@@ -37,6 +37,7 @@ internal static class InfoPage
         return Page("Ayarlar", "Uygulamanın görünümü ve hakkında bilgiler.",
             AppearanceCard.Create(connection),
             HotkeysCard.Create(),
+            CasperCard.Create(connection),
             BatteryPage.IntervalCard(connection),
             WindowsPowerCard.Create(),
             Card("Hakkında",
