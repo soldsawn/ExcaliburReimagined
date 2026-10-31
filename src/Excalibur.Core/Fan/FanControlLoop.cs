@@ -38,7 +38,9 @@ public sealed record FanLoopOptions
     /// <summary>EC firmware versions whose 0x2C/0x2D semantics were verified on hardware.</summary>
     /// P009B0: the G870's EC with BIOS CQ171/CQ212 (0x2C/0x2D found in its code, docs/06 3.6c; 2026-10-31 a CQ212 user's trial passed,
     /// WMI 0x0205 not followed, both fans through the EC).
-    public IReadOnlySet<string> KnownEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009B0" };
+    /// P006B0: two G870s with BIOS CQ111 (2026-10-31 an i7-12650H on 0.1.6 and an i5-12450H on 0.1.7: trials passed, WMI 0x0205 not followed,
+    /// both fans through the EC).
+    public IReadOnlySet<string> KnownEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009B0", "P006B0" };
     /// <summary>
     /// Unverified versions whose trial passed on someone else's machine (a tester's report): the trial is still run here,
     /// worded as a short calibration. One that passes on 2-3 different machines moves to <see cref="KnownEcVersions"/>.
@@ -48,9 +50,9 @@ public sealed record FanLoopOptions
     public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0", "P009C0", "P007B0" };
     /// <summary>
     /// EC versions the built-in curves suit (tuned on the G870's P008B0); a machine with another one starts on EC automatic after its
-    /// trial. P009B0, P009C0 and P007B0 have only been seen on G870s, the same laptop and fans.
+    /// trial. P009B0, P006B0, P009C0 and P007B0 have only been seen on G870s, the same laptop and fans.
     /// </summary>
-    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009B0", "P009C0", "P007B0" };
+    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009B0", "P006B0", "P009C0", "P007B0" };
     /// <summary>Trusted EC versions whose fans are written through the BIOS (WMI SET 0x0205): their trial passed that way.</summary>
     public IReadOnlySet<string> WmiEcVersions { get; init; } = new HashSet<string>();
     public int MaxReadFailures { get; init; } = 3;
