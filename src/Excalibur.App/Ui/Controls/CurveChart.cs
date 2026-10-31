@@ -19,9 +19,13 @@ internal sealed class CurveChart : FrameworkElement
     private const int MinC = 30, MaxC = 100, WarmC = 65;
     // The stock EC's CPU-fan steps, at the percents of its own table (read from EC RAM, 2026-10-31): 60/64/68 % follow a board
     // sensor, drawn where the original-settings seconds of the history (2026-10-26..31) average them; 72/80/88/94 % at the
-    // table's CPU thresholds (above 55/58/61/64 C).
+    // table's CPU thresholds (above 55/58/61/64 C). The EC copies its table from its own firmware when the power mode changes
+    // (bank1 0x840F, P008B0 = P009B0, 2026-11-01): Office and Gaming share this one; High performance has stronger top steps.
     private static readonly (int C, int P)[] Stock =
         [(MinC, 60), (45, 60), (45, 64), (47, 64), (47, 68), (56, 68), (56, 72), (59, 72), (59, 80), (62, 80), (62, 88), (65, 88), (65, 94), (MaxC, 94)];
+    private static readonly (int C, int P)[] StockHigh =
+        [(MinC, 60), (45, 60), (45, 64), (47, 64), (47, 68), (56, 68), (56, 72), (59, 72), (59, 84), (62, 84), (62, 94), (65, 94), (65, 100), (MaxC, 100)];
+    private (int C, int P)[] StockSteps => _status?.Power?.Mode == Excalibur.Core.Power.PowerMode.HighPerformance ? StockHigh : Stock;
     // Settings can hide the line (on by default).
     private bool ShowStock => TryFindResource("StockLine") is not false;
     // Safety floors: 25% always (30% through WMI), 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
@@ -121,7 +125,7 @@ internal sealed class CurveChart : FrameworkElement
 
         Zones(dc);
         Grid(dc);
-        if (ShowStock) Polyline(dc, Stock, new Pen(Res("SubText"), 1.5) { DashStyle = DashStyles.Dash });
+        if (ShowStock) Polyline(dc, StockSteps,new Pen(Res("SubText"), 1.5) { DashStyle = DashStyles.Dash });
         Polyline(dc, ThroughWmi ? WmiFloors : Floors, new Pen(Res("Bad"), 1.2) { DashStyle = DashStyles.Dot });
         Trail(dc);
 
@@ -265,7 +269,7 @@ internal sealed class CurveChart : FrameworkElement
                 lines.Add(($"Ekran kartı fanı: %{gpu}  (~{Texts.Rpm(gpu)} rpm)", Res("Ok")));
             }
         }
-        if (ShowStock) lines.Add(($"Orijinal ayar: %{StepAt(Stock, c)}", Res("SubText")));
+        if (ShowStock) lines.Add(($"Orijinal ayar: %{StepAt(StockSteps, c)}", Res("SubText")));
         lines.Add(($"İndirilemeyen alt sınır: %{StepAt(ThroughWmi ? WmiFloors : Floors, c)}", Res("Bad")));
         Box(dc, lines, At(c, 100).X + 10, _plot.Top + 6, m.X);
     }
