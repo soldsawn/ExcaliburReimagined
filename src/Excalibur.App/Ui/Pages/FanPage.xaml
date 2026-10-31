@@ -46,7 +46,7 @@
                             <Rectangle Width="16" Height="3" Fill="{DynamicResource Ok}" VerticalAlignment="Center" />
                             <TextBlock Text="Ekran kartı eğrisi" />
                         </StackPanel>
-                        <StackPanel>
+                        <StackPanel Visibility="{DynamicResource StockLineVisibility}">
                             <Rectangle Width="16" Height="2" Fill="{DynamicResource SubText}" VerticalAlignment="Center" />
                             <TextBlock Text="Orijinal ayar" />
                         </StackPanel>

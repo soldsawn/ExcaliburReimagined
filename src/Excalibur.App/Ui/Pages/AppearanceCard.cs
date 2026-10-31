@@ -72,6 +72,7 @@ internal static class AppearanceCard
         checks.Children.Add(Check("Profil değişince ekranın altında kısa bildirim göster", s.Osd, on => Save(x => x with { Osd = on })));
         checks.Children.Add(Check("Kartların köşelerinde vurgu çizgileri", s.CornerMarks, on => Save(x => x with { CornerMarks = on })));
         checks.Children.Add(Check("Soğutma grafiğinde parlayan, yumuşak kayan noktalar", s.Motion, on => Save(x => x with { Motion = on })));
+        checks.Children.Add(Check("Soğutma grafiğinde orijinal ayar çizgisi", s.StockLine, on => Save(x => x with { StockLine = on })));
 
         return InfoPage.Card("Görünüm",
             InfoPage.Text("Değişiklikler hemen uygulanır; hızlı panel ve menü bir sonraki açılışta yeni görünümü alır.", "Caption", bottom: 14),

@@ -10,7 +10,7 @@ namespace Excalibur.App.Ui;
 /// The main window's colors as brush resources (same palette as the tray's
 /// <see cref="Tray.Theme"/>): SawnTask's family of dark base and thin-bordered cards, with a
 /// crimson accent (or the user's, made readable by <see cref="AccentColor"/>) and cyan live values. Also carries the
-/// appearance switches the controls read: NumberFont, CornerMarks, Motion. Rebuilt whenever the user settings change.
+/// appearance switches the controls read: NumberFont, CornerMarks, Motion, StockLine. Rebuilt whenever the user settings change.
 /// </summary>
 internal static class Palette
 {
@@ -85,6 +85,8 @@ internal static class Palette
         d["NumberFont"] = new FontFamily(settings.NumberFont == NumberFont.SegoeUi ? "Segoe UI" : "Bahnschrift, Segoe UI");
         d["CornerMarks"] = settings.CornerMarks;
         d["Motion"] = settings.Motion;
+        d["StockLine"] = settings.StockLine;
+        d["StockLineVisibility"] = settings.StockLine ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
         return d;
 
         static byte Mix(byte from, byte to, double t) => (byte)Math.Round(from + (to - from) * t);

@@ -10,15 +10,20 @@ namespace Excalibur.App.Ui.Controls;
 
 /// <summary>
 /// Temperature -> fan % chart: the selected profile's CPU and GPU curves, the safety floors,
-/// the measured stock EC curve, warm/hot zones, a faded trail of where the fans really ran in
+/// the stock EC curve (can be hidden in Settings), warm/hot zones, a faded trail of where the fans really ran in
 /// the last minutes, and both fans now. Hovering shows what each line says at that temperature;
 /// hovering a fan's dot explains why it runs as it does (docs/09, after FanControl / G-Helper).
 /// </summary>
 internal sealed class CurveChart : FrameworkElement
 {
     private const int MinC = 30, MaxC = 100, WarmC = 65;
-    // Measured stock EC CPU-fan steps (docs/07 A.2): <58 C 66%, 58-64 C 86%, >=65 C ~94%.
-    private static readonly (int C, int P)[] Stock = [(MinC, 66), (58, 66), (58, 86), (65, 86), (65, 94), (MaxC, 94)];
+    // The stock EC's CPU-fan steps, at the percents of its own table (read from EC RAM, 2026-10-31): 60/64/68 % follow a board
+    // sensor, drawn where the original-settings seconds of the history (2026-10-26..31) average them; 72/80/88/94 % at the
+    // table's CPU thresholds (above 55/58/61/64 C).
+    private static readonly (int C, int P)[] Stock =
+        [(MinC, 60), (45, 60), (45, 64), (47, 64), (47, 68), (56, 68), (56, 72), (59, 72), (59, 80), (62, 80), (62, 88), (65, 88), (65, 94), (MaxC, 94)];
+    // Settings can hide the line (on by default).
+    private bool ShowStock => TryFindResource("StockLine") is not false;
     // Safety floors: 25% always (30% through WMI), 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
     internal static readonly (int C, int P)[] Floors = FloorsFrom(SafetyPolicy.AbsoluteFloor);
 
@@ -116,7 +121,7 @@ internal sealed class CurveChart : FrameworkElement
 
         Zones(dc);
         Grid(dc);
-        Polyline(dc, Stock, new Pen(Res("SubText"), 1.5) { DashStyle = DashStyles.Dash });
+        if (ShowStock) Polyline(dc, Stock, new Pen(Res("SubText"), 1.5) { DashStyle = DashStyles.Dash });
         Polyline(dc, ThroughWmi ? WmiFloors : Floors, new Pen(Res("Bad"), 1.2) { DashStyle = DashStyles.Dot });
         Trail(dc);
 
@@ -260,7 +265,7 @@ internal sealed class CurveChart : FrameworkElement
                 lines.Add(($"Ekran kartı fanı: %{gpu}  (~{Texts.Rpm(gpu)} rpm)", Res("Ok")));
             }
         }
-        lines.Add(($"Orijinal ayar: %{StepAt(Stock, c)}", Res("SubText")));
+        if (ShowStock) lines.Add(($"Orijinal ayar: %{StepAt(Stock, c)}", Res("SubText")));
         lines.Add(($"İndirilemeyen alt sınır: %{StepAt(ThroughWmi ? WmiFloors : Floors, c)}", Res("Bad")));
         Box(dc, lines, At(c, 100).X + 10, _plot.Top + 6, m.X);
     }

@@ -100,6 +100,8 @@ public sealed record UserSettings
     public bool CornerMarks { get; init; } = true;
     /// <summary>Gliding and breathing dots on the cooling chart; off = they jump straight to each reading.</summary>
     public bool Motion { get; init; } = true;
+    /// <summary>The original-settings (stock EC) line on the cooling chart.</summary>
+    public bool StockLine { get; init; } = true;
     public NumberFont NumberFont { get; init; } = NumberFont.Bahnschrift;
     /// <summary>The screen refresh rate on the charger and on battery; applied by the tray.</summary>
     public RefreshRateRule RefreshRate { get; init; } = new();
@@ -150,7 +152,7 @@ public sealed record UserSettings
     // Value equality over the rule list (a record would compare it by reference), so a reload that changed nothing stays quiet.
     public bool Equals(UserSettings? other) =>
         other is not null && Version == other.Version && TrayFont == other.TrayFont && Osd == other.Osd && Accent == other.Accent
-        && Theme == other.Theme && CornerMarks == other.CornerMarks && Motion == other.Motion && NumberFont == other.NumberFont
+        && Theme == other.Theme && CornerMarks == other.CornerMarks && Motion == other.Motion && StockLine == other.StockLine && NumberFont == other.NumberFont
         && RefreshRate == other.RefreshRate && AppRules.SequenceEqual(other.AppRules)
         && WindowsPower == other.WindowsPower;
 
