@@ -26,6 +26,13 @@ public interface IFanHardware
     /// and at stop; the real hardware then reads nothing back (<see cref="EcFanHardware.ResetToAutoUnread"/>).
     /// </summary>
     void ResetToAutoUnread() => this.ResetToAuto();
+
+    /// <summary>
+    /// Hands one fan to the EC while the loop runs on a verified EC (the Original profile): written, not read back, like
+    /// <see cref="ResetToAutoUnread"/>. The read-back of 0xFF fell on three ACPI 15 warnings while the profile was cycled
+    /// through Original with the shortcut (2026-11-01 01:03:45, a 219 ms read).
+    /// </summary>
+    void SetAutoUnread(FanId fan) => SetTarget(fan, FanTarget.Auto);
 }
 
 public static class FanHardwareExtensions

@@ -386,6 +386,23 @@ public sealed class EcFanHardware : IFanHardware
         if (first is not null) throw new FanWriteException("Could not hand the fans back to the EC.", first);
     }
 
+    public void SetAutoUnread(FanId fan)
+    {
+        if (WritePath == FanWritePath.Wmi)
+        {
+            SetTarget(fan, FanTarget.Auto);
+            return;
+        }
+        try { ec.WriteByte(FanRegisters.TargetOf(fan), FanTarget.Auto.Value); }
+        catch (EcBusyException ex) { throw new FanBusyException($"{fan} fan target auto not written: the EC is busy.", ex); }
+        catch (TimeoutException ex) { throw new FanWriteException($"{fan} fan target auto could not be written.", ex); }
+        _follow.Wrote(fan, FanTarget.Auto, _lastPercent[(int)fan], _clock.Elapsed);
+        if (_ec is not null)
+            _ec = fan == FanId.Cpu ? _ec with { CpuTarget = FanTarget.Auto } : _ec with { GpuTarget = FanTarget.Auto };
+        else
+            Learnt(fan, FanTarget.Auto);
+    }
+
     /// <summary>One SET 0x0205 with both fans' targets; a fan below <see cref="FanControlLoop.WmiFloor"/> gets the floor.</summary>
     private void WriteWmi(FanTarget cpu, FanTarget gpu)
     {

@@ -330,7 +330,9 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                 if (!NeedsWrite(fan, s.TargetOf(fan), want, urgent, now)) continue;
                 try
                 {
-                    hardware.SetTarget(fan, want);
+                    // Running means a verified EC (or a passed trial): EC automatic needs no read-back here.
+                    if (want.IsAuto) hardware.SetAutoUnread(fan);
+                    else hardware.SetTarget(fan, want);
                     _lastWrite[(int)fan] = now;
                 }
                 catch (FanBusyException)
