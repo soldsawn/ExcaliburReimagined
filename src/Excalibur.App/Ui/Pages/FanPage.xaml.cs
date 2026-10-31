@@ -98,6 +98,7 @@ public partial class FanPage : UserControl
         // Original settings draw no profile curve: the legend's gray line already says which one is theirs.
         CpuLegend.Visibility = profile?.IsEcAuto == true ? Visibility.Collapsed : Visibility.Visible;
         CpuLegendText.Text = separateGpu ? "İşlemci eğrisi" : "Profil eğrisi";
+        StockLegend.Visibility = Chart.ShowsStock ? Visibility.Visible : Visibility.Collapsed;
         CurveTitle.Text = $"Eğri — {ProfileNames.Label(s.Profile, s.ManualUntil)}";
         Chart.Show(profile, s);
 

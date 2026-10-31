@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.7-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.1.8-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -249,7 +249,7 @@ xychart-beta
 - Yani orijinal ayarda fanlar **boşta bile %52'nin altına inmez**; işlemci 55–65 °C arasına girince hızla %80–94'e çıkar. Uygulamanın profilleri bu yüzden boşta daha sessizdir.
 - Ekran kartı fanının tablosu aynı yüzdeleri kullanır, işlemci eşikleri biraz farklıdır (57/59/62/64/66 °C).
 - Denetleyicide başka bir donanım çeşidi için 8 kademeli, daha geç ısınan tablolar da var (66/69/72 °C); G870 bunları kullanmıyor.
-- Soğutma sayfasındaki gri kesik **"Orijinal ayar"** çizgisi bu tablodan çizilir ve seçili güç moduna göre değişir (Ayarlar > Görünüm'den gizlenebilir).
+- Soğutma sayfasındaki gri kesik **"Orijinal ayar"** çizgisi bu tablodan çizilir ve seçili güç moduna göre değişir (Ayarlar > Görünüm'den gizlenebilir). Diğer modellerin tablosu farklı olabildiği ve Windows'tan okunamadığı için çizgi yalnız `P008B0` ve `P009B0`'da görünür.
 
 ### Neden %100'de 5400 değil ~5100 devir?
 
@@ -354,7 +354,7 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **`v0.1.7`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**; `P009B0` (BIOS CQ171/CQ212) and `P006B0` (BIOS CQ111) are supported the same way. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. A trial runs once per machine; afterwards the app starts without it, on the profile you last chose. Use at your own risk.
+> **`v0.1.8`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**; `P009B0` (BIOS CQ171/CQ212) and `P006B0` (BIOS CQ111) are supported the same way. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. A trial runs once per machine; afterwards the app starts without it, on the profile you last chose. Use at your own risk.
 
 **Tested devices:** G870 · BIOS CQ141 · EC `P008B0` (developed on, fans through the EC) · G870 · BIOS CQ212 · EC `P009B0` (trial passed, fans through the EC; now enabled without a trial) · G870 · BIOS CP211 · EC `P009C0` (trial passed, fans through the BIOS/WMI) · G870 · BIOS CQ131 · EC `P007B0` (trial passed, fans through the EC) · G870 · BIOS CQ111 · EC `P006B0` (trials passed on two machines, both fans through the EC; now enabled without a trial) · G770 · BIOS CP221 · EC `P003K0` (trial passed, fans through the EC).
 

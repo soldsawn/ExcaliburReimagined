@@ -48,7 +48,28 @@ public class FanFollowCheckTests
     public void A_fan_well_below_its_top_speed_does_not_follow_a_full_target()
     {
         _c.Wrote(FanId.Cpu, FanTarget.FromPercent(100), 85, S(0));
-        Assert.Equal(FanFollow.Rewrite, Check(88, 5));
+        Assert.Equal(FanFollow.Rewrite, Check(86, 5));
+    }
+
+    [Fact]
+    public void A_fan_the_EC_is_still_speeding_up_gets_more_time()
+    {
+        // The EC ramps the PWM a step at a time: 50 -> 100 is not half way after 5 s but keeps closing in.
+        _c.Wrote(FanId.Cpu, FanTarget.FromPercent(100), 50, S(0));
+        Assert.Equal(FanFollow.None, Check(60, 5));
+        Assert.Equal(FanFollow.None, Check(70, 10));
+        Assert.Equal(FanFollow.Rewrite, Check(71, 15)); // stalled
+        Assert.Equal(FanFollow.None, Check(80, 20));    // moving again after the rewrite
+        Assert.Equal(FanFollow.None, Check(91, 25));    // at the top: done
+        Assert.Equal(FanFollow.None, Check(50, 40));
+    }
+
+    [Fact]
+    public void Closing_in_waits_at_most_thirty_seconds()
+    {
+        _c.Wrote(FanId.Cpu, FanTarget.FromPercent(100), 20, S(0));
+        for (int i = 1; i <= 5; i++) Assert.Equal(FanFollow.None, Check(20 + 4 * i, 5 * i));
+        Assert.Equal(FanFollow.Rewrite, Check(48, 30));
     }
 
     [Fact]

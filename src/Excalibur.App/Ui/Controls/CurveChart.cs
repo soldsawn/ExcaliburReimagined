@@ -26,8 +26,11 @@ internal sealed class CurveChart : FrameworkElement
     private static readonly (int C, int P)[] StockHigh =
         [(MinC, 60), (45, 60), (45, 64), (47, 64), (47, 68), (56, 68), (56, 72), (59, 72), (59, 84), (62, 84), (62, 94), (65, 94), (65, 100), (MaxC, 100)];
     private (int C, int P)[] StockSteps => _status?.Power?.Mode == Excalibur.Core.Power.PowerMode.HighPerformance ? StockHigh : Stock;
-    // Settings can hide the line (on by default).
-    private bool ShowStock => TryFindResource("StockLine") is not false;
+    // Settings can hide the line (on by default). Drawn only on the EC versions whose firmware table is known: other models
+    // have their own tables, and PawnIO cannot read the EC's table memory (0x500..) to draw theirs.
+    private static readonly HashSet<string> StockTableEcVersions = new(StringComparer.OrdinalIgnoreCase) { "P008B0", "P009B0" };
+    private bool ShowStock => TryFindResource("StockLine") is not false && _status?.EcVersion is { } ec && StockTableEcVersions.Contains(ec);
+    internal bool ShowsStock => ShowStock;
     // Safety floors: 25% always (30% through WMI), 80% from 70 C, 90% from 78 C, 100% when hot (>= 80 C for 3 s).
     internal static readonly (int C, int P)[] Floors = FloorsFrom(SafetyPolicy.AbsoluteFloor);
 
