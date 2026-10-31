@@ -62,10 +62,42 @@ internal static class InfoPage
             try { Clipboard.SetText(OverviewPage.SupportLine(connection.Status)); button.Content = "Kopyalandı"; }
             catch (System.Runtime.InteropServices.ExternalException) { } // the clipboard is busy; the user can click again
         };
+        var report = new Button { Content = "Sorun bildir", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(8, 0, 0, 0) };
+        report.SetResourceReference(FrameworkElement.StyleProperty, "PlainButton");
+        report.Click += (_, _) => Report(report, connection);
         var panel = new StackPanel { Margin = new Thickness(0, 12, 0, 4) };
-        panel.Children.Add(button);
-        panel.Children.Add(Text("Model, BIOS ve fan yazılımı sürümünü tek satırda kopyalar; bir sorun bildirirken yapıştırabilirsiniz.", "Caption", top: 6));
+        panel.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { button, report } });
+        panel.Children.Add(Text("\"Bilgileri kopyala\" model, BIOS ve fan yazılımı sürümünü tek satırda kopyalar. \"Sorun bildir\" son günlerin " +
+                                "günlüklerini Masaüstüne bir zip olarak kaydeder ve GitHub'da sorun sayfasını açar; zip'i oraya sürüklemeniz yeterli. " +
+                                "Hiçbir şey kendiliğinden gönderilmez.", "Caption", top: 6));
         return panel;
+    }
+
+    /// <summary>Saves the report zip to the desktop, shows it in Explorer and opens a filled-in GitHub issue (BugReport).</summary>
+    private static void Report(Button owner, FanConnection connection)
+    {
+        if (!ConfirmDialog.Ask(owner, "Sorun bildir",
+                $"Son {BugReport.Days} günün fan ve koruma günlükleri, ayarlar ve sürüm bilgileri Masaüstüne bir zip olarak kaydedilir. " +
+                "Kullanıcı adınız ve klasör yollarınız dosyalardan çıkarılır. Sonra GitHub'da sorun sayfası açılır; neyin çalışmadığını yazıp " +
+                "zip'i sayfaya sürükleyin.", "Zip oluştur"))
+            return;
+        try
+        {
+            string summary = OverviewPage.SupportLine(connection.Status);
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string zip = BugReport.Create(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), FanPaths.DataDirectory, summary,
+                [(Path.Combine(local, "ExcaliburReimagined", "tray.log"), "tray.log"), (Path.Combine(roaming, "ExcaliburReimagined", "settings.json"), "settings.json")],
+                DateTime.Now);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(BugReport.IssueLink(summary)) { UseShellExecute = true });
+            owner.Content = "Zip Masaüstünde";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            owner.Content = "Oluşturulamadı";
+            owner.ToolTip = ex.Message;
+        }
     }
 
     /// <summary>Asks GitHub for the newest release, only when the button is pressed.</summary>

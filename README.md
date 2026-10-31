@@ -338,6 +338,8 @@ Ayarlar ve varsayılan değerler **BIOS CQ212**'den okundu (i5-12450H, RTX 4060)
 
 <a id="katkıda-bulunma"></a>
 ## 🤝 Katkıda Bulunma
+Bir şey çalışmadıysa **Ayarlar > Hakkında > "Sorun bildir"** son günlerin günlüklerini Masaüstüne bir zip olarak kaydeder (kullanıcı adınız ve klasör yollarınız çıkarılır) ve GitHub'da bilgileri dolu bir sorun sayfası açar; neyin olmadığını yazıp zip'i sayfaya sürüklemeniz yeterli. Uygulama kendiliğinden hiçbir şey göndermez.
+
 Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lütfen bir **Issue** açarak model, EC ve BIOS sürümünüzü ve denemenin sonucunu belirtin. Okuma/yazma doğrulaması yapılmadan yeni cihazlar için fan kontrolü kilidi açılmaz; birkaç farklı bilgisayarda geçen sürümler listeye eklenir.
 
 ## 📄 Lisans ve Sorumluluk Reddi
