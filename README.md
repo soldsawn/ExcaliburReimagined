@@ -67,7 +67,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 | Casper Excalibur G870 | CQ131 | `P007B0` | Deneme geçti, iki fan da uydu | doğrudan EC | ⚡ Tek tıkla kısa ayar |
 | Casper Excalibur G770 | CP221 | `P003K0` | Deneme geçti, iki fan da uydu | doğrudan EC | ⚡ Tek tıkla kısa ayar |
 
-Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirsiniz (bkz. [Katkıda Bulunma](#katkıda-bulunma)). Deneme önerilen cihazlarda Panel'deki deneme kartında bulunan **"Bilgileri kopyala"** düğmesi gerekli bilgileri tek satırda verir; diğerlerinde model, BIOS ve fan yazılımı (EC) sürümü **Ayarlar > Hakkında**'da yazar.
+Listede olmayan bir cihazda denediyseniz sonucu bir **Issue** ile paylaşabilirsiniz (bkz. [Katkıda Bulunma](#katkıda-bulunma)). Uygulamada **Ayarlar > Hakkında > "Bilgileri kopyala"** gerekli bilgileri tek satırda verir.
 
 **Uygulama fan yazılımı (EC) sürümünü nasıl ele alır:**
 

@@ -48,7 +48,24 @@ internal static class InfoPage
                      (HardwareNames.Bios is { } bios ? $"   ·   BIOS: {bios}" : "") +
                      (fanFirmware is null ? "" : $"   ·   Fan denetleyici yazılımı: {fanFirmware}"), "Caption", top: 6),
                 Text(connection.Status is { Mode: FanLoopMode.Running } status ? FanPage.WritePathLine(status.WritePath) : "", "Caption", top: 6),
+                CopyInfo(connection),
                 UpdateCheck()));
+    }
+
+    /// <summary>The same one-line summary as the Panel's trial card, for a bug report or a GitHub issue.</summary>
+    private static StackPanel CopyInfo(FanConnection connection)
+    {
+        var button = new Button { Content = "Bilgileri kopyala", HorizontalAlignment = HorizontalAlignment.Left };
+        button.SetResourceReference(FrameworkElement.StyleProperty, "PlainButton");
+        button.Click += (_, _) =>
+        {
+            try { Clipboard.SetText(OverviewPage.SupportLine(connection.Status)); button.Content = "Kopyalandı"; }
+            catch (System.Runtime.InteropServices.ExternalException) { } // the clipboard is busy; the user can click again
+        };
+        var panel = new StackPanel { Margin = new Thickness(0, 12, 0, 4) };
+        panel.Children.Add(button);
+        panel.Children.Add(Text("Model, BIOS ve fan yazılımı sürümünü tek satırda kopyalar; bir sorun bildirirken yapıştırabilirsiniz.", "Caption", top: 6));
+        return panel;
     }
 
     /// <summary>Asks GitHub for the newest release, only when the button is pressed.</summary>

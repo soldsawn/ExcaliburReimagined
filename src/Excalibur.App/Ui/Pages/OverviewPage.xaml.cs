@@ -146,7 +146,7 @@ public partial class OverviewPage : UserControl
     };
 
     /// <summary>One line for the developer: app version, model, BIOS, fan firmware and the trial's result.</summary>
-    private static string SupportLine(FanStatusDto? s)
+    internal static string SupportLine(FanStatusDto? s)
     {
         string app = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
         var t = s?.Trial;
@@ -161,7 +161,8 @@ public partial class OverviewPage : UserControl
         return $"Excalibur Reimagined {app} · Model: {HardwareNames.Model ?? "?"} · BIOS: {HardwareNames.Bios ?? "?"} · " +
                $"Fan yazılımı (EC): {s?.EcVersion ?? "?"} · Deneme: {result}" +
                (t is null ? "" : $" · WMI 0x0205: {Fan(t.WmiFollows)}, işlemci fanı {Fan(t.CpuFollows)}, ekran kartı fanı {Fan(t.GpuFollows)}") +
-               (t is { State: EcTrialState.Passed } ? $" · yol: {(t.Path == FanWritePath.Wmi ? "WMI" : "EC")}" : "");
+               (t is { State: EcTrialState.Passed } ? $" · yol: {(t.Path == FanWritePath.Wmi ? "WMI" : "EC")}" : "") +
+               (t is null && s is { Mode: FanLoopMode.Running } ? $" · yol: {(s.WritePath == FanWritePath.Wmi ? "WMI" : "EC")}" : "");
     }
 
     // The power mode next to the fan profile, so both are one click away (the Performans page has the same choice, with more room).
