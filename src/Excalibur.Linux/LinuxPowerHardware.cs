@@ -23,7 +23,25 @@ internal sealed class LinuxPowerHardware(
     public const byte EcPowerModeRegister = 0x95;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
+    /// <summary>The long-term CPU limit each mode gives on Windows (the BIOS's values, measured on the G870).</summary>
+    public static int ModePl1Watts(PowerMode mode) => mode switch
+    {
+        PowerMode.HighPerformance => 55,
+        PowerMode.Gaming => 45,
+        _ => 35,
+    };
+
     public void SetMode(PowerMode mode)
+    {
+        WriteMode(mode);
+        // The BIOS's own mode call also moves the CPU limit; user space cannot run it, so the app does that part.
+        rapl?.SetModeLimit(ModePl1Watts(mode));
+    }
+
+    /// <summary>The firmware's CPU limits back (the service stops; the mode itself stays in the EC).</summary>
+    public void RestoreFirmware() => rapl?.RestoreFirmware();
+
+    private void WriteMode(PowerMode mode)
     {
         bool wroteProfile = TryWritePlatformProfile(mode);
         if (ec is not null)
@@ -159,6 +177,10 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
     private readonly string? _mmioPkgDir = FindPackageDir(powercapRoot, mmio: true);
     private (ulong EnergyUj, TimeSpan At)? _last;
     private ulong? _originalPl1Uw, _originalPl2Uw;
+    // What the power mode allows, set by the app: on Windows the BIOS moves the limit with the mode, on Linux nothing does
+    // (the MMIO copy stayed 55 W in every mode, 2026-11-01), so the mode's value goes into the MSR copy.
+    private int? _modePl1Watts;
+    private CpuLimit? _userLimit;
 
     public CpuPower? Read(TimeSpan now, int? fallbackModePl1Watts = null)
     {
@@ -186,7 +208,7 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
                            ?? fallbackModePl1Watts;
 
             int? pl1 = Lower(msrPl1, mmioPl1);
-            int? modePl1 = mmioPl1 ?? (_originalPl1Uw is { } orig ? (int)Math.Round(orig / 1_000_000.0) : msrPl1);
+            int? modePl1 = _modePl1Watts ?? mmioPl1 ?? (_originalPl1Uw is { } orig ? (int)Math.Round(orig / 1_000_000.0) : msrPl1);
             return new CpuPower(watts, pl1, msrPl2, modePl1);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -195,9 +217,31 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
         }
     }
 
+    /// <summary>The power mode's long-term limit (null: none); applied now unless the user's own limit holds.</summary>
+    public void SetModeLimit(int? watts)
+    {
+        _modePl1Watts = watts;
+        if (_userLimit is null) Write(null);
+    }
+
+    /// <summary>The user's own limit, or null for "the power mode decides".</summary>
     public void Apply(CpuLimit? limit)
     {
-        if (limit is null && _originalPl1Uw is null && _originalPl2Uw is null) return;
+        _userLimit = limit;
+        Write(limit);
+    }
+
+    /// <summary>The firmware's own values, as they were before the first write (the service stops).</summary>
+    public void RestoreFirmware()
+    {
+        _userLimit = null;
+        _modePl1Watts = null;
+        Write(null);
+    }
+
+    private void Write(CpuLimit? limit)
+    {
+        if (limit is null && _modePl1Watts is null && _originalPl1Uw is null && _originalPl2Uw is null) return;
         if (_pkgDir is null)
         {
             if (limit is null) return;
@@ -213,11 +257,13 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
             _originalPl1Uw ??= curPl1;
             _originalPl2Uw ??= curPl2;
 
-            ulong wantedPl1 = limit is null ? _originalPl1Uw.Value : (ulong)limit.Pl1Watts * 1_000_000UL;
+            ulong wantedPl1 = limit is not null ? (ulong)limit.Pl1Watts * 1_000_000UL
+                : _modePl1Watts is { } mode ? (ulong)mode * 1_000_000UL
+                : _originalPl1Uw.Value;
             ulong wantedPl2 = limit is null ? _originalPl2Uw.Value : (ulong)limit.Pl2Watts * 1_000_000UL;
 
-            // Only the MSR copy: the limit in force is the lower of the two, and the MMIO copy belongs to the power mode
-            // (the EC rewrites it on every mode change), as on Windows, which only reads it.
+            // Only the MSR copy: the limit in force is the lower of the two; the MMIO copy is the firmware's (on Windows the
+            // BIOS moves it with the mode), left alone as on Windows, which only reads it.
             if (curPl1 != wantedPl1) File.WriteAllText(pl1Path, wantedPl1.ToString(CultureInfo.InvariantCulture));
             if (curPl2 != wantedPl2) File.WriteAllText(pl2Path, wantedPl2.ToString(CultureInfo.InvariantCulture));
         }

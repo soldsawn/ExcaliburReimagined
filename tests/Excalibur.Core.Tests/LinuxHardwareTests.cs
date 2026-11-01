@@ -85,6 +85,45 @@ public sealed class LinuxHardwareTests : IDisposable
     }
 
     [Fact]
+    public void Rapl_power_mode_sets_pl1_unless_the_user_limits_and_stop_brings_the_firmware_values_back()
+    {
+        string pkg = Path.Combine(_temp, "intel-rapl_0");
+        string mmio = Path.Combine(_temp, "intel-rapl-mmio_0");
+        Directory.CreateDirectory(pkg);
+        Directory.CreateDirectory(mmio);
+        File.WriteAllText(Path.Combine(pkg, "name"), "package-0\n");
+        File.WriteAllText(Path.Combine(pkg, "constraint_0_power_limit_uw"), "200000000\n");
+        File.WriteAllText(Path.Combine(pkg, "constraint_1_power_limit_uw"), "115000000\n");
+        File.WriteAllText(Path.Combine(mmio, "name"), "package-0\n");
+        // Measured on the G870 under Linux (2026-11-01): the MMIO copy stays 55 W in every mode.
+        File.WriteAllText(Path.Combine(mmio, "constraint_0_power_limit_uw"), "55000000\n");
+        string Pl1() => File.ReadAllText(Path.Combine(pkg, "constraint_0_power_limit_uw")).Trim();
+        string Pl2() => File.ReadAllText(Path.Combine(pkg, "constraint_1_power_limit_uw")).Trim();
+
+        var rapl = new LinuxRapl(_temp);
+        rapl.SetModeLimit(35); // Office
+        Assert.Equal("35000000", Pl1());
+        Assert.Equal("115000000", Pl2());
+        var office = rapl.Read(TimeSpan.FromSeconds(1))!;
+        Assert.Equal(35, office.Pl1Watts);
+        Assert.Equal(35, office.ModePl1Watts);
+
+        rapl.Apply(new CpuLimit(25, 50)); // the user's own limit wins
+        rapl.SetModeLimit(45);            // Gaming while it holds: no change
+        Assert.Equal("25000000", Pl1());
+        Assert.Equal("50000000", Pl2());
+
+        rapl.Apply(null);                 // back to the power mode: Gaming's 45 W, the firmware's PL2
+        Assert.Equal("45000000", Pl1());
+        Assert.Equal("115000000", Pl2());
+
+        rapl.RestoreFirmware();           // the service stops
+        Assert.Equal("200000000", Pl1());
+        Assert.Equal("115000000", Pl2());
+        Assert.Equal("55000000", File.ReadAllText(Path.Combine(mmio, "constraint_0_power_limit_uw")).Trim());
+    }
+
+    [Fact]
     public void Rapl_handles_energy_counter_wraparound()
     {
         string pkg = Path.Combine(_temp, "intel-rapl_0");

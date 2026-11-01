@@ -324,11 +324,11 @@ internal sealed class OverviewPage : UserControl
             button.IsEnabled = power is not null && (mode == PowerMode.Office || power.Lock == PowerLock.None);
             button.IsChecked = power?.Mode == mode;
             // What the mode allows on this laptop, as the service measured it; nothing until it has.
-            var w = power?.Modes?.FirstOrDefault(x => x.Mode == mode);
             string full = PowerModes.First(x => x.Mode == mode).Full;
-            // Linux: the mode moves only the CPU's limit (the graphics card's needs the BIOS's ACPI call).
-            _powerWatts[mode].Text = w?.CpuWatts is { } c ? $"{c} W" : "–";
-            ToolTip.SetTip(button, w?.CpuWatts is { } cw ? $"{full}: işlemci en çok {cw} W" : $"{full}: seçilince ölçülür");
+            // Linux: the app sets the mode's CPU limit itself (the BIOS does on Windows); the graphics card's does not change.
+            int cw = LinuxPowerHardware.ModePl1Watts(mode);
+            _powerWatts[mode].Text = $"{cw} W";
+            ToolTip.SetTip(button, $"{full}: işlemci en çok {cw} W");
         }
         _renderingPower = false;
         _powerHint.Text = power?.Lock switch

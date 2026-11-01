@@ -56,6 +56,7 @@ internal sealed class Daemon
     private readonly LinuxEcSmiChannel? _smi;
     private readonly FakeFanHardware? _fake;
     private readonly SimulatedPowerHardware? _simPower;
+    private readonly LinuxPowerHardware? _linuxPower;
     private readonly string? _problem;
     private readonly FanCommandHandler? _commands;
     private readonly object _gate = new();
@@ -108,7 +109,7 @@ internal sealed class Daemon
         else if (LinuxEc.Open(out _problem) is { } ec)
         {
             hardware = new LinuxFanHardware(ec, Log);
-            powerHardware = new LinuxPowerHardware(ec, new LinuxRapl(), new GpuLimiter(new NvmlGpuClocks()));
+            powerHardware = _linuxPower = new LinuxPowerHardware(ec, new LinuxRapl(), new GpuLimiter(new NvmlGpuClocks()));
             smiChannel = _smi = new LinuxEcSmiChannel(ec, Log);
         }
         else
@@ -270,6 +271,8 @@ internal sealed class Daemon
     {
         try { _history.Dispose(); } catch (Exception) { }
         try { _power?.RestoreCpuLimit(); } catch (Exception ex) { Log($"power restore failed: {ex.Message}"); }
+        // The power mode's CPU limit is the app's on Linux: the firmware's own value comes back while the service is off.
+        try { _linuxPower?.RestoreFirmware(); } catch (Exception ex) { Log($"CPU limit restore failed: {ex.Message}"); }
         if (_loop is null) return;
         lock (_gate) _loop.Stop(DateTimeOffset.Now);
         DrainEvents();

@@ -155,8 +155,8 @@ internal sealed class PowerPage : UserControl
                 Kit.Card("Anlık güç", meters),
                 SideBySide(
                     Kit.Card("İşlemci güç sınırı",
-                        Kit.Text("İşlemcinin gücünü güç modunun izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, ağır işlerde biraz daha yavaş çalışma. " +
-                                 "Güç modunun sınırından yüksek bir değer etkisizdir.", "Caption"),
+                        Kit.Text("İşlemcinin gücünü kendiniz belirleyebilirsiniz: düşük değer daha az ısı ve fan sesi, ağır işlerde biraz daha yavaş çalışma demektir. " +
+                                 "Kendi sınırınız açıkken güç modu işlemciyi değiştirmez.", "Caption"),
                         new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _byMode, _own } },
                         _ownPanel, _limitError),
                     Kit.Card("Ekran kartı güç sınırı",
@@ -280,8 +280,8 @@ internal sealed class PowerPage : UserControl
         {
             button.IsEnabled = power is not null && (mode == PowerMode.Office || power.Lock == PowerLock.None);
             button.IsChecked = power?.Mode == mode;
-            var w = power?.Modes?.FirstOrDefault(x => x.Mode == mode);
-            _modeWatts[mode].Text = w?.CpuWatts is { } c ? $"işlemci {c} W" : "seçilince ölçülür";
+            // The app sets each mode's CPU limit on Linux (see LinuxPowerHardware.SetMode).
+            _modeWatts[mode].Text = $"işlemci {LinuxPowerHardware.ModePl1Watts(mode)} W";
         }
         _rendering = false;
 
@@ -333,10 +333,8 @@ internal sealed class PowerPage : UserControl
         SliderTexts();
         _ownPanel.IsVisible = _own.IsChecked == true;
 
-        int? modeLimit = power?.Mode is { } m ? power.Modes?.FirstOrDefault(x => x.Mode == m)?.CpuWatts : null;
-        _limitNote.Text = modeLimit is { } ml && _pl1.Value > ml
-            ? $"Şu anki güç modunda uzun süreli sınır en çok {ml} W; daha yüksek değer etkisiz kalır."
-            : power?.CpuLimit is { } on && !_limitDirty ? $"Uygulanıyor: uzun süreli {on.Pl1Watts} W, kısa süreli {on.Pl2Watts} W."
+        // Linux: the user's limit replaces the mode's (the app sets both), so a value above the mode's is not "ineffective" here.
+        _limitNote.Text = power?.CpuLimit is { } on && !_limitDirty ? $"Uygulanıyor: uzun süreli {on.Pl1Watts} W, kısa süreli {on.Pl2Watts} W."
             : _limitDirty ? "Değişiklikler \"Uygula\"ya basınca geçerli olur." : "";
     }
 
