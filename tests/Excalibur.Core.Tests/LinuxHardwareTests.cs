@@ -60,6 +60,31 @@ public sealed class LinuxHardwareTests : IDisposable
     }
 
     [Fact]
+    public void Rapl_never_writes_the_mmio_copy_that_the_power_mode_owns()
+    {
+        string pkg = Path.Combine(_temp, "intel-rapl_0");
+        string mmio = Path.Combine(_temp, "intel-rapl-mmio_0");
+        Directory.CreateDirectory(pkg);
+        Directory.CreateDirectory(mmio);
+        File.WriteAllText(Path.Combine(pkg, "name"), "package-0\n");
+        File.WriteAllText(Path.Combine(pkg, "constraint_0_power_limit_uw"), "200000000\n");
+        File.WriteAllText(Path.Combine(pkg, "constraint_1_power_limit_uw"), "115000000\n");
+        File.WriteAllText(Path.Combine(mmio, "name"), "package-0\n");
+        File.WriteAllText(Path.Combine(mmio, "constraint_0_power_limit_uw"), "55000000\n"); // High performance
+
+        var rapl = new LinuxRapl(_temp);
+        rapl.Apply(new CpuLimit(35, 60));
+        Assert.Equal("55000000", File.ReadAllText(Path.Combine(mmio, "constraint_0_power_limit_uw")).Trim());
+        Assert.Equal(35, rapl.Read(TimeSpan.FromSeconds(1))!.Pl1Watts); // the lower copy (MSR) holds the limit
+
+        // The EC moves to Office (35 W) while the limit runs; clearing the limit must leave that alone, not bring 55 W back.
+        File.WriteAllText(Path.Combine(mmio, "constraint_0_power_limit_uw"), "35000000\n");
+        rapl.Apply(null);
+        Assert.Equal("35000000", File.ReadAllText(Path.Combine(mmio, "constraint_0_power_limit_uw")).Trim());
+        Assert.Equal("200000000", File.ReadAllText(Path.Combine(pkg, "constraint_0_power_limit_uw")).Trim());
+    }
+
+    [Fact]
     public void Rapl_handles_energy_counter_wraparound()
     {
         string pkg = Path.Combine(_temp, "intel-rapl_0");

@@ -158,7 +158,7 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
     private readonly string? _pkgDir = FindPackageDir(powercapRoot, mmio: false);
     private readonly string? _mmioPkgDir = FindPackageDir(powercapRoot, mmio: true);
     private (ulong EnergyUj, TimeSpan At)? _last;
-    private ulong? _originalPl1Uw, _originalPl2Uw, _originalMmioPl1Uw;
+    private ulong? _originalPl1Uw, _originalPl2Uw;
 
     public CpuPower? Read(TimeSpan now, int? fallbackModePl1Watts = null)
     {
@@ -216,19 +216,10 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
             ulong wantedPl1 = limit is null ? _originalPl1Uw.Value : (ulong)limit.Pl1Watts * 1_000_000UL;
             ulong wantedPl2 = limit is null ? _originalPl2Uw.Value : (ulong)limit.Pl2Watts * 1_000_000UL;
 
+            // Only the MSR copy: the limit in force is the lower of the two, and the MMIO copy belongs to the power mode
+            // (the EC rewrites it on every mode change), as on Windows, which only reads it.
             if (curPl1 != wantedPl1) File.WriteAllText(pl1Path, wantedPl1.ToString(CultureInfo.InvariantCulture));
             if (curPl2 != wantedPl2) File.WriteAllText(pl2Path, wantedPl2.ToString(CultureInfo.InvariantCulture));
-
-            if (_mmioPkgDir is { } md)
-            {
-                string mmioPl1Path = Path.Combine(md, "constraint_0_power_limit_uw");
-                if (ReadUlong(mmioPl1Path) is { } curMmioPl1)
-                {
-                    _originalMmioPl1Uw ??= curMmioPl1;
-                    ulong wantedMmioPl1 = limit is null ? _originalMmioPl1Uw.Value : wantedPl1;
-                    if (curMmioPl1 != wantedMmioPl1) File.WriteAllText(mmioPl1Path, wantedMmioPl1.ToString(CultureInfo.InvariantCulture));
-                }
-            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

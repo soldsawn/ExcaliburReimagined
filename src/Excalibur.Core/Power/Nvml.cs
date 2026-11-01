@@ -58,6 +58,9 @@ public static class Nvml
     {
         lock (Gate)
         {
+            // On Linux any NVML call wakes a runtime-suspended GPU (NVIDIA's driver README: "nvidia-smi will wake the GPU"),
+            // and the service asks every few seconds: a sleeping GPU is "unknown" instead. Windows' driver answers without that.
+            if (OperatingSystem.IsLinux() && LinuxGpuAsleep()) return null;
             if (!_tried)
             {
                 _tried = true;
@@ -74,6 +77,33 @@ public static class Nvml
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
         }
+    }
+
+    private static string? _runtimeStatusPath;
+    private static bool _searchedPci;
+
+    /// <summary>True when the NVIDIA GPU's PCI runtime power state is anything but "active" (suspended, suspending...).</summary>
+    private static bool LinuxGpuAsleep()
+    {
+        if (!_searchedPci)
+        {
+            _searchedPci = true;
+            try
+            {
+                foreach (var dev in Directory.GetDirectories("/sys/bus/pci/devices"))
+                {
+                    if (File.ReadAllText(Path.Combine(dev, "vendor")).Trim() != "0x10de") continue;
+                    if (!File.ReadAllText(Path.Combine(dev, "class")).Trim().StartsWith("0x03", StringComparison.Ordinal)) continue;
+                    string status = Path.Combine(dev, "power", "runtime_status");
+                    if (File.Exists(status)) _runtimeStatusPath = status;
+                    break;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        if (_runtimeStatusPath is null) return false; // no NVIDIA GPU found: NVML itself will say so
+        try { return File.ReadAllText(_runtimeStatusPath).Trim() != "active"; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
     private static int Init() => OperatingSystem.IsLinux() ? Lin.nvmlInit_v2() : Win.nvmlInit_v2();
