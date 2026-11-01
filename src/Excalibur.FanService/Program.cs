@@ -156,7 +156,9 @@ builder.Services.AddSingleton(sp =>
     void Log(string m) => fileLog.Write(DateTimeOffset.Now, m);
     return new Excalibur.Core.Graphics.GraphicsSwitcher(graphicsMonitor, new Excalibur.Core.Graphics.GraphicsModeWriter(firmware),
         simulate ? new SimulatedGpuDevices() : new Excalibur.Core.Graphics.PnpGpuDevices(Log),
-        () => { power.ReleaseGpuLimit(); Nvml.Release(); }, Nvml.Resume, Log);
+        () => { power.ReleaseGpuLimit(); Nvml.Release(); }, Nvml.Resume, Log,
+        simulate ? () => false : () => Excalibur.Core.Graphics.WindowsGraphicsSystem.BitLockerOn(Log),
+        simulate ? () => Log("graphics: (simulation) Windows would restart now") : () => Excalibur.Core.Graphics.WindowsGraphicsSystem.Restart(Log));
 });
 builder.Services.AddHostedService<GraphicsWorker>();
 builder.Services.AddHostedService<BatteryWorker>();

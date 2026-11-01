@@ -40,8 +40,9 @@ public sealed class GraphicsModeWriter(ISmiChannel firmware)
 }
 
 /// <summary>Where a change stands: running, or how the last one ended.</summary>
+/// <param name="RestartPending">The BIOS has been told a mode that starts with the next boot (Discrete, or Hybrid from Discrete).</param>
 public sealed record GraphicsSwitchState(bool Busy, GraphicsMode? Target, string? ErrorCode = null, string? Error = null,
-    bool RestartAdvised = false);
+    bool RestartAdvised = false, bool RestartPending = false);
 
 /// <summary>
 /// Changes between Hybrid and Integrated without a restart, the way the stock Control Center does on this model (SKU 49,
@@ -53,13 +54,19 @@ public sealed record GraphicsSwitchState(bool Busy, GraphicsMode? Target, string
 /// GFXT stays 0 after Integrated (the BIOS sets it to 1 only at boot and on waking), so the EC itself does not see the GPU
 /// temperature (our fans take it from the NVIDIA driver meanwhile). The driver's power limit came back at once on
 /// 2026-11-02 (85 W); on 2026-10-23, with NVML left open, it had not. A failed step puts back what was done.
+/// Discrete (BIOS Primary Display PEG) starts with the next boot, as in the stock software: refused while BitLocker
+/// protects the system drive (the firmware change would ask for the recovery key), the GPU switched back on first when
+/// Integrated, the BIOS told, then <paramref name="restart"/>. Leaving a Discrete boot is Hybrid and a restart; choosing
+/// Hybrid before the restart takes Discrete back. The user said Discrete worked on this machine with the stock software
+/// (its internal screen stayed on), so there is no automatic way back.
 /// </summary>
 public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWriter writer, IGpuDevices devices,
-    Action releaseGpu, Action resumeGpu, Action<string> log)
+    Action releaseGpu, Action resumeGpu, Action<string> log, Func<bool>? bitLockerOn = null, Action? restart = null)
 {
     private readonly object _gate = new();
     private GraphicsSwitchState _state = new(false, null);
     private bool _restartAdvised;
+    private GraphicsMode? _pending; // told to the BIOS, starts with the next boot
 
     public GraphicsSwitchState State { get { lock (_gate) return _state; } }
 
@@ -72,9 +79,9 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
         lock (_gate)
         {
             if (_state.Busy) return new GraphicsSwitchState(true, _state.Target, "graphics_busy", "A graphics mode change is running.");
-            if (target == GraphicsMode.Discrete)
-                return new GraphicsSwitchState(false, target, "graphics_unsupported", "Discrete is not available yet.");
-            _state = new GraphicsSwitchState(true, target, RestartAdvised: _restartAdvised);
+            if (target == GraphicsMode.Discrete && restart is null)
+                return new GraphicsSwitchState(false, target, "graphics_unsupported", "Discrete needs a restart, which is not available here.");
+            _state = new GraphicsSwitchState(true, target, RestartAdvised: _restartAdvised, RestartPending: _pending is not null);
         }
         Task.Run(() => Switch(target, source));
         return null;
@@ -88,7 +95,7 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
         {
             if (target == GraphicsMode.Integrated) ToIntegrated(source);
             else if (target == GraphicsMode.Hybrid) ToHybrid(source);
-            else throw new GraphicsException("graphics_unsupported", "Discrete is not available yet.");
+            else ToDiscrete(source);
         }
         catch (GraphicsException ex)
         {
@@ -101,7 +108,7 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
             (code, error) = ("graphics_failed", ex.Message);
             log($"graphics: {target} failed ({source}): {ex}");
         }
-        lock (_gate) _state = new GraphicsSwitchState(false, target, code, error, _restartAdvised);
+        lock (_gate) _state = new GraphicsSwitchState(false, target, code, error, _restartAdvised, _pending is not null);
     }
 
     /// <summary>After a wake: the BIOS has set GFXT back to 1, so the advice ends (once Hybrid).</summary>
@@ -125,6 +132,7 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
     {
         var now = Fresh(source);
         if (now.Mode == GraphicsMode.Integrated) return;
+        if (_pending is not null) throw new GraphicsException("graphics_restart_pending", "Another mode starts with the next boot: restart first.");
         if (now.HdmiConnected) throw new GraphicsException("graphics_hdmi", "An HDMI cable is in (the port is on the NVIDIA GPU).");
         if (now.Mode == GraphicsMode.Discrete)
             throw new GraphicsException("graphics_discrete", "Started in Discrete: choose Hybrid and restart first.");
@@ -159,9 +167,25 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
     private void ToHybrid(string source)
     {
         var now = Fresh(source);
-        if (now.Mode == GraphicsMode.Hybrid && devices.Enabled != false) return;
+        if (_pending == GraphicsMode.Discrete)
+        {
+            // Not restarted yet: the boot mode is still Hybrid, the BIOS only has to forget Discrete.
+            writer.Set(GraphicsMode.Hybrid);
+            _pending = null;
+            log($"graphics: Discrete taken back before the restart ({source})");
+            return;
+        }
         if (now.Mode == GraphicsMode.Discrete)
-            throw new GraphicsException("graphics_unsupported", "Leaving Discrete needs a restart (not available yet).");
+        {
+            if (_pending == GraphicsMode.Hybrid) return;
+            RefuseUnderBitLocker();
+            log($"graphics: Hybrid from the next boot ({source}); restarting");
+            writer.Set(GraphicsMode.Hybrid);
+            _pending = GraphicsMode.Hybrid;
+            Restart();
+            return;
+        }
+        if (now.Mode == GraphicsMode.Hybrid && devices.Enabled != false) return;
 
         log($"graphics: switching to Hybrid ({source})");
         devices.Enable();
@@ -170,6 +194,46 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
         writer.Set(GraphicsMode.Hybrid);
         var after = Fresh(source);
         log(after.Mode == GraphicsMode.Hybrid ? "graphics: Hybrid (NVIDIA GPU on; a sleep or restart is advised)" : $"graphics: the BIOS still reports {after.Mode}");
+    }
+
+    private void ToDiscrete(string source)
+    {
+        var now = Fresh(source);
+        if (now.Mode == GraphicsMode.Discrete)
+        {
+            // Started in Discrete; a Hybrid chosen since is taken back (no restart needed to stay).
+            if (_pending == GraphicsMode.Hybrid)
+            {
+                writer.Set(GraphicsMode.Discrete);
+                _pending = null;
+                log($"graphics: Hybrid taken back before the restart ({source})");
+            }
+            return;
+        }
+        if (_pending == GraphicsMode.Discrete) { Restart(); return; } // told already; the restart did not happen
+        RefuseUnderBitLocker();
+        log($"graphics: Discrete from the next boot ({source}); restarting");
+        if (now.Mode == GraphicsMode.Integrated)
+        {
+            devices.Enable();
+            resumeGpu();
+        }
+        writer.Set(GraphicsMode.Discrete);
+        _pending = GraphicsMode.Discrete;
+        Fresh(source); // Hybrid until the restart (the Integrated mark is gone)
+        Restart();
+    }
+
+    private void RefuseUnderBitLocker()
+    {
+        if (bitLockerOn?.Invoke() == true)
+            throw new GraphicsException("graphics_bitlocker", "BitLocker protects the system drive; a firmware display change would ask for its recovery key.");
+    }
+
+    private void Restart()
+    {
+        if (restart is null) throw new GraphicsException("graphics_unsupported", "A restart is not available here.");
+        restart();
     }
 
     private void TryEnable()

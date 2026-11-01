@@ -39,8 +39,10 @@ public static class FanPipe
     /// 14: + casperScan, casperDisable, casperRestore (Casper Control Center parts off / back on; response Casper).
     /// 15: + status GraphicsMode (Hybrid / Discrete / Integrated, as the BIOS reports it) and GraphicsSwitch (a change running /
     ///     how the last ended: ErrorCode graphics_hdmi / graphics_discrete / graphics_devices / graphics_not_set / graphics_busy /
-    ///     graphics_unsupported / graphics_firmware / graphics_failed; RestartAdvised), setGraphicsMode(graphicsMode) (starts it;
-    ///     the outcome shows in the status).
+    ///     graphics_unsupported / graphics_firmware / graphics_failed / graphics_bitlocker / graphics_restart /
+    ///     graphics_restart_pending; RestartAdvised; RestartPending = a mode that starts with the next boot),
+    ///     setGraphicsMode(graphicsMode) (starts it; Discrete, and Hybrid from a Discrete start, restart Windows; the outcome
+    ///     shows in the status).
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
     public const int ProtocolVersion = 15;

@@ -74,7 +74,7 @@ internal sealed class DisplayPage : UserControl
                     _gpuError, _gpuRestart,
                     InfoPage.Text("• Hibrit: iki ekran kartı birlikte; NVIDIA kartı yalnız gerektiğinde çalışır. Önerilen.", "Caption", top: 6),
                     InfoPage.Text("• Dahili: yalnız Intel; NVIDIA kartı kapanır, pil daha uzun gider. HDMI çıkışı çalışmaz; HDMI kablosu takılınca kendiliğinden Hibrit'e dönülür.", "Caption", top: 2),
-                    InfoPage.Text("• Harici: yalnız NVIDIA; oyunlarda en yüksek hız, pil daha kısa. Yeniden başlatma gerekir (yakında).", "Caption", top: 2)),
+                    InfoPage.Text("• Harici: yalnız NVIDIA; oyunlarda en yüksek hız, pil daha kısa. Geçişte ve dönüşte bilgisayar yeniden başlar.", "Caption", top: 2)),
             },
         };
 
@@ -91,7 +91,7 @@ internal sealed class DisplayPage : UserControl
         {
             (GraphicsMode.Hybrid, "Hibrit", "iki ekran kartı · önerilen"),
             (GraphicsMode.Integrated, "Dahili", "yalnız Intel · pil uzun"),
-            (GraphicsMode.Discrete, "Harici", "yalnız NVIDIA · yakında"),
+            (GraphicsMode.Discrete, "Harici", "yalnız NVIDIA · yeniden başlatır"),
         })
         {
             var b = new RadioButton
@@ -103,9 +103,7 @@ internal sealed class DisplayPage : UserControl
             b.Checked += async (_, _) =>
             {
                 if (_rendering) return;
-                if (mode == GraphicsMode.Integrated && !ConfirmDialog.Ask(this, "Dahili moda geç",
-                        "NVIDIA ekran kartı kapanacak; açık oyun ya da ekran kartını kullanan programlar kapanabilir. Kaydedilmemiş işleriniz varsa önce kaydedin.",
-                        "Dahili moda geç"))
+                if (!Confirm(mode))
                 {
                     RenderGraphics();
                     return;
@@ -120,21 +118,42 @@ internal sealed class DisplayPage : UserControl
         return panel;
     }
 
+    /// <summary>Integrated closes what uses the NVIDIA GPU; Discrete, and leaving a Discrete start, restart Windows.</summary>
+    private bool Confirm(GraphicsMode mode)
+    {
+        bool startedDiscrete = _connection.Status?.GraphicsMode == GraphicsMode.Discrete;
+        bool pending = _connection.Status?.GraphicsSwitch?.RestartPending == true;
+        if (mode == GraphicsMode.Integrated && !startedDiscrete)
+            return ConfirmDialog.Ask(this, "Dahili moda geç",
+                "NVIDIA ekran kartı kapanacak; açık oyun ya da ekran kartını kullanan programlar kapanabilir. Kaydedilmemiş işleriniz varsa önce kaydedin.",
+                "Dahili moda geç");
+        if (mode == GraphicsMode.Discrete && !startedDiscrete && !pending)
+            return ConfirmDialog.Ask(this, "Harici moda geç",
+                "Bilgisayar birkaç saniye içinde yeniden başlayacak; açık işlerinizi şimdi kaydedin. Harici modda NVIDIA kartı hep açık olur: oyunlarda en yüksek hız, ama pil daha kısa gider ve fan daha sık çalışabilir.",
+                "Kaydettim, yeniden başlat");
+        if (mode == GraphicsMode.Hybrid && startedDiscrete && !pending)
+            return ConfirmDialog.Ask(this, "Hibrit moda dön",
+                "Bilgisayar birkaç saniye içinde yeniden başlayacak; açık işlerinizi şimdi kaydedin.",
+                "Kaydettim, yeniden başlat");
+        return true;
+    }
+
     private void RenderGraphics()
     {
         var s = _connection.Connected ? _connection.Status : null;
         var sw = s?.GraphicsSwitch;
         bool busy = sw?.Busy == true;
-        GraphicsMode? shown = busy ? sw!.Target : s?.GraphicsMode;
+        GraphicsMode? shown = busy || sw?.RestartPending == true ? sw!.Target : s?.GraphicsMode;
         _gpuNow.Text = s is null ? "Fan hizmetine bağlanılamıyor; mod okunamadı."
             : s.GraphicsMode is not { } mode ? "Bu bilgisayar ekran kartı modunu bildirmiyor."
             : busy ? $"{GraphicsName(sw!.Target!.Value)} moduna geçiliyor, birkaç saniye sürer…"
+            : sw is { RestartPending: true, Target: { } next } ? $"Şu an: {GraphicsName(mode)} · yeniden başlayınca {GraphicsName(next)}"
             : $"Şu an: {GraphicsName(mode)}";
         _rendering = true;
         foreach (var (m, b) in _gpuButtons)
         {
             b.IsChecked = m == shown;
-            b.IsEnabled = s?.GraphicsMode is not null && !busy && m != GraphicsMode.Discrete;
+            b.IsEnabled = s?.GraphicsMode is not null && !busy;
         }
         _rendering = false;
         if (busy) ShowError(null);
@@ -156,6 +175,9 @@ internal sealed class DisplayPage : UserControl
         "graphics_not_set" => "BIOS Dahili modu kabul etmedi; NVIDIA kartı yeniden açıldı.",
         "graphics_busy" => "Bir mod değişikliği zaten sürüyor.",
         "graphics_unsupported" => "Bu mod şimdilik kullanılamıyor.",
+        "graphics_bitlocker" => "BitLocker açıkken bu mod değiştirilemez: değişiklik açılışta BitLocker kurtarma anahtarını sordurur. Önce BitLocker'ı kapatın.",
+        "graphics_restart" => "Mod kaydedildi ama bilgisayar yeniden başlatılamadı; kendiniz yeniden başlatın.",
+        "graphics_restart_pending" => "Başka bir mod yeniden başlatmayı bekliyor; önce bilgisayarı yeniden başlatın.",
         _ => error is null ? "Mod değiştirilemedi." : $"Mod değiştirilemedi ({error}).",
     };
 

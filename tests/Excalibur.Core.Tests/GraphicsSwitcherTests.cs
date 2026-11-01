@@ -9,6 +9,8 @@ public class GraphicsSwitcherTests
     private readonly SimulatedGpuDevices _gpu = new();
     private readonly List<string> _log = [];
     private readonly List<string> _calls = [];
+    private bool _bitLocker;
+    private int _restarts;
     private readonly GraphicsModeMonitor _monitor;
     private readonly GraphicsSwitcher _switcher;
 
@@ -16,7 +18,7 @@ public class GraphicsSwitcherTests
     {
         _monitor = new GraphicsModeMonitor(new GraphicsModeReader(_bios).Read, _log.Add);
         _switcher = new GraphicsSwitcher(_monitor, new GraphicsModeWriter(_bios), _gpu,
-            () => _calls.Add("release"), () => _calls.Add("resume"), _log.Add);
+            () => _calls.Add("release"), () => _calls.Add("resume"), _log.Add, () => _bitLocker, () => _restarts++);
     }
 
     [Fact]
@@ -95,9 +97,70 @@ public class GraphicsSwitcherTests
     }
 
     [Fact]
-    public void Discrete_is_not_offered_yet_and_a_second_change_waits_for_the_first()
+    public void Discrete_is_told_to_the_BIOS_then_Windows_restarts()
     {
-        Assert.Equal("graphics_unsupported", _switcher.Start(GraphicsMode.Discrete, "window")!.ErrorCode);
+        _switcher.Switch(GraphicsMode.Discrete, "window");
+        Assert.Equal(1, _restarts);
+        Assert.Equal(GraphicsMode.Discrete, _bios.LastSet);
+        Assert.Equal(GraphicsMode.Hybrid, _bios.Mode); // the boot mode changes with the restart
+        Assert.True(_switcher.State.RestartPending);
+        Assert.Null(_switcher.State.ErrorCode);
+    }
+
+    [Fact]
+    public void Discrete_is_refused_under_BitLocker()
+    {
+        _bitLocker = true;
+        _switcher.Switch(GraphicsMode.Discrete, "window");
+        Assert.Equal("graphics_bitlocker", _switcher.State.ErrorCode);
+        Assert.Equal(0, _restarts);
+        Assert.Null(_bios.LastSet);
+    }
+
+    [Fact]
+    public void Discrete_from_Integrated_switches_the_GPU_back_on_first()
+    {
+        _switcher.Switch(GraphicsMode.Integrated, "window");
+        _calls.Clear();
+        _switcher.Switch(GraphicsMode.Discrete, "window");
+        Assert.True(_gpu.Enabled);
+        Assert.Equal(["resume"], _calls);
+        Assert.Equal(1, _restarts);
+        Assert.Equal(GraphicsMode.Hybrid, _monitor.Current!.Mode); // until the restart
+        _switcher.Switch(GraphicsMode.Integrated, "window");
+        Assert.Equal("graphics_restart_pending", _switcher.State.ErrorCode);
+        Assert.True(_gpu.Enabled);
+    }
+
+    [Fact]
+    public void Hybrid_before_the_restart_takes_Discrete_back()
+    {
+        _switcher.Switch(GraphicsMode.Discrete, "window");
+        _switcher.Switch(GraphicsMode.Hybrid, "window");
+        Assert.Equal(GraphicsMode.Hybrid, _bios.LastSet);
+        Assert.False(_switcher.State.RestartPending);
+        Assert.Equal(1, _restarts);
+    }
+
+    [Fact]
+    public void Leaving_a_Discrete_boot_is_Hybrid_and_a_restart_and_Integrated_is_refused()
+    {
+        _bios.Mode = GraphicsMode.Discrete;
+        _switcher.Switch(GraphicsMode.Integrated, "window");
+        Assert.Equal("graphics_discrete", _switcher.State.ErrorCode);
+        _switcher.Switch(GraphicsMode.Hybrid, "window");
+        Assert.Equal(GraphicsMode.Hybrid, _bios.LastSet);
+        Assert.Equal(1, _restarts);
+        Assert.True(_switcher.State.RestartPending);
+        _switcher.Switch(GraphicsMode.Discrete, "window"); // changed their mind before the restart
+        Assert.Equal(GraphicsMode.Discrete, _bios.LastSet);
+        Assert.False(_switcher.State.RestartPending);
+        Assert.Equal(1, _restarts);
+    }
+
+    [Fact]
+    public void A_second_change_waits_for_the_first()
+    {
         Assert.Null(_switcher.Start(GraphicsMode.Integrated, "window"));
         // Busy until the background switch ends (it may already have ended on a fast machine).
         var second = _switcher.Start(GraphicsMode.Hybrid, "window");
