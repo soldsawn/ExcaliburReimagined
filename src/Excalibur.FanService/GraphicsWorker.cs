@@ -8,7 +8,7 @@ namespace Excalibur.FanService;
 /// 5 s after a wake, and 3 s after the firmware's HDMI event (GMC_WMIEvent byte 1 = 4, a cable in or out; 3 s = the EC
 /// quiet spell every firmware event starts). Runs apart from the fan loop: a slow firmware call can only delay it.
 /// </summary>
-public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal signal, FanRuntime runtime, ILogger<GraphicsWorker> logger) : BackgroundService
+public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal signal, FanRuntime runtime, Excalibur.Core.Fan.FanFileLog fileLog, ILogger<GraphicsWorker> logger) : BackgroundService
 {
     public const byte HdmiEvent = 4;
     private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(10), ResumeDelay = TimeSpan.FromSeconds(5), HdmiDelay = TimeSpan.FromSeconds(3);
@@ -35,6 +35,9 @@ public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal sig
                 if (_why is not { } why) continue;
                 _why = null;
                 await Task.Run(() => graphics.Refresh(why), stoppingToken);
+                // Diagnosis (2026-11-02: a cable pulled out still read "in"): what the BIOS says after its HDMI event.
+                if (why == "HDMI" && graphics.Current is { } now)
+                    fileLog.Write(DateTimeOffset.Now, $"graphics: after the HDMI event the BIOS reports the cable {(now.HdmiConnected ? "in" : "out")}");
             }
         }
         catch (OperationCanceledException) { }
@@ -60,7 +63,10 @@ public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal sig
             var watcher = new ManagementEventWatcher(new ManagementScope(@"root\wmi"), new WqlEventQuery("SELECT * FROM GMC_WMIEvent"));
             watcher.EventArrived += (_, e) =>
             {
-                if (e.NewEvent["EventDetail"] is byte[] { Length: > 1 } detail && detail[1] == HdmiEvent) Schedule("HDMI", HdmiDelay);
+                if (e.NewEvent["EventDetail"] is not byte[] { Length: > 4 } detail || detail[1] != HdmiEvent) return;
+                // Byte 4 = the HDMI line when the event was raised (DSDT _L12 sets GWMI.HDMI from the same GPIO).
+                fileLog.Write(DateTimeOffset.Now, $"graphics: HDMI event, the cable is {(detail[4] == 1 ? "in" : "out")} by the event");
+                Schedule("HDMI", HdmiDelay);
             };
             watcher.Start();
             return watcher;
