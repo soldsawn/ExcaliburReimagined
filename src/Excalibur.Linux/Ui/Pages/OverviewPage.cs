@@ -323,10 +323,9 @@ internal sealed class OverviewPage : UserControl
             // What the mode allows on this laptop, as the service measured it; nothing until it has.
             var w = power?.Modes?.FirstOrDefault(x => x.Mode == mode);
             string full = PowerModes.First(x => x.Mode == mode).Full;
-            _powerWatts[mode].Text = w is { GpuWatts: { } g } ? $"{w.CpuWatts?.ToString() ?? "–"}/{g} W" : "–";
-            ToolTip.SetTip(button, w is { GpuWatts: { } gw }
-                ? $"{full}: {(w.CpuWatts is { } cw ? $"işlemci en çok {cw} W, " : "")}ekran kartı en çok {gw} W"
-                : $"{full}: seçilince ölçülür");
+            // Linux: the mode moves only the CPU's limit (the graphics card's needs the BIOS's ACPI call).
+            _powerWatts[mode].Text = w?.CpuWatts is { } c ? $"{c} W" : "–";
+            ToolTip.SetTip(button, w?.CpuWatts is { } cw ? $"{full}: işlemci en çok {cw} W" : $"{full}: seçilince ölçülür");
         }
         _renderingPower = false;
         _powerHint.Text = power?.Lock switch
@@ -334,7 +333,7 @@ internal sealed class OverviewPage : UserControl
             null => "",
             PowerLock.OnBattery => "Pilde yalnızca Ofis modu çalışır.",
             PowerLock.UsbCAdapter => "USB-C adaptörde yalnızca Ofis modu.",
-            _ => "İşlemci / ekran kartı güç sınırı",
+            _ => "İşlemci güç sınırı",
         };
     }
 

@@ -48,11 +48,11 @@ internal sealed class MainWindow : Window
         _defs =
         [
             new("overview", "Panel", "", () => new OverviewPage(_connection)),
-            new("fan", "Soğutma", "", () => Soon("Soğutma")),
-            new("history", "Geçmiş", "", () => Soon("Geçmiş")),
-            new("profiles", "Profiller", "", () => Soon("Profiller")),
-            new("power", "Performans", "", () => Soon("Performans")),
-            new("battery", "Pil", "", () => Soon("Pil")),
+            new("fan", "Soğutma", "", () => new FanPage(_connection)),
+            new("history", "Geçmiş", "", () => new HistoryPage(_connection)),
+            new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
+            new("power", "Performans", "", () => new PowerPage(_connection)),
+            new("battery", "Pil", "", () => new BatteryPage(_connection)),
             new("lighting", "Aydınlatma", "", () => Soon("Aydınlatma")),
             new("automation", "Otomasyon", char.ConvertFromUtf32(0xF013D), () => Soon("Otomasyon")),
             new("settings", "Ayarlar", "", () => Soon("Ayarlar"), Bottom: true),
