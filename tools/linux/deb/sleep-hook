@@ -1,0 +1,6 @@
+#!/bin/sh
+# Uykudan önce fanlar dizüstüne bırakılır, uyanınca fan kontrolü yeniden başlar.
+case "$1" in
+  pre)  /opt/excalibur-reimagined/excalibur-reimagined sleep pre ;;
+  post) /opt/excalibur-reimagined/excalibur-reimagined sleep post ;;
+esac

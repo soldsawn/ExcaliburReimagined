@@ -53,7 +53,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 🔄 **Güncelleme Denetimi:** GitHub'da yeni sürüm olup olmadığı kontrolü.
 - 🧹 **Casper Programlarını Kapatma:** Control Center'ın arka planda çalışan sürücüsü, açılış görevleri ve programları tek tuşla durdurulup devre dışı bırakılır; hiçbir şey silinmez, "Geri al" eski hâline döndürür (Ayarlar). Fan denetleyicisini kullanan başka programlar (NoteBook FanControl, WinRing0) uyarı olarak gösterilir.
 - ⌨️ **Kısayol Tuşları:** Her yerden fan profilini (Ctrl+Alt+F) ve güç modunu (Ctrl+Alt+M) değiştirme, pencereyi açma (Ctrl+Alt+E); birleşimler Ayarlar'dan değiştirilebilir.
-> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux sürümüne pencereli arayüz, güç modu ve klavye ışığı.
+> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux'ta Secure Boot açıkken çalışma ve güç modunun ekran kartı sınırını da değiştirmesi (kendi çekirdek modülümüzle).
 
 <a id="diğer-modeller"></a>
 ### 🧪 Diğer Modeller ve EC Sürümleri
@@ -100,9 +100,19 @@ Sürüm sayfasında ayrıca **`ExcaliburReimagined-<sürüm>-zip-kurulum.zip`** 
 <a id="linux"></a>
 ### 🐧 Linux
 
-Sürüm sayfasındaki **`ExcaliburReimagined-<sürüm>-linux-x64.tar.gz`** Linux içindir. Arka plan servisi, pencereli masaüstü arayüzü (sistem tepsisi simgesiyle birlikte) ve komut satırından (`exr`) oluşur: Windows'takiyle aynı fan profilleri (Sessiz, Dengeli, Performans, Orijinal ve özel eğriler), aynı güvenlik kuralları ve EC sürüm denemesi, güç modları (Ofis, Oyun, Yüksek performans; pilde otomatik Ofis kilidi), işlemci/ekran kartı watt sınırları, şarja/pile göre otomatik geçiş, klavye aydınlatması, pil durumu/tahminleri ve yerel geçmiş. Servis durunca, çökünce ya da bilgisayar uykuya geçince fanlar dizüstünün kendi ayarına döner ve watt sınırları geri alınır.
+Linux sürümü arka plan servisi, **Windows'takiyle aynı pencere** (Panel, Soğutma, Geçmiş, Profiller, Performans, Pil, Aydınlatma, Otomasyon, Ayarlar; masaüstü destekliyorsa sistem tepsisi simgesi) ve komut satırından (`exr`) oluşur: aynı fan profilleri ve özel eğriler, aynı güvenlik kuralları ve EC sürüm denemesi, güç modları (pilde otomatik Ofis kilidi), işlemci/ekran kartı watt sınırları, şarja/pile göre otomatik geçiş, üç bölgeli klavye ışığı, pil sağlığı/tahminleri ve yerel geçmiş. Servis durunca, çökünce ya da bilgisayar uykuya geçince fanlar dizüstünün kendi ayarına döner; servis durunca watt sınırları da geri alınır.
 
 **Şart:** BIOS'ta **Secure Boot kapalı** olmalı (açılışta F2 > Security). Açıkken Linux EC'ye yazmaya izin vermez; uygulama bunu söyler ve fanlara dokunmaz.
+
+**Ubuntu, Linux Mint, Pop!_OS, Zorin, Debian:** sürüm sayfasından **`excalibur-reimagined_<sürüm>_amd64.deb`** dosyasını indirip çift tıklayın ya da:
+
+```bash
+sudo apt install ./excalibur-reimagined_*_amd64.deb
+```
+
+Kaldırmak için `sudo apt remove excalibur-reimagined` (ayarlar ve geçmiş de silinsin: `sudo apt purge excalibur-reimagined`). Daha önce `install.sh` ile kurduysanız `.deb` eskisini kendisi temizler.
+
+**Diğer dağıtımlar:** **`ExcaliburReimagined-<sürüm>-linux-x64.tar.gz`**:
 
 ```bash
 tar -xzf ExcaliburReimagined-*-linux-x64.tar.gz
@@ -120,12 +130,12 @@ sudo bash install.sh
 | `exr mode oyun` | Güç modunu değiştirir (`ofis`, `oyun`, `yuksek`; pilde yalnız Ofis) |
 | `exr cpu-limit 35 60` / `exr gpu-limit 65` | İşlemci (PL1/PL2) ve ekran kartı watt sınırları (`off` ile kaldırılır) |
 | `exr auto ac mode oyun profile dengeli` | Şarja takılınca / pile geçince (`bat`) otomatik güç modu ve fan profili |
-| `exr light #00FFFF --level 2` | Klavye rengi, parlaklığı (0–2), efektleri (`breathing`, `cycle`, `wave`, `zones`, `off`) ve boşta kapatma |
-| `exr battery` / `exr history 60` | Pil sağlığı, anlık çekiş/süre tahminleri ve son dakikaların fan/sıcaklık özeti |
+| `exr light #00FFFF --level 2` | Klavye rengi, parlaklığı (0–2) ve efektleri (`breathing`, `cycle`, `zones`, `off`) |
+| `exr battery` / `exr history 60` | Pil sağlığı, süre tahminleri ve son dakikaların fan/sıcaklık özeti |
 | `exr trial` | Tanınmayan EC sürümünde onaylı kısa deneme |
 | `exr report` | Sorun bildirmek için günlükleri bir zip'e koyar |
 
-(`exr`, `excalibur-reimagined` komutunun kısa yoludur.) Kaldırmak için: `sudo /opt/excalibur-reimagined/uninstall.sh`
+(`exr`, `excalibur-reimagined` komutunun kısa yoludur.) tar.gz ile kurduysanız kaldırmak için: `sudo /opt/excalibur-reimagined/uninstall.sh`
 
 **Hangi dağıtımlarda çalışır?** Uygulama EC'ye çekirdeğin `ec_sys` modülüyle ulaşır ve servis için systemd kullanır; bunlar dağıtıma göre değişir.
 
@@ -142,7 +152,7 @@ Windows ile birlikte kullanıyorsanız Linux'ta bir kez `sudo timedatectl set-lo
 
 Desteklenmeyen bir dağıtımda hiçbir şey bozulmaz: uygulama EC'ye ulaşamazsa fanlara dokunmaz ve `exr status` nedenini söyler. Denediğiniz dağıtımın sonucunu `exr report` zip'iyle bir Issue olarak paylaşırsanız tabloyu güncelleriz.
 
-**Henüz Linux'ta olmayanlar:** Secure Boot açıkken çalışma ve `.deb` paketi. Sırayla eklenecek; Secure Boot ve Fedora desteği için kendi çekirdek modülümüz planlanıyor.
+**Henüz Linux'ta olmayanlar:** Secure Boot açıkken çalışma; güç modunun ekran kartı sınırını da değiştirmesi (Linux'ta mod yalnız işlemciyi ve dizüstünün fan ayarını değiştirir; ekran kartını watt sınırıyla kısabilirsiniz); boşta klavye ışığını söndürme, program kuralları, ekran yenileme hızı ve kısayol tuşları. Secure Boot, ekran kartı sınırı ve Fedora desteği için kendi çekirdek modülümüz planlanıyor.
 
 ### Kod üzerinden kurulum (geliştiriciler için)
 
@@ -424,7 +434,7 @@ Hardcoded limits ensure fans never go below 25% (30% when they are set through t
 
 **Installation:** download **`ExcaliburReimagined-<version>-setup.exe`** from the [latest release](https://github.com/soldsawn/ExcaliburReimagined/releases/latest) and run it. .NET comes inside it, and if the PawnIO driver is missing it downloads the official setup, checks its hash and installs it. Uninstall from Windows Settings > Apps (you are asked whether to keep your settings and fan history; by default they are kept). The setup is not signed, so Windows may warn about an unknown publisher (More info > Run anyway). The release also has a `-zip-kurulum.zip` with the same install as a folder (`1-Kur.cmd` / `2-Kaldir.cmd`).
 
-**Linux:** download `ExcaliburReimagined-<version>-linux-x64.tar.gz`, extract it and run `sudo bash install.sh`. It includes a desktop GUI + system tray icon (`exr gui` or from the application menu), a systemd service, and a command line (`exr`): fan control (`exr status`, `exr profile sessiz|dengeli|performans|orijinal`, custom curves via `exr profile save`, temporary `exr manual`), power modes (`exr mode ofis|oyun|yuksek`, auto-locked to Office on battery), CPU/GPU watt limits (`exr cpu-limit`, `exr gpu-limit`), AC/battery automation (`exr auto`), three-zone keyboard lighting (`exr light`), battery health/estimates (`exr battery`), local history (`exr history`), EC trial (`exr trial`) and bug reports (`exr report`). It reaches the EC through the kernel's `ec_sys` module, so **Secure Boot must be off**; tested on Ubuntu 26.04 (G870, CQ212), expected to work on Ubuntu derivatives and Debian, likely not on Fedora (no `ec_sys`) or immutable distros. Secure Boot support (signed DKMS module) and `.deb` packaging on Linux are planned next.
+**Linux:** on Ubuntu/Mint/Debian install `excalibur-reimagined_<version>_amd64.deb` (`sudo apt install ./excalibur-reimagined_*_amd64.deb`); elsewhere extract `ExcaliburReimagined-<version>-linux-x64.tar.gz` and run `sudo bash install.sh`. It has the same window as on Windows (all nine pages, tray icon where the desktop supports it), a systemd service and a command line (`exr`): fan profiles and custom curves, power modes (Office only on battery), CPU/GPU watt limits, AC/battery automation, three-zone keyboard lighting, battery health/estimates, local history, EC trial and bug reports (`exr report`). It reaches the EC through the kernel's `ec_sys` module, so **Secure Boot must be off**; on Linux the power mode changes the CPU limit and the laptop's fan table but not the GPU limit (use the GPU watt limit). Tested on Ubuntu 26.04 (G870, CQ212); likely not on Fedora (no `ec_sys`). A signed DKMS module (Secure Boot, GPU limit by power mode, Fedora) is planned next.
 
 **From source (elevated PowerShell):**
 ```powershell

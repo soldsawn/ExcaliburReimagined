@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+APP=excalibur-reimagined
+if [ "$1" = configure ]; then
+  mkdir -p /var/lib/$APP /var/log/$APP
+  # Short name exr: only when nothing else owns it.
+  if ! command -v exr >/dev/null 2>&1; then ln -sf /opt/$APP/$APP /usr/bin/exr; fi
+
+  # EC access (ec_sys with writing on); the files in /etc/modprobe.d and /etc/modules-load.d keep it after a restart.
+  modprobe -r ec_sys 2>/dev/null || true
+  modprobe ec_sys write_support=1 2>/dev/null || echo "UYARI: ec_sys yüklenemedi (bu çekirdekte olmayabilir)."
+  mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+
+  if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    systemctl enable $APP.service >/dev/null 2>&1 || true
+    systemctl restart $APP.service || true
+  fi
+
+  if [ -f /sys/kernel/security/lockdown ] && ! grep -q "\[none\]" /sys/kernel/security/lockdown; then
+    echo "!! Secure Boot açık: Linux bu modda EC'ye yazmaya izin vermiyor. Fan kontrolü için BIOS'ta (açılışta F2 > Security) Secure Boot'u kapatın."
+  fi
+  echo "Excalibur Reimagined kuruldu. Uygulama menüsünden açabilir ya da terminalde 'exr status' yazabilirsiniz."
+fi
+exit 0

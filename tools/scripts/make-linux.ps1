@@ -22,3 +22,10 @@ if (Test-Path $tar) { Remove-Item $tar }
 tar.exe -czf $tar -C (Join-Path $repo 'dist') $name
 if ($LASTEXITCODE -ne 0) { throw 'tar failed' }
 Write-Host ("ready: {0} ({1:N0} MB)" -f $tar, ((Get-Item $tar).Length / 1MB))
+
+# The .deb (Debian, Ubuntu, Mint...), built in WSL: dpkg-deb gives the files root ownership, which a Windows tar cannot.
+function ToWsl([string]$p) { '/mnt/' + $p.Substring(0, 1).ToLowerInvariant() + ($p.Substring(2) -replace '\\', '/') }
+$deb = Join-Path $repo "dist\excalibur-reimagined_${version}_amd64.deb"
+if (Test-Path $deb) { Remove-Item $deb }
+wsl.exe -d Ubuntu-24.04 -- bash (ToWsl (Join-Path $repo 'tools\linux\make-deb.sh')) (ToWsl $out) $version (ToWsl $deb)
+if ($LASTEXITCODE -ne 0) { throw 'make-deb.sh failed (WSL Ubuntu-24.04 with dpkg-deb is needed)' }

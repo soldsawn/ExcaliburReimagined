@@ -1,23 +1,27 @@
 #!/bin/bash
-# Excalibur Reimagined — Linux denemesi (L1 + L2 + L3, USB'den açılan Ubuntu'da). Kullanım: bash /cdrom/dene.sh
+# Excalibur Reimagined — Linux denemesi (0.2.0: .deb kurulumu, yeni pencere, ortak servis dili; USB'den açılan Ubuntu'da).
+# Kullanım: bash /cdrom/dene.sh
 OUT="$HOME/excalibur-deneme-$(date +%H%M)"
 mkdir -p "$OUT"
 exec > >(tee "$OUT/sonuc.txt") 2>&1
-echo "== Excalibur Reimagined Linux (L1+L2+L3) denemesi $(date)"
+echo "== Excalibur Reimagined Linux denemesi $(date)"
 uname -a
 cat /sys/class/dmi/id/product_name /sys/class/dmi/id/bios_version 2>/dev/null
 echo "lockdown: $(cat /sys/kernel/security/lockdown 2>/dev/null)"
 # Linux keeps the hardware clock in UTC, Windows in local time: without this Windows boots 3 hours behind afterwards.
 sudo timedatectl set-local-rtc 1 2>/dev/null
 
-PKG=$(ls /cdrom/ExcaliburReimagined-*-linux-x64.tar.gz /media/*/*/ExcaliburReimagined-*-linux-x64.tar.gz /run/media/*/*/ExcaliburReimagined-*-linux-x64.tar.gz 2>/dev/null | tail -1)
-if [ -z "$PKG" ]; then echo "!! Paket bulunamadı (USB'nin köküne kopyalandı mı?)"; exit 1; fi
-echo "paket: $PKG"
-rm -rf /tmp/exr && mkdir -p /tmp/exr && tar -xzf "$PKG" -C /tmp/exr
-cd /tmp/exr/ExcaliburReimagined-*-linux-x64 || exit 1
+DEB=$(ls /cdrom/excalibur-reimagined_*_amd64.deb /media/*/*/excalibur-reimagined_*_amd64.deb /run/media/*/*/excalibur-reimagined_*_amd64.deb 2>/dev/null | tail -1)
+if [ -z "$DEB" ]; then echo "!! .deb paketi bulunamadı (USB'nin köküne kopyalandı mı?)"; exit 1; fi
+echo "paket: $DEB"
+cp "$DEB" /tmp/exr.deb
 
-echo; echo "== 1. Kurulum"
-sudo bash install.sh
+echo; echo "== 1. Kurulum (.deb)"
+sudo apt-get install -y /tmp/exr.deb 2>&1 | grep -v "^Reading\|^Building\|Reading database"
+dpkg -s excalibur-reimagined | grep -E "^Status|^Version"
+echo "servis: $(systemctl is-active excalibur-reimagined) / $(systemctl is-enabled excalibur-reimagined)"
+exr version
+sleep 3
 echo; echo "ec_sys: $(sudo ls /sys/kernel/debug/ec/ec0/io 2>/dev/null || echo yok) write_support=$(cat /sys/module/ec_sys/parameters/write_support 2>/dev/null)"
 echo "coretemp: $(grep -l coretemp /sys/class/hwmon/*/name 2>/dev/null | head -1)"
 echo "intel-rapl: $(cat /sys/class/powercap/intel-rapl:0/name 2>/dev/null || echo yok) PL1=$(cat /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw 2>/dev/null) PL2=$(cat /sys/class/powercap/intel-rapl:0/constraint_1_power_limit_uw 2>/dev/null)"
@@ -62,7 +66,7 @@ sudo tail -40 /var/log/excalibur-reimagined/fan-*.log
 sudo exr report >/dev/null 2>&1; sudo sh -c "cp /root/ExcaliburReimagined-rapor-*.zip '$OUT/'" 2>/dev/null
 
 # Sonuçları USB'ye yaz (Ubuntu USB'yi salt okunur bağlar; yazılabilir yapmayı dener).
-USB=$(dirname "$PKG")
+USB=$(dirname "$DEB")
 sudo mount -o remount,rw "$USB" 2>/dev/null
 if sudo cp -r "$OUT" "$USB/" 2>/dev/null; then
   echo; echo "== Sonuçlar USB'ye yazıldı: $(basename "$OUT")"
@@ -70,5 +74,11 @@ else
   echo; echo "== USB'ye yazılamadı; sonuçlar $OUT içinde."
 fi
 
-echo; echo "== Masaüstü penceresi (exr gui) açılıyor..."
+echo; echo "== 8. Pencere ekran görüntüleri (gerçek cihazda, birkaç saniye sürer)"
+echo "tepsi desteği: $(dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.NameHasOwner string:org.kde.StatusNotifierWatcher 2>/dev/null | grep -o 'boolean [a-z]*')"
+timeout 90 exr gui --snapshot "$OUT/ekran" >/dev/null 2>&1; echo "görüntüler: $(ls "$OUT/ekran" 2>/dev/null | tr '\n' ' ')"
+if sudo cp -r "$OUT" "$USB/" 2>/dev/null; then echo "(ekran görüntüleri de USB'ye yazıldı)"; fi
+
+echo; echo "== Masaüstü penceresi açılıyor (uygulama menüsünde de 'Excalibur Reimagined' var)..."
+echo "   Kaldırmak isterseniz: sudo apt remove excalibur-reimagined"
 nohup exr gui >/dev/null 2>&1 &

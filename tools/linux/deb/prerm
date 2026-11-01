@@ -1,0 +1,11 @@
+#!/bin/sh
+# Before the files go (remove) or are replaced (upgrade): stop the service, which hands the fans to the EC
+# (ExecStopPost runs "release" as well).
+set -e
+APP=excalibur-reimagined
+if [ -d /run/systemd/system ]; then
+  systemctl stop $APP.service 2>/dev/null || true
+  [ "$1" = remove ] && systemctl disable $APP.service >/dev/null 2>&1 || true
+fi
+[ -x /opt/$APP/$APP ] && /opt/$APP/$APP release 2>/dev/null || true
+exit 0

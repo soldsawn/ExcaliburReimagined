@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+APP=excalibur-reimagined
+case "$1" in
+  remove|purge)
+    # The short name, if postinst made it.
+    if [ -L /usr/bin/exr ] && [ "$(readlink /usr/bin/exr)" = "/opt/$APP/$APP" ]; then rm -f /usr/bin/exr; fi
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl reset-failed $APP.service 2>/dev/null || true
+    fi
+    ;;
+esac
+# Settings, history and logs only on purge (apt purge excalibur-reimagined).
+[ "$1" = purge ] && rm -rf /var/lib/$APP /var/log/$APP
+exit 0

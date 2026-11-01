@@ -1,7 +1,7 @@
 ﻿<Project>
   <!-- One version for every project: 0.x until the 1.0 release. -->
   <PropertyGroup>
-    <Version>0.1.9</Version>
-    <InformationalVersion>0.1.9</InformationalVersion>
+    <Version>0.2.0</Version>
+    <InformationalVersion>0.2.0</InformationalVersion>
   </PropertyGroup>
 </Project>

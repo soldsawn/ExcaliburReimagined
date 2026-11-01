@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Excalibur Reimagined
+Comment=Casper Excalibur fan kontrolü, güç modu ve klavye aydınlatması
+Exec=/usr/bin/excalibur-reimagined gui
+Icon=excalibur-reimagined
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+Keywords=Excalibur;Casper;Fan;Power;RGB;
+StartupWMClass=excalibur-reimagined

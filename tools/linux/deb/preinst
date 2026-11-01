@@ -1,0 +1,14 @@
+#!/bin/sh
+# An earlier install.sh install (tar.gz) has its own copies: stop it and remove them, so the two never run side by side.
+set -e
+APP=excalibur-reimagined
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+  if [ -f /etc/systemd/system/$APP.service ]; then
+    systemctl disable --now $APP.service 2>/dev/null || true
+    rm -f /etc/systemd/system/$APP.service
+    [ "$(readlink -f /usr/local/bin/exr 2>/dev/null)" = "/opt/$APP/$APP" ] && rm -f /usr/local/bin/exr
+    rm -f /usr/local/bin/$APP /usr/share/pixmaps/$APP.png /opt/$APP/uninstall.sh
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+fi
+exit 0

@@ -1,0 +1,14 @@
+Package: excalibur-reimagined
+Version: @VERSION@
+Architecture: amd64
+Maintainer: soldsawn <https://github.com/soldsawn/ExcaliburReimagined>
+Installed-Size: @SIZE@
+Depends: libx11-6, libice6, libsm6, libfontconfig1
+Section: utils
+Priority: optional
+Homepage: https://github.com/soldsawn/ExcaliburReimagined
+Description: Casper Excalibur fan, güç modu ve klavye ışığı kontrolü
+ Casper Excalibur dizüstüleri için fan profilleri, güvenlik kuralları,
+ güç modları, işlemci/ekran kartı watt sınırları, üç bölgeli klavye ışığı,
+ pil durumu ve sıcaklık geçmişi. Arka plan hizmeti, pencereli arayüz ve
+ komut satırı (exr). BIOS'ta Secure Boot kapalı olmalıdır.
