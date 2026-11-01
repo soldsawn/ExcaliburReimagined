@@ -55,7 +55,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 🧹 **Casper Programlarını Kapatma:** Control Center'ın arka planda çalışan sürücüsü, açılış görevleri ve programları tek tuşla durdurulup devre dışı bırakılır; hiçbir şey silinmez, "Geri al" eski hâline döndürür (Ayarlar). Fan denetleyicisini kullanan başka programlar (NoteBook FanControl, WinRing0) uyarı olarak gösterilir.
 - ⌨️ **Kısayol Tuşları:** Her yerden fan profilini (Ctrl+Alt+F) ve güç modunu (Ctrl+Alt+M) değiştirme, pencereyi açma (Ctrl+Alt+E); birleşimler Ayarlar'dan değiştirilebilir.
 - 🖥️ **Ekran Kartı Modu:** Hibrit (Intel + NVIDIA), Dahili (yalnız Intel; NVIDIA kartı kapanır, pil daha uzun gider) ve Harici (yalnız NVIDIA; dizüstünün ekran anahtarıyla dahili ekran da NVIDIA'ya geçer). Hibrit ile Dahili arasında yeniden başlatma gerekmez; HDMI kablosu takılıyken Dahili'ye geçilmez (HDMI çıkışı NVIDIA'ya bağlı), Dahili'deyken kablo takılınca kendiliğinden Hibrit'e dönülür. Harici'ye geçiş ve dönüş bilgisayarı yeniden başlatır; BIOS ekranı taşırken bu açılış 1-2 dakika sürer, bilgisayar bir kez kapanıp açılabilir. BitLocker açıkken Harici'ye geçilmez. Yöntem orijinal Control Center'ın bu modeldekiyle aynıdır (Ekran sayfası).
-> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux'ta Secure Boot açıkken çalışma ve güç modunun ekran kartı sınırını da değiştirmesi (kendi çekirdek modülümüzle).
+> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux'ta ekran kartı modu ve Fedora desteği.
 
 <a id="diğer-modeller"></a>
 ### 🧪 Diğer Modeller ve EC Sürümleri
@@ -102,11 +102,11 @@ Sürüm sayfasında ayrıca **`ExcaliburReimagined-<sürüm>-zip-kurulum.zip`** 
 <a id="linux"></a>
 ### 🐧 Linux
 
-> Linux paketleri şimdilik **[v0.2.0](https://github.com/soldsawn/ExcaliburReimagined/releases/tag/v0.2.0)** sürüm sayfasındadır; v0.2.1 yalnız Windows için.
-
 Linux sürümü arka plan servisi, **Windows'takiyle aynı pencere** (Panel, Soğutma, Geçmiş, Profiller, Performans, Pil, Aydınlatma, Otomasyon, Ayarlar; masaüstü destekliyorsa sistem tepsisi simgesi) ve komut satırından (`exr`) oluşur: aynı fan profilleri ve özel eğriler, aynı güvenlik kuralları ve EC sürüm denemesi, güç modları (pilde otomatik Ofis kilidi), işlemci/ekran kartı watt sınırları, şarja/pile göre otomatik geçiş, üç bölgeli klavye ışığı, pil sağlığı/tahminleri ve yerel geçmiş. Servis durunca, çökünce ya da bilgisayar uykuya geçince fanlar dizüstünün kendi ayarına döner; servis durunca watt sınırları da geri alınır.
 
-**Şart:** BIOS'ta **Secure Boot kapalı** olmalı (açılışta F2 > Security). Açıkken Linux EC'ye yazmaya izin vermez; uygulama bunu söyler ve fanlara dokunmaz.
+**Kendi çekirdek modülümüz (`.deb` ile gelir):** `.deb` paketi `excalibur_ec` modülünü kurar (DKMS: çekirdek güncellenince kendiliğinden yeniden derlenir). Modül yüklüyken güç modu BIOS'un kendi komutuyla uygulanır, yani **ekran kartının sınırı da moda göre değişir** (Windows'taki gibi); klavye ışığı ve fan devirleri de BIOS üzerinden okunur. Modül yoksa uygulama eskisi gibi çekirdeğin `ec_sys` modülüyle çalışır.
+
+**Secure Boot:** Modül Secure Boot açıkken de çalışır. Secure Boot açıksa kurulum, modülün imza anahtarını **bir kez onaylamanızı** ister: bir parola belirlersiniz, yeniden başlatınca çıkan mavi ekranda **Enroll MOK > Continue > Yes** seçip parolayı girersiniz (NVIDIA sürücüsündeki adımın aynısı). İstemezseniz BIOS'ta Secure Boot'u kapatabilirsiniz (açılışta F2 > Security). `tar.gz` kurulumu modülü kurmaz; onda Secure Boot kapalı olmalı. *Secure Boot açıkken kurulum henüz gerçek cihazda denenmedi; sorun olursa `exr report` zip'iyle bildirin.*
 
 **Ubuntu, Linux Mint, Pop!_OS, Zorin, Debian:** sürüm sayfasından **`excalibur-reimagined_<sürüm>_amd64.deb`** dosyasını indirip çift tıklayın ya da:
 
@@ -141,14 +141,14 @@ sudo bash install.sh
 
 (`exr`, `excalibur-reimagined` komutunun kısa yoludur.) tar.gz ile kurduysanız kaldırmak için: `sudo /opt/excalibur-reimagined/uninstall.sh`
 
-**Hangi dağıtımlarda çalışır?** Uygulama EC'ye çekirdeğin `ec_sys` modülüyle ulaşır ve servis için systemd kullanır; bunlar dağıtıma göre değişir.
+**Hangi dağıtımlarda çalışır?** Uygulama EC'ye `.deb` kurulumunda kendi modülümüzle (derlemek için `dkms` ve çekirdek başlıkları gerekir; apt bunları kendisi kurar), `tar.gz` kurulumunda çekirdeğin `ec_sys` modülüyle ulaşır ve servis için systemd kullanır; bunlar dağıtıma göre değişir.
 
 | Dağıtım | Durum |
 |---|---|
 | Ubuntu (26.04, G870 / CQ212) | ✅ Denendi |
 | Linux Mint, Pop!_OS, Zorin OS, Debian | ✅ Büyük olasılıkla çalışır (aynı çekirdek modülü) |
 | Arch, Manjaro, EndeavourOS, openSUSE | 🟡 Denenmedi |
-| Fedora | ❌ Büyük olasılıkla çalışmaz (çekirdeğinde `ec_sys` yok gibi görünüyor) |
+| Fedora | ❌ Büyük olasılıkla çalışmaz (`tar.gz` kurulumu `ec_sys` ister, Fedora çekirdeğinde yok gibi görünüyor; modül için `.rpm` henüz yok) |
 | Bazzite, SteamOS, Fedora Silverblue | ❌ Sistem klasörleri yazılamadığı için kurulum yapılamaz |
 | systemd kullanmayan dağıtımlar | ❌ Servis kurulamaz |
 
@@ -156,7 +156,7 @@ Windows ile birlikte kullanıyorsanız Linux'ta bir kez `sudo timedatectl set-lo
 
 Desteklenmeyen bir dağıtımda hiçbir şey bozulmaz: uygulama EC'ye ulaşamazsa fanlara dokunmaz ve `exr status` nedenini söyler. Denediğiniz dağıtımın sonucunu `exr report` zip'iyle bir Issue olarak paylaşırsanız tabloyu güncelleriz.
 
-**Henüz Linux'ta olmayanlar:** ekran kartı modu; Secure Boot açıkken çalışma; güç modunun ekran kartı sınırını da değiştirmesi (Linux'ta mod yalnız işlemciyi ve dizüstünün fan ayarını değiştirir; ekran kartını watt sınırıyla kısabilirsiniz); boşta klavye ışığını söndürme, program kuralları, ekran yenileme hızı ve kısayol tuşları. Secure Boot, ekran kartı sınırı ve Fedora desteği için kendi çekirdek modülümüz planlanıyor.
+**Henüz Linux'ta olmayanlar:** ekran kartı modu; boşta klavye ışığını söndürme, program kuralları, ekran yenileme hızı ve kısayol tuşları; Fedora desteği. `tar.gz` kurulumunda (modülsüz) güç modu ekran kartının sınırını değiştirmez; ekran kartını watt sınırıyla kısabilirsiniz.
 
 ### Kod üzerinden kurulum (geliştiriciler için)
 
@@ -441,7 +441,7 @@ Hardcoded limits ensure fans never go below 25% (30% when they are set through t
 
 **Installation:** download **`ExcaliburReimagined-<version>-setup.exe`** from the [latest release](https://github.com/soldsawn/ExcaliburReimagined/releases/latest) and run it. .NET comes inside it, and if the PawnIO driver is missing it downloads the official setup, checks its hash and installs it. Uninstall from Windows Settings > Apps (you are asked whether to keep your settings and fan history; by default they are kept). The setup is not signed, so Windows may warn about an unknown publisher (More info > Run anyway). The release also has a `-zip-kurulum.zip` with the same install as a folder (`1-Kur.cmd` / `2-Kaldir.cmd`).
 
-**Linux** (packages are on the [v0.2.0](https://github.com/soldsawn/ExcaliburReimagined/releases/tag/v0.2.0) release; v0.2.1 is Windows only; no graphics mode on Linux yet): on Ubuntu/Mint/Debian install `excalibur-reimagined_<version>_amd64.deb` (`sudo apt install ./excalibur-reimagined_*_amd64.deb`); elsewhere extract `ExcaliburReimagined-<version>-linux-x64.tar.gz` and run `sudo bash install.sh`. It has the same window as on Windows (all nine pages, tray icon where the desktop supports it), a systemd service and a command line (`exr`): fan profiles and custom curves, power modes (Office only on battery), CPU/GPU watt limits, AC/battery automation, three-zone keyboard lighting, battery health/estimates, local history, EC trial and bug reports (`exr report`). It reaches the EC through the kernel's `ec_sys` module, so **Secure Boot must be off**; on Linux the power mode changes the CPU limit and the laptop's fan table but not the GPU limit (use the GPU watt limit). Tested on Ubuntu 26.04 (G870, CQ212); likely not on Fedora (no `ec_sys`). A signed DKMS module (Secure Boot, GPU limit by power mode, Fedora) is planned next.
+**Linux** (no graphics mode on Linux yet): on Ubuntu/Mint/Debian install `excalibur-reimagined_<version>_amd64.deb` (`sudo apt install ./excalibur-reimagined_*_amd64.deb`); elsewhere extract `ExcaliburReimagined-<version>-linux-x64.tar.gz` and run `sudo bash install.sh`. It has the same window as on Windows (all nine pages, tray icon where the desktop supports it), a systemd service and a command line (`exr`): fan profiles and custom curves, power modes (Office only on battery), CPU/GPU watt limits, AC/battery automation, three-zone keyboard lighting, battery health/estimates, local history, EC trial and bug reports (`exr report`). The `.deb` installs our own kernel module (`excalibur_ec`, DKMS): with it the power mode goes through the BIOS's own command, so the GPU limit follows the mode as on Windows, and it works with Secure Boot after you enroll its signing key once (set a password during install, then choose Enroll MOK > Continue > Yes on the blue screen after the restart; the Secure Boot path is not yet tested on a real machine). Without the module (the tar.gz) it uses the kernel's `ec_sys` module, which needs **Secure Boot off**, and the power mode does not change the GPU limit. Tested on Ubuntu 26.04 (G870, CQ212); likely not on Fedora (no `ec_sys`, no `.rpm` yet).
 
 **From source (elevated PowerShell):**
 ```powershell
