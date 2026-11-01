@@ -10,6 +10,8 @@ cat /sys/class/dmi/id/product_name /sys/class/dmi/id/bios_version 2>/dev/null
 echo "lockdown: $(cat /sys/kernel/security/lockdown 2>/dev/null)"
 # Linux keeps the hardware clock in UTC, Windows in local time: without this Windows boots 3 hours behind afterwards.
 sudo timedatectl set-local-rtc 1 2>/dev/null
+# The live session runs in UTC (no time zone chosen): show Turkish time, as an installed Ubuntu would.
+sudo timedatectl set-timezone Europe/Istanbul 2>/dev/null
 
 DEB=$(ls /cdrom/excalibur-reimagined_*_amd64.deb /media/*/*/excalibur-reimagined_*_amd64.deb /run/media/*/*/excalibur-reimagined_*_amd64.deb 2>/dev/null | tail -1)
 if [ -z "$DEB" ]; then echo "!! .deb paketi bulunamadı (USB'nin köküne kopyalandı mı?)"; exit 1; fi
@@ -33,7 +35,7 @@ for m in ofis yuksek oyun; do
   echo "-- mode $m"
   exr mode "$m" | grep -E "Güç modu|İşlemci|Ekran kartı"
   sleep 2
-  echo "   EC 0x95=$(sudo xxd -s $((0x95)) -l 1 -p /sys/kernel/debug/ec/ec0/io 2>/dev/null) RAPL_PL1=$(cat /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw 2>/dev/null)"
+  echo "   EC 0x95=$(sudo xxd -s $((0x95)) -l 1 -p /sys/kernel/debug/ec/ec0/io 2>/dev/null) RAPL_PL1(MSR)=$(cat /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw 2>/dev/null) PL1(MMIO, güç modunun)=$(cat /sys/class/powercap/intel-rapl-mmio:0/constraint_0_power_limit_uw 2>/dev/null || echo yok)"
 done
 
 echo; echo "== 3. İşlemci Güç Sınırı (35/60 W -> Kaldır)"
