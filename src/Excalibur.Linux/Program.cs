@@ -734,8 +734,13 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
 
     case "version":
     case "--version":
-        Console.WriteLine($"Excalibur Reimagined {version} (Linux)");
+    {
+        // "0.2.0+<commit>": the build's commit, so a test can tell which package is installed.
+        string? info = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        string commit = info?.Split('+') is [_, var hash, ..] ? $" · {hash[..Math.Min(7, hash.Length)]}" : "";
+        Console.WriteLine($"Excalibur Reimagined {version} (Linux){commit}");
         return 0;
+    }
 
     default:
         Console.WriteLine($"""
