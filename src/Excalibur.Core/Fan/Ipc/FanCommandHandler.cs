@@ -39,6 +39,11 @@ public sealed class FanCommandHandler(
     // The program whose rule is in force (setAppOverride), so the tray can tell after a service restart that it must send it again.
     private volatile string? _appProgram;
 
+    // Uptime runs on a steady clock, so a wall clock jump (Linux reading a local-time RTC as UTC) cannot make it negative:
+    // the start time sent is "now minus uptime".
+    private readonly TimeSpan _ageAtStart = DateTimeOffset.Now - startedAt;
+    private readonly System.Diagnostics.Stopwatch _uptime = System.Diagnostics.Stopwatch.StartNew();
+
     /// <summary>One request line in, one response out; never throws for a bad request.</summary>
     public FanResponse Handle(string line)
     {
@@ -223,7 +228,7 @@ public sealed class FanCommandHandler(
     }
 
     public FanStatusDto Status() =>
-        FanStatusDto.From(loop.Status, simulated, startedAt) with
+        FanStatusDto.From(loop.Status, simulated, DateTimeOffset.Now - (_ageAtStart + _uptime.Elapsed)) with
         {
             Power = PowerStatusDto.From(power.Status),
             LightIdleOffMinutes = settings.Current.Lighting?.IdleOffMinutes ?? 0,
