@@ -16,6 +16,23 @@ ln -sf "$DIR/$APP" /usr/local/bin/$APP
 # Kısa yol: yalnız başka bir şeye ait değilse.
 if ! command -v exr >/dev/null 2>&1 || [ "$(readlink -f "$(command -v exr)")" = "$DIR/$APP" ]; then ln -sf "$DIR/$APP" /usr/local/bin/exr; fi
 
+echo "== Masaüstü kısayolu"
+mkdir -p /usr/share/pixmaps /usr/share/applications
+"$DIR/$APP" --extract-icon /usr/share/pixmaps/$APP.png 2>/dev/null || true
+cat > /usr/share/applications/$APP.desktop <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Excalibur Reimagined
+Comment=Casper Excalibur fan kontrolü, güç modu ve klavye aydınlatması
+Exec=/usr/local/bin/$APP gui
+Icon=$APP
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+Keywords=Excalibur;Casper;Fan;Power;RGB;
+StartupWMClass=excalibur-reimagined
+DESKTOP
+chmod 644 /usr/share/applications/$APP.desktop
+
 echo "== EC erişimi (ec_sys, yazma açık)"
 echo "options ec_sys write_support=1" > /etc/modprobe.d/$APP.conf
 echo "ec_sys" > /etc/modules-load.d/$APP.conf
@@ -59,5 +76,5 @@ if grep -q "\[none\]" /sys/kernel/security/lockdown 2>/dev/null || [ ! -f /sys/k
 fi
 $APP status || true
 echo
-echo "Kuruldu. Komutlar: $APP status | $APP profile sessiz|dengeli|performans|orijinal | $APP report"
+echo "Kuruldu. Uygulama menüsünden 'Excalibur Reimagined' olarak veya terminalden 'exr gui' / 'exr status' ile açabilirsiniz."
 echo "Kaldırmak için: sudo $DIR/uninstall.sh"

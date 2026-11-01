@@ -6,6 +6,7 @@ if [ "$(id -u)" -ne 0 ]; then echo "Bu betik yönetici yetkisi ister: sudo $0"; 
 systemctl disable --now $APP.service 2>/dev/null
 [ -x "$DIR/$APP" ] && "$DIR/$APP" release 2>/dev/null
 rm -f /etc/systemd/system/$APP.service /usr/lib/systemd/system-sleep/$APP /etc/modprobe.d/$APP.conf /etc/modules-load.d/$APP.conf
+rm -f /usr/share/applications/$APP.desktop /usr/share/pixmaps/$APP.png
 [ "$(readlink -f /usr/local/bin/exr 2>/dev/null)" = "$DIR/$APP" ] && rm -f /usr/local/bin/exr
 rm -f /usr/local/bin/$APP
 systemctl daemon-reload

@@ -372,6 +372,11 @@ internal sealed class Daemon
     {
         var now = DateTimeOffset.Now;
         string cmd = req.Cmd.ToLowerInvariant();
+        if (cmd == "guistatus")
+        {
+            if (_battery.Health is null) _battery.ReadHealth();
+            return Status(null, includeProfiles: true, includeBattery: true, historyMinutes: Math.Clamp(req.Minutes ?? 60, 1, 43200));
+        }
         if (cmd == "battery")
         {
             if (_battery.Health is null) _battery.ReadHealth();

@@ -10,6 +10,7 @@ using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
 using Excalibur.Core.Settings;
 using Excalibur.Linux;
+using Excalibur.Linux.Ui;
 
 // excalibur-reimagined (Linux, L1 + L2): the fan, power, lighting, battery and history service and its CLI.
 string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
@@ -311,7 +312,34 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
     case "service":
         return Daemon.Run(simulate);
 
+    case "--extract-icon":
+        return rest.Length >= 2 ? LinuxGuiApp.ExtractIcon(rest[1]) : 2;
+
+    case "gui":
+    case "ui":
+    case "window":
+    case "arayuz":
+    case "arayüz":
+    {
+        string? snapshotDir = null;
+        for (int i = 1; i + 1 < rest.Length; i++)
+        {
+            if (rest[i].ToLowerInvariant() is "--snapshot" or "-s")
+                snapshotDir = rest[i + 1];
+        }
+        if (snapshotDir is null && !LinuxGuiApp.HasDisplaySession())
+        {
+            Console.Error.WriteLine("Grafik masaüstü oturumu (DISPLAY / WAYLAND_DISPLAY) bulunamadı. Komut satırı için: exr status");
+            return 2;
+        }
+        return LinuxGuiApp.Run(paths, version, snapshotDir);
+    }
+
     case null:
+        return LinuxGuiApp.HasDisplaySession()
+            ? LinuxGuiApp.Run(paths, version)
+            : Print(Ask(new LinuxRequest("status")));
+
     case "status":
     case "durum":
         return Print(Ask(new LinuxRequest("status")));
@@ -697,6 +725,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
         Console.WriteLine($"""
             Excalibur Reimagined {version} (Linux) — Casper Excalibur kontrol uygulaması
 
+              exr [gui]                                        pencereli masaüstü arayüzünü ve tepsi simgesini açar
               exr status                                       durum: sıcaklıklar, fanlar, güç modu, watt sınırları
               exr profile <ad>                                 sessiz | dengeli | performans | orijinal | <özel-ad>
               exr profiles                                     tüm profilleri ve fan eğrilerini listeler

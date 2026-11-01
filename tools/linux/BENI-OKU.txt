@@ -13,7 +13,12 @@ Casper Excalibur için fan kontrolü, güç modu, işlemci/ekran kartı watt sı
 KURULUM (paketi açtığınız klasörde terminal açın):
     sudo bash install.sh
 
+KULLANIM:
+    Uygulama menüsünden "Excalibur Reimagined" simgesine tıklayın veya terminalde "exr" / "exr gui" yazın.
+    Pencere kapatıldığında sistem tepsisinde (saatin yanında) çalışmaya devam eder.
+
 KOMUTLAR (kısa yol: exr):
+    exr [gui]                                pencereli masaüstü arayüzünü ve tepsi simgesini açar
     exr status                               sıcaklıklar, fanlar, güç modu, watt sınırları
     exr profile sessiz                       profil seç (dengeli | performans | orijinal | <özel-ad>)
     exr profiles                             tüm profilleri ve fan eğrilerini listele
@@ -31,7 +36,7 @@ KOMUTLAR (kısa yol: exr):
 KALDIRMA:
     sudo /opt/excalibur-reimagined/uninstall.sh
 
-Bu sürümde henüz yok (sırayla gelecek): pencereli arayüz, Secure Boot açıkken çalışma.
+Bu sürümde henüz yok (gelecek): Secure Boot açıkken çalışma ve .deb paketi.
 Doğrulanmış EC sürümleri: P008B0, P009B0, P006B0. Diğerlerinde fanlar önce yalnız izlenir; "exr trial" ile kısa bir deneme yapılır.
 Windows ile birlikte kullanıyorsanız: Linux donanım saatini UTC tutar, Windows yerel saat; Windows'a geçince saat 3 saat
 kayık görünebilir. Linux'ta bir kez: sudo timedatectl set-local-rtc 1
