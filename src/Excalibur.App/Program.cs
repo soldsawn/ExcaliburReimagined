@@ -6,6 +6,11 @@ namespace Excalibur.App;
 
 internal static class Program
 {
+    private static readonly IntPtr PerMonitorAwareV2 = new(-4); // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
     /// <summary>
     /// Excalibur Reimagined, the replacement for the Casper Control Center. One exe, two modes,
     /// each in its own process so the part that runs all day stays small:
@@ -34,6 +39,10 @@ internal static class Program
 
         if (Has(args, "--window"))
         {
+            // Each monitor at its own scale. The project's ApplicationHighDpiMode reaches only WinForms' start-up (the tray);
+            // loading WPF made the window process system-aware, and Windows stretched it as a bitmap on a monitor with another
+            // scale (blurry on a 125 % screen beside a 100 % one, 2026-11-02). Must come before WPF's assemblies load.
+            SetProcessDpiAwarenessContext(PerMonitorAwareV2);
             RunWindow(sim, snapshot);
             return;
         }
