@@ -9,9 +9,10 @@ namespace Excalibur.Linux;
 /// which sets the EC's internal mode, CPU PL1 and stock fan table) and, when present, /sys/firmware/acpi/platform_profile;
 /// the power source from /sys/class/power_supply; the CPU's power and PL1/PL2 limits from the kernel's intel-rapl
 /// powercap interface; the GPU's power and clock lock from NVML (libnvidia-ml.so.1).
-/// Not done here: the BIOS's own mode call (DSDT WSAA 0xFB00/0x0300) also sets the NVIDIA Dynamic Boost values (NPCF
-/// CTGP/DTGP/ATPP...) and the DPTF variables (ODV0/ODV1) and notifies NPCF and IETM; user space cannot run that ACPI
-/// method, so on Linux the GPU's power ceiling does not follow the mode (planned for the L4 kernel module).
+/// With our excalibur_ec module loaded the mode goes through the BIOS's own call instead (DSDT WSAA 0xFB00/0x0300, as on
+/// Windows), which besides EC 0x95 sets the NVIDIA Dynamic Boost values (NPCF CTGP/DTGP/ATPP...) and the DPTF variables
+/// (ODV0/ODV1) and notifies NPCF and IETM. Without it user space cannot run that ACPI method, and the GPU's power ceiling
+/// does not follow the mode.
 /// </summary>
 internal sealed class LinuxPowerHardware(
     LinuxEc? ec,
@@ -21,6 +22,7 @@ internal sealed class LinuxPowerHardware(
     string platformProfilePath = "/sys/firmware/acpi/platform_profile") : IPowerHardware
 {
     public const byte EcPowerModeRegister = 0x95;
+    private const ushort PowerModeFunction = 0x0300;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>The long-term CPU limit each mode gives on Windows (the BIOS's values, measured on the G870).</summary>
@@ -44,6 +46,21 @@ internal sealed class LinuxPowerHardware(
     private void WriteMode(PowerMode mode)
     {
         bool wroteProfile = TryWritePlatformProfile(mode);
+        if (ec?.Module is { } module)
+        {
+            try
+            {
+                var command = Excalibur.Core.Hardware.SmiCommand.Set(PowerModeFunction);
+                command.A2 = (uint)mode;
+                module.Call(command);
+                return;
+            }
+            catch (IOException ex)
+            {
+                if (!wroteProfile) throw new PowerException($"BIOS power mode call failed ({ex.Message}).", ex);
+                return;
+            }
+        }
         if (ec is not null)
         {
             try

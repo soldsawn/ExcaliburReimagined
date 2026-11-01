@@ -108,9 +108,12 @@ internal sealed class Daemon
         }
         else if (LinuxEc.Open(out _problem) is { } ec)
         {
+            Log(ec.Module is not null ? "ec: through the excalibur_ec module (BIOS commands available)" : "ec: through ec_sys");
             hardware = new LinuxFanHardware(ec, Log);
             powerHardware = _linuxPower = new LinuxPowerHardware(ec, new LinuxRapl(), new GpuLimiter(new NvmlGpuClocks()));
-            smiChannel = _smi = new LinuxEcSmiChannel(ec, Log);
+            // The light key's level is read from the EC either way; the light itself goes through the BIOS when the module is there.
+            _smi = new LinuxEcSmiChannel(ec, Log);
+            smiChannel = ec.Module is { } module ? new ModuleSmiChannel(module) : _smi;
         }
         else
         {

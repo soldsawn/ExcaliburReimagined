@@ -8,4 +8,7 @@ if [ -d /run/systemd/system ]; then
   [ "$1" = remove ] && systemctl disable $APP.service >/dev/null 2>&1 || true
 fi
 [ -x /opt/$APP/$APP ] && /opt/$APP/$APP release 2>/dev/null || true
+# This version's module (an upgrade's postinst adds its own).
+modprobe -r excalibur_ec 2>/dev/null || true
+command -v dkms >/dev/null 2>&1 && dkms remove -m excalibur-ec -v @VERSION@ --all >/dev/null 2>&1 || true
 exit 0

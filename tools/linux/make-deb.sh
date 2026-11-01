@@ -20,14 +20,18 @@ mkdir -p "$ROOT/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$ROOT/etc/modprobe.d" "$ROOT/etc/modules-load.d"
 echo "options ec_sys write_support=1" > "$ROOT/etc/modprobe.d/$APP.conf"
 echo "ec_sys" > "$ROOT/etc/modules-load.d/$APP.conf"
+# The excalibur_ec module's source for DKMS (postinst builds it).
+MOD="$ROOT/usr/src/excalibur-ec-$VERSION"
+install -D -m 644 -t "$MOD" "$HERE/excalibur-ec/excalibur_ec.c" "$HERE/excalibur-ec/excalibur_ec.h" "$HERE/excalibur-ec/Makefile"
+sed "s/@VERSION@/$VERSION/" "$HERE/excalibur-ec/dkms.conf" > "$MOD/dkms.conf"
 
 mkdir -p "$ROOT/DEBIAN"
 SIZE=$(du -sk --exclude=DEBIAN "$ROOT" | cut -f1)
 sed -e "s/@VERSION@/$VERSION/" -e "s/@SIZE@/$SIZE/" "$HERE/deb/control" > "$ROOT/DEBIAN/control"
 printf '/etc/modprobe.d/%s.conf\n/etc/modules-load.d/%s.conf\n' "$APP" "$APP" > "$ROOT/DEBIAN/conffiles"
-for s in preinst postinst prerm postrm; do install -m 755 "$HERE/deb/$s" "$ROOT/DEBIAN/$s"; done
+for s in preinst postinst prerm postrm; do sed "s/@VERSION@/$VERSION/g" "$HERE/deb/$s" > "$ROOT/DEBIAN/$s"; chmod 755 "$ROOT/DEBIAN/$s"; done
 # Linux line endings, whatever git checked out on Windows (a CR breaks the scripts' first line).
-find "$ROOT/DEBIAN" "$ROOT/lib" "$ROOT/usr/lib" "$ROOT/usr/share/applications" -type f -exec sed -i 's/\r$//' {} +
+find "$ROOT/DEBIAN" "$ROOT/lib" "$ROOT/usr/lib" "$ROOT/usr/share/applications" "$MOD" -type f -exec sed -i 's/\r$//' {} +
 
 dpkg-deb --root-owner-group --build "$ROOT" "$OUT" >/dev/null
 echo "deb: $OUT ($(du -h "$OUT" | cut -f1))"

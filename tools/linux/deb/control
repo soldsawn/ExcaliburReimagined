@@ -4,6 +4,7 @@ Architecture: amd64
 Maintainer: soldsawn <https://github.com/soldsawn/ExcaliburReimagined>
 Installed-Size: @SIZE@
 Depends: libx11-6, libice6, libsm6, libfontconfig1
+Recommends: dkms
 Section: utils
 Priority: optional
 Homepage: https://github.com/soldsawn/ExcaliburReimagined

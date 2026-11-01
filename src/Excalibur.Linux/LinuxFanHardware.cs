@@ -6,7 +6,8 @@ namespace Excalibur.Linux;
 /// The fans on Linux (L1). From the EC (ec_sys): targets 0x2C/0x2D, the percent the EC drives each fan at 0x2E/0x2F, Fn+1
 /// at 0xC3, the GPU temperature at 0xB7 (VGAT, as the BIOS's GET 0x0200 reads it), the firmware version at 0xFA.
 /// The CPU temperature from the kernel's coretemp sensor (the CPU itself, like the MSR on Windows). The fan speeds from the
-/// EC's memory window (0xFE400530, where the BIOS reads them; /dev/mem), else from the percent. Targets are read back after
+/// BIOS's sensor command (GET 0x0200 A4/A5, as on Windows) when our excalibur_ec module is loaded, else from the EC's memory
+/// window (0xFE400530, where the BIOS reads them; /dev/mem), else from the percent. Targets are read back after
 /// writing: on Linux the kernel queues EC access, so this is safe here.
 /// </summary>
 internal sealed class LinuxFanHardware(LinuxEc ec, Action<string>? log = null) : IFanHardware
@@ -96,9 +97,16 @@ internal sealed class LinuxFanHardware(LinuxEc ec, Action<string>? log = null) :
         return null;
     }
 
-    /// <summary>Both fan speeds from the EC's memory window; null (and not tried again) when /dev/mem refuses.</summary>
+    /// <summary>Both fan speeds from the BIOS through the module, else from the EC's memory window; null (and the memory
+    /// not tried again) when /dev/mem refuses.</summary>
     private (int Cpu, int Gpu)? Rpm()
     {
+        if (ec.Module is { } module)
+        {
+            var sensors = module.Call(Excalibur.Core.Hardware.SmiCommand.Get(0x0200));
+            if (sensors.A4 > MaxRpm || sensors.A5 > MaxRpm) throw new IOException($"Implausible fan speeds {sensors.A4}/{sensors.A5}.");
+            return ((int)sensors.A4, (int)sensors.A5);
+        }
         if (!_rpmFromMemory) return null;
         try
         {

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Excalibur.Core\Excalibur.Core.csproj" />
     <Compile Include="..\..\src\Excalibur.Linux\Linux*.cs" Link="Linux\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\Excalibur.Linux\ExcaliburEcDevice.cs" Link="Linux\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
