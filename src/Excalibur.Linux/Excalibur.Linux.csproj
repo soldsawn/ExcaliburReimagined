@@ -28,6 +28,14 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\Excalibur.App\Assets\app-256.png" LogicalName="app-256.png" />
+    <!-- The window's fonts (open licences in Ui/Fonts) and theme. -->
+    <AvaloniaResource Include="Ui\Fonts\*.ttf" />
+    <AvaloniaResource Include="Ui\Theme.axaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Windows window's plain-C# parts, shared so both windows word things the same way. -->
+    <Compile Include="..\Excalibur.App\Texts.cs;..\Excalibur.App\ProfileCatalog.cs;..\Excalibur.App\Tray\ProfileNames.cs;..\Excalibur.App\SystemEventLog.cs" Link="App\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,276 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The Windows window's Styles.xaml in Avalonia: same keys as classes (TextBlock.Caption, RadioButton.Segment...),
+         colours from Palette (DynamicResource), fonts embedded (Ui/Fonts: Selawik for Segoe UI, Barlow Semi Condensed for
+         Bahnschrift, Fluent System Icons for Segoe Fluent Icons, Cascadia Mono). -->
+
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="Background" Value="{DynamicResource Bg}" />
+    </Style>
+
+    <!-- Cards: plain Borders (banners) and BracketCards share Border's properties. -->
+    <Style Selector=":is(Decorator).CardBox">
+        <Setter Property="Border.Background" Value="{DynamicResource Card}" />
+        <Setter Property="Border.BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="Border.BorderThickness" Value="1" />
+        <Setter Property="Border.CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="18,14" />
+    </Style>
+
+    <Style Selector="TextBlock.PageTitle">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+    <Style Selector="TextBlock.CardTitle">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+    <Style Selector="TextBlock.Kicker">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+    </Style>
+    <Style Selector="TextBlock.Caption">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.Body">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.BigValue">
+        <Setter Property="FontFamily" Value="{DynamicResource NumberFont}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="46" />
+        <Setter Property="Foreground" Value="{DynamicResource Value}" />
+    </Style>
+    <Style Selector="TextBlock.Mono">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+    </Style>
+    <Style Selector="TextBlock.Icon">
+        <Setter Property="FontFamily" Value="{DynamicResource IconFont}" />
+    </Style>
+
+    <!-- Sidebar navigation: hover tint, and an accent pill + brighter row when selected. -->
+    <Style Selector="RadioButton.NavButton">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Height" Value="38" />
+        <Setter Property="Margin" Value="8,1" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Bg" Background="Transparent" CornerRadius="6">
+                    <Grid>
+                        <Border Name="Pill" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
+                                Background="{DynamicResource Accent}" IsVisible="False" />
+                        <StackPanel Orientation="Horizontal" Margin="14,0,8,0" VerticalAlignment="Center">
+                            <TextBlock Text="{TemplateBinding Tag}" FontFamily="{DynamicResource IconFont}"
+                                       FontSize="18" Width="22" VerticalAlignment="Center" />
+                            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                              Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.NavButton:pointerover /template/ Border#Bg">
+        <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+    <Style Selector="RadioButton.NavButton:checked /template/ Border#Bg">
+        <Setter Property="Background" Value="{DynamicResource Card}" />
+    </Style>
+    <Style Selector="RadioButton.NavButton:checked /template/ Border#Pill">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!-- Profile / duration segments: outlined and tinted in the accent when selected. -->
+    <Style Selector="RadioButton.Segment">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="38" />
+        <Setter Property="MinWidth" Value="96" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Bg" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Border}"
+                        BorderThickness="1" CornerRadius="6" Padding="14,0">
+                    <Grid>
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Border Name="Glow" Height="2" Width="24" CornerRadius="1" VerticalAlignment="Bottom"
+                                Margin="0,0,0,3" Background="{DynamicResource Accent}" IsVisible="False" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.Segment:pointerover /template/ Border#Bg">
+        <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+    <Style Selector="RadioButton.Segment:checked /template/ Border#Bg">
+        <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="RadioButton.Segment:checked /template/ Border#Glow">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="RadioButton.Segment:disabled">
+        <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <!-- Buttons: plain (card), accent, danger. -->
+    <Style Selector="Button.PlainButton, Button.AccentButton, Button.DangerButton">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="Background" Value="{DynamicResource Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Bg" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.AccentButton">
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="Button.DangerButton">
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+        <Setter Property="Background" Value="{DynamicResource Bad}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Bad}" />
+    </Style>
+    <Style Selector="Button.PlainButton:pointerover /template/ Border#Bg, Button.AccentButton:pointerover /template/ Border#Bg, Button.DangerButton:pointerover /template/ Border#Bg">
+        <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="Button.PlainButton:disabled, Button.AccentButton:disabled, Button.DangerButton:disabled">
+        <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <!-- Check box: framed square, accent when ticked (every CheckBox). -->
+    <Style Selector="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Orientation="Horizontal" Background="Transparent">
+                    <Border Name="Box" Width="18" Height="18" CornerRadius="4" Background="{DynamicResource Card}"
+                            BorderBrush="{DynamicResource SubText}" BorderThickness="1.2" VerticalAlignment="Center">
+                        <TextBlock Name="Tick" Text="&#xF293;" FontFamily="{DynamicResource IconFont}" FontSize="12" IsVisible="False"
+                                   Foreground="{DynamicResource OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Margin="9,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Border#Box">
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="CheckBox:checked /template/ TextBlock#Tick">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="CheckBox:pointerover /template/ Border#Box">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="CheckBox:disabled">
+        <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <!-- Drop-down list: framed box with a chevron, themed popup and rows. -->
+    <Style Selector="ComboBox.ThemedCombo">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="Background" Value="{DynamicResource Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="MinWidth" Value="170" />
+        <Setter Property="Padding" Value="12,0,32,0" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="ComboBox.ThemedCombo:pointerover /template/ Border#Background">
+        <Setter Property="Background" Value="{DynamicResource CardHover}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+    </Style>
+    <Style Selector="ComboBox.ThemedCombo /template/ Border#PopupBorder">
+        <Setter Property="Background" Value="{DynamicResource Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="ComboBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="Padding" Value="12,7" />
+    </Style>
+    <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+    <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    </Style>
+
+    <!-- Thin slider: accent fill to the left of a round thumb. -->
+    <Style Selector="Slider.ThinSlider">
+        <Setter Property="IsSnapToTickEnabled" Value="True" />
+        <Setter Property="TickFrequency" Value="5" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+        <Setter Property="Background" Value="{DynamicResource Border}" />
+    </Style>
+    <Style Selector="Slider.ThinSlider /template/ RepeatButton#PART_DecreaseButton">
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="Slider.ThinSlider /template/ RepeatButton#PART_IncreaseButton">
+        <Setter Property="Background" Value="{DynamicResource Border}" />
+    </Style>
+    <Style Selector="Slider.ThinSlider /template/ Thumb">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Ellipse Width="18" Height="18" Fill="{DynamicResource Text}" Stroke="{DynamicResource Accent}" StrokeThickness="4" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource Card}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+    </Style>
+
+    <Style Selector="TextBox">
+        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        <Setter Property="Background" Value="{DynamicResource Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Text}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource AccentSoft}" />
+    </Style>
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement, TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource CardHover}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+</Styles>

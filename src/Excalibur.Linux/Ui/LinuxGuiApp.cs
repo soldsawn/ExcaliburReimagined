@@ -6,24 +6,28 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
-using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
+using Avalonia.Markup.Xaml.Styling;
+using Excalibur.Core.Fan.Ipc;
 using Excalibur.Core.Power;
+using Excalibur.Core.Settings;
 
 namespace Excalibur.Linux.Ui;
 
 /// <summary>
-/// Avalonia desktop application for Linux (L3): hosts <see cref="LinuxMainWindow"/> and the system tray icon
-/// (<see cref="TrayIcon"/>), and supports headless Skia PNG snapshot rendering (<c>--snapshot &lt;dir&gt;</c>).
+/// The Linux window application: <see cref="MainWindow"/> (the Windows window's pages in Avalonia), the tray icon where the
+/// desktop shows one, one window per user, and headless PNG snapshots for development (<c>gui --snapshot &lt;dir&gt;</c>).
 /// </summary>
 internal sealed class LinuxGuiApp : Application
 {
-    private static LinuxGuiClient? _client;
+    private static LinuxPaths? _paths;
     private static string? _snapshotDir;
     private static bool _headless;
 
-    private LinuxMainWindow? _window;
+    private MainWindow? _window;
+    private FanConnection? _connection;
+    private UserSettingsStore? _userSettings;
     private NativeMenuItem? _tempItem;
 
     public static bool HasDisplaySession() =>
@@ -44,44 +48,44 @@ internal sealed class LinuxGuiApp : Application
         return 0;
     }
 
-    public static int Run(LinuxPaths paths, string version, string? snapshotDir = null)
+    public static int Run(LinuxPaths paths, string? snapshotDir = null)
     {
         // One window per user: a second launch (menu, terminal) brings the running one forward instead.
         if (snapshotDir is null && TryShowRunningInstance()) return 0;
-        _client = new LinuxGuiClient(paths, version);
+        _paths = paths;
         _snapshotDir = snapshotDir;
         _headless = snapshotDir is not null && !HasDisplaySession();
 
         var builder = AppBuilder.Configure<LinuxGuiApp>();
         if (_headless)
-        {
-            builder.UseSkia()
-                   .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
-        }
+            builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
         else
-        {
-            builder.UsePlatformDetect()
-                   .UseSkia();
-        }
+            builder.UsePlatformDetect().UseSkia();
         return builder.StartWithClassicDesktopLifetime([]);
     }
 
     public override void Initialize()
     {
-        RequestedThemeVariant = ThemeVariant.Dark;
         Styles.Add(new FluentTheme());
+        Styles.Add(new StyleInclude(new Uri("avares://excalibur-reimagined/")) { Source = new Uri("avares://excalibur-reimagined/Ui/Theme.axaml") });
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && _client is not null)
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && _paths is not null)
         {
+            // The appearance (theme, accent, number font, corner marks) is the Windows window's settings file, under ~/.config.
+            _userSettings = new UserSettingsStore();
+            Palette.Apply(Resources, _userSettings.Current);
+            _userSettings.Changed += s => Dispatcher.UIThread.Post(() => Palette.Apply(Resources, s));
+
+            _connection = new FanConnection(_paths);
             using var iconStream = OpenEmbeddedIcon();
             // Hide to the tray only where the desktop shows tray icons (GNOME without its AppIndicator extension does not);
             // otherwise closing the window would leave it running with no way back.
             bool hasTray = !_headless && TrayHostAvailable() && SetupTrayIcon(desktop);
             if (_snapshotDir is null) ListenForOtherInstances();
-            _window = new LinuxMainWindow(_client, hideToTrayOnClose: hasTray && _snapshotDir is null, iconStream);
+            _window = new MainWindow(_connection, iconStream) { HideOnClose = hasTray && _snapshotDir is null };
             desktop.MainWindow = _window;
 
             if (_snapshotDir is { } dir)
@@ -98,49 +102,36 @@ internal sealed class LinuxGuiApp : Application
 
     private bool SetupTrayIcon(IClassicDesktopStyleApplicationLifetime desktop)
     {
-        if (_client is null) return false;
+        if (_connection is not { } connection) return false;
         try
         {
             using var iconStream = OpenEmbeddedIcon();
             if (iconStream is null) return false;
 
             _tempItem = new NativeMenuItem("Excalibur Reimagined — Bağlanıyor...") { IsEnabled = false };
-            var openItem = new NativeMenuItem("Pencereyi Aç");
+            var openItem = new NativeMenuItem("Pencereyi aç");
             openItem.Click += (_, _) => ShowMainWindow();
 
             var profileMenu = new NativeMenu();
-            foreach (var (key, label) in new[]
+            foreach (var (key, label, _) in Excalibur.App.Tray.ProfileNames.All)
             {
-                ("Quiet", "Sessiz"),
-                ("Balanced", "Dengeli"),
-                ("Performance", "Performans"),
-                ("EcAuto", "Orijinal (EC)"),
-            })
-            {
-                string profKey = key;
                 var item = new NativeMenuItem(label);
-                item.Click += (_, _) => _client.Send(new LinuxRequest("setProfile", Profile: profKey));
+                item.Click += async (_, _) => await connection.SendAsync(new FanRequest("setProfile", Profile: key));
                 profileMenu.Items.Add(item);
             }
 
             var powerMenu = new NativeMenu();
-            foreach (var (mode, label) in new[]
+            foreach (var (mode, label) in new[] { (PowerMode.Office, "Ofis"), (PowerMode.Gaming, "Oyun"), (PowerMode.HighPerformance, "Yüksek performans") })
             {
-                (PowerMode.Office, "Ofis"),
-                (PowerMode.Gaming, "Oyun"),
-                (PowerMode.HighPerformance, "Yüksek performans"),
-            })
-            {
-                PowerMode target = mode;
                 var item = new NativeMenuItem(label);
-                item.Click += (_, _) => _client.Send(new LinuxRequest("setPowerMode", PowerMode: target));
+                item.Click += async (_, _) => await connection.SendAsync(new FanRequest("setPowerMode", PowerMode: mode));
                 powerMenu.Items.Add(item);
             }
 
-            var exitItem = new NativeMenuItem("Çıkış (Servis Arkada Çalışmaya Devam Eder)");
+            var exitItem = new NativeMenuItem("Çıkış (fan hizmeti çalışmaya devam eder)");
             exitItem.Click += (_, _) =>
             {
-                _window?.ExitApplication();
+                _window?.Exit();
                 desktop.Shutdown(0);
             };
 
@@ -151,8 +142,8 @@ internal sealed class LinuxGuiApp : Application
                     _tempItem,
                     new NativeMenuItemSeparator(),
                     openItem,
-                    new NativeMenuItem("Fan Profili") { Menu = profileMenu },
-                    new NativeMenuItem("Güç Modu") { Menu = powerMenu },
+                    new NativeMenuItem("Fan profili") { Menu = profileMenu },
+                    new NativeMenuItem("Güç modu") { Menu = powerMenu },
                     new NativeMenuItemSeparator(),
                     exitItem,
                 },
@@ -166,21 +157,20 @@ internal sealed class LinuxGuiApp : Application
                 IsVisible = true,
             };
             tray.Clicked += (_, _) => ShowMainWindow();
-
             TrayIcon.SetIcons(this, [tray]);
 
-            _client.Changed += () => Dispatcher.UIThread.Post(() =>
+            connection.Changed += () =>
             {
-                if (_client.Status is { } s)
-                {
-                    string summary = $"CPU {s.CpuTempC?.ToString() ?? "-"} °C · GPU {s.GpuTempC?.ToString() ?? "-"} °C · {LinuxMainWindow.ProfileLabel(s.Profile)}";
-                    if (_tempItem is not null) _tempItem.Header = summary;
-                    tray.ToolTipText = $"Excalibur Reimagined — {summary}";
-                }
-            });
+                if (connection.Status is not { } s) return;
+                string summary = $"İşlemci {s.CpuTempC?.ToString() ?? "-"} °C · Ekran kartı {s.GpuTempC?.ToString() ?? "-"} °C · {Excalibur.App.Tray.ProfileNames.Label(s.Profile)}";
+                if (_tempItem is not null) _tempItem.Header = summary;
+                tray.ToolTipText = $"Excalibur Reimagined — {summary}";
+            };
+            // The window polls only while it exists; the tray's line needs it running even while the window is hidden.
+            connection.Start();
             return true;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return false;
         }

@@ -27,66 +27,6 @@ internal sealed record LinuxPaths(string Data, string Logs, string Socket)
     public string Battery => Path.Combine(Data, "battery");
 }
 
-/// <summary>A request on the control socket: one JSON line.</summary>
-internal sealed record LinuxRequest(
-    string Cmd,
-    string? Profile = null,
-    PowerMode? PowerMode = null,
-    CpuLimit? CpuLimit = null,
-    int? GpuLimitWatts = null,
-    CustomProfile? CustomProfile = null,
-    PowerAutomation? Automation = null,
-    KeyboardLighting? Lighting = null,
-    HistoryMode? HistoryMode = null,
-    int? BatteryReadMinutes = null,
-    int? CpuPercent = null,
-    int? GpuPercent = null,
-    int? Minutes = null,
-    bool? OnBattery = null);
-
-internal sealed record LinuxProfileDto(string Name, bool BuiltIn, IReadOnlyList<CurvePoint>? Cpu, IReadOnlyList<CurvePoint>? Gpu);
-
-internal sealed record LinuxPowerDto(
-    PowerMode? Mode,
-    PowerMode? Preferred,
-    bool OnBattery,
-    int? BatteryPercent,
-    PowerLock Lock,
-    int? CpuWatts,
-    int? CpuPl1Watts,
-    int? CpuPl2Watts,
-    CpuLimit? CpuLimit,
-    int? GpuPowerWatts,
-    int? GpuTgpWatts,
-    int? GpuLimitWatts,
-    int? GpuLockMhz,
-    PowerAutomation Automation);
-
-internal sealed record LinuxBatteryDto(
-    BatteryLive? Live,
-    double? WattsNow,
-    BatteryHealth? Health,
-    BatteryAverage? LastInterval,
-    int ReadMinutes,
-    IReadOnlyList<BatteryEstimate> Estimates,
-    IReadOnlyList<BatteryEstimate> IdleEstimates);
-
-internal sealed record LinuxHistoryDto(
-    HistoryMode Mode,
-    int RangeMinutes,
-    HistorySummary? Summary);
-
-/// <summary>The answer: the service's state as the command line prints it.</summary>
-internal sealed record LinuxStatus(
-    bool Ok, string? Error, string Mode, string Profile, string? EcVersion, bool Simulated, string? Problem,
-    int? CpuTempC, int? GpuTempC, int? CpuRpm, int? GpuRpm, int? CpuPercent, int? GpuPercent, bool HoldsFans,
-    string? Trial, IReadOnlyList<string> Events,
-    LinuxPowerDto? Power = null,
-    KeyboardLighting? Lighting = null,
-    IReadOnlyList<LinuxProfileDto>? Profiles = null,
-    LinuxBatteryDto? Battery = null,
-    LinuxHistoryDto? History = null);
-
 /// <summary>
 /// The fan, power, lighting, battery and history service on Linux (L1 + L2): one tick a second of the same
 /// <see cref="FanControlLoop"/> as on Windows (curves, safety floors, hot rule, EC version list and trial), plus
@@ -96,11 +36,6 @@ internal sealed record LinuxStatus(
 /// </summary>
 internal sealed class Daemon
 {
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     private static readonly TimeSpan ResumeDelay = TimeSpan.FromSeconds(5);
 
     private readonly LinuxPaths _paths;
@@ -122,6 +57,7 @@ internal sealed class Daemon
     private readonly FakeFanHardware? _fake;
     private readonly SimulatedPowerHardware? _simPower;
     private readonly string? _problem;
+    private readonly FanCommandHandler? _commands;
     private readonly object _gate = new();
     private bool _asleep;
     private DateTimeOffset? _resumeAt;
@@ -203,6 +139,12 @@ internal sealed class Daemon
             TrustedEcVersions = s.TrustedEcVersions.Contains(v) ? s.TrustedEcVersions : [.. s.TrustedEcVersions, v],
             Profile = profile.Name,
         }, out _);
+        _settings.Changed += s => _history.Mode = s.History;
+
+        // The same commands as the Windows service's pipe (no Casper clean-up, no "shutdown": systemd owns the service).
+        if (_power is not null && _lighting is not null)
+            _commands = new FanCommandHandler(_loop, simulate, DateTimeOffset.Now, _settings, _history, _power, _lighting, _battery,
+                _batteryRecorder, _batteryEstimates, _switcher, _log, warn: Log);
     }
 
     public static int Run(bool simulate)
@@ -346,258 +288,60 @@ internal sealed class Daemon
         while (!stop.IsCancellationRequested)
         {
             var client = await listener.AcceptAsync(stop);
-            _ = Task.Run(() => Handle(client));
+            _ = Task.Run(() => Serve(client, stop));
         }
     }
 
-    private void Handle(Socket client)
+    /// <summary>As the Windows pipe: one JSON line in, one out, any number of exchanges per connection.</summary>
+    private void Serve(Socket client, CancellationToken stop)
     {
-        using (client)
-        using (var stream = new NetworkStream(client))
-        using (var reader = new StreamReader(stream, Encoding.UTF8))
-        using (var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true })
+        try
         {
-            LinuxStatus answer;
-            try
+            using (client)
+            using (var stream = new NetworkStream(client))
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true })
             {
-                var req = JsonSerializer.Deserialize<LinuxRequest>(reader.ReadLine() ?? "", Json);
-                answer = req?.Cmd is null ? Status("boş istek") : Execute(req);
+                while (!stop.IsCancellationRequested && reader.ReadLine() is { } line)
+                    writer.WriteLine(JsonSerializer.Serialize(Handle(line), FanPipe.Json));
             }
-            catch (JsonException) { answer = Status("geçersiz istek"); }
-            writer.WriteLine(JsonSerializer.Serialize(answer, Json));
         }
+        catch (IOException) { } // the client went away
     }
 
-    private LinuxStatus Execute(LinuxRequest req)
+    private FanResponse Handle(string line)
     {
+        FanRequest? req = null;
+        try { req = JsonSerializer.Deserialize<FanRequest>(line, FanPipe.Json); }
+        catch (JsonException) { }
         var now = DateTimeOffset.Now;
-        string cmd = req.Cmd.ToLowerInvariant();
-        if (cmd == "guistatus")
+        switch (req?.Cmd?.ToLowerInvariant())
         {
-            if (_battery.Health is null) _battery.ReadHealth();
-            return Status(null, includeProfiles: true, includeBattery: true, historyMinutes: Math.Clamp(req.Minutes ?? 60, 1, 43200));
-        }
-        if (cmd == "battery")
-        {
-            if (_battery.Health is null) _battery.ReadHealth();
-            return Status(null, includeBattery: true);
-        }
-        if (cmd == "setbatteryinterval")
-        {
-            if (req.BatteryReadMinutes is not { } mins) return Status("pil okuma aralığı gerekli", includeBattery: true);
-            var err = _settings.Update(s => s with { BatteryReadMinutes = mins }, out _);
-            if (err.Count > 0) return Status(string.Join("; ", err), includeBattery: true);
-            _batteryRecorder.Interval = TimeSpan.FromMinutes(mins);
-            return Status(null, includeBattery: true);
-        }
-        if (cmd == "history")
-            return Status(null, historyMinutes: Math.Clamp(req.Minutes ?? 60, 1, 43200));
-        if (cmd == "sethistorymode")
-        {
-            if (req.HistoryMode is not { } hm || !Enum.IsDefined(hm)) return Status("geçersiz geçmiş modu", historyMinutes: 60);
-            var err = _settings.Update(s => s with { History = hm }, out _);
-            if (err.Count > 0) return Status(string.Join("; ", err), historyMinutes: 60);
-            _history.Mode = hm;
-            Log($"history mode set to {hm}");
-            return Status(null, historyMinutes: 60);
-        }
-
-        if (_loop is null) return Status(cmd == "status" ? null : _problem);
-        switch (cmd)
-        {
-            case "status":
-                return Status(null);
-
-            case "setprofile":
-                if (req.Profile is null || _settings.Current.FindProfile(req.Profile) is not { } profile)
-                    return Status($"bilinmeyen profil: {req.Profile}");
-                lock (_gate) _switcher!.Switch(profile, now, "cli");
-                DrainEvents();
-                return Status(null);
-
-            case "setmanual":
-                if (req.CpuPercent is not { } cpu || req.GpuPercent is not { } gpu || req.Minutes is not { } minutes)
-                    return Status("manuel hız için yüzdeler ve dakika gerekli");
-                try
-                {
-                    lock (_gate) _loop.SetManual(cpu, gpu, TimeSpan.FromMinutes(minutes), now, "cli");
-                    DrainEvents();
-                    return Status(null);
-                }
-                catch (ArgumentException ex) { return Status(ex.Message); }
-
-            case "profiles":
-                return Status(null, includeProfiles: true);
-
-            case "saveprofile":
-                return SaveProfile(req.CustomProfile, now);
-
-            case "deleteprofile":
-                return DeleteProfile(req.Profile, now);
-
-            case "setpowermode":
-                if (_power is null || req.PowerMode is not { } mode || !Enum.IsDefined(mode))
-                    return Status("geçersiz güç modu");
-                var modeRes = _power.SetMode(mode);
-                try { _power.Poll(); } catch { }
-                return Status(modeRes.Ok ? null : TranslatePowerError(modeRes));
-
-            case "setcpulimit":
-                if (_power is null) return Status("güç yönetimi kullanılamıyor");
-                var cpuRes = _power.SetCpuLimit(req.CpuLimit);
-                try { _power.Poll(); } catch { }
-                return Status(cpuRes.Ok ? null : TranslatePowerError(cpuRes));
-
-            case "setgpulimit":
-                if (_power is null) return Status("güç yönetimi kullanılamıyor");
-                var gpuRes = _power.SetGpuLimit(req.GpuLimitWatts);
-                try { _power.Poll(); } catch { }
-                return Status(gpuRes.Ok ? null : TranslatePowerError(gpuRes));
-
-            case "setautomation":
-                if (req.Automation is null) return Status("otomasyon ayarı eksik");
-                var autoErrors = _settings.Update(s => s with { PowerAutomation = req.Automation }, out _);
-                if (autoErrors.Count > 0) return Status(string.Join("; ", autoErrors));
-                Log($"power automation updated: enabled={req.Automation.Enabled}, ac={req.Automation.OnAc.Mode?.ToString() ?? "-"}/{req.Automation.OnAc.FanProfile ?? "-"}, bat={req.Automation.OnBattery.Mode?.ToString() ?? "-"}/{req.Automation.OnBattery.FanProfile ?? "-"}");
-                return Status(null);
-
-            case "setlighting":
-                if (_lighting is null || req.Lighting is null) return Status("klavye ışığı ayarı eksik");
-                var lightErrors = _lighting.Set(req.Lighting);
-                return Status(lightErrors.Count > 0 ? string.Join("; ", lightErrors) : null);
-
-            case "simpower":
-                if (!_simulate || _simPower is null || req.OnBattery is not { } onBat)
-                    return Status("sim-power yalnız --simulate modunda çalışır");
-                _simPower.OnBattery = onBat;
-                if (_simBattery is not null) _simBattery.OnBattery = onBat;
-                _power?.Poll();
-                SafeTickBattery();
-                DrainEvents();
-                return Status(null);
-
-            case "trial":
-                lock (_gate) _loop.StartEcTrial(now);
-                DrainEvents();
-                return Status(null);
-
-            case "sleep":
+            // systemd's sleep hook (excalibur-reimagined sleep pre/post).
+            case "sleep" when _loop is not null:
                 _resumeAt = null;
                 lock (_gate) { _asleep = true; _loop.Stop(now); }
                 Log("suspending: fans handed to the EC");
-                return Status(null);
-
-            case "wake":
+                return new FanResponse(true);
+            case "wake" when _loop is not null:
                 lock (_gate) { _asleep = false; _loop.Start(SavedProfile(), now); }
                 _resumeAt = now + ResumeDelay;
                 Log("resumed: fan control restarted");
-                return Status(null);
-
-            default:
-                return Status($"bilinmeyen komut: {req.Cmd}");
+                return new FanResponse(true);
+            // --simulate only: pretend the charger was unplugged / plugged in.
+            case "simpowerbattery" or "simpowerac" when _simPower is not null:
+                bool onBattery = req!.Cmd.Equals("simPowerBattery", StringComparison.OrdinalIgnoreCase);
+                _simPower.OnBattery = onBattery;
+                if (_simBattery is not null) _simBattery.OnBattery = onBattery;
+                _power?.Poll();
+                SafeTickBattery();
+                break;
         }
-    }
-
-    private LinuxStatus SaveProfile(CustomProfile? definition, DateTimeOffset now)
-    {
-        if (definition is null) return Status("profil tanımı eksik", includeProfiles: true);
-        var problems = definition.Validate();
-        if (problems.Count > 0) return Status(string.Join("; ", problems), includeProfiles: true);
-        var errors = _settings.Update(s => ProfileLibrary.Save(s, definition), out _);
-        if (errors.Count > 0) return Status(string.Join("; ", errors), includeProfiles: true);
-        string name = definition.Name.Trim();
-        Log($"custom profile saved: {name}");
-        lock (_gate)
-        {
-            if (_loop is not null && string.Equals(_loop.Status.Profile, name, StringComparison.OrdinalIgnoreCase)
-                && _settings.Current.FindProfile(name) is { } edited)
-                _loop.SetProfile(edited, now, FanSource.Service);
-        }
+        // Without the EC (Secure Boot, no ec_sys) there is no fan control to talk to; the reason goes to the window.
+        if (_commands is null) return new FanResponse(false, _problem ?? "EC is not available.", Code: "ec_unavailable");
+        var response = _commands.Handle(line);
         DrainEvents();
-        return Status(null, includeProfiles: true);
-    }
-
-    private LinuxStatus DeleteProfile(string? name, DateTimeOffset now)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return Status("silinecek profil adı gerekli", includeProfiles: true);
-        if (FanProfile.FindBuiltIn(name) is not null) return Status($"'{name}' yerleşik bir profil, silinemez", includeProfiles: true);
-        if (!_settings.Current.CustomProfiles.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
-            return Status($"'{name}' adında özel bir profil yok", includeProfiles: true);
-        lock (_gate)
-        {
-            if (_loop is not null && string.Equals(_loop.Status.Profile, name, StringComparison.OrdinalIgnoreCase))
-                _switcher!.Switch(FanProfile.Balanced, now, FanSource.Service);
-        }
-        var errors = _settings.Update(s => ProfileLibrary.Delete(s, name), out _);
-        if (errors.Count > 0) return Status(string.Join("; ", errors), includeProfiles: true);
-        Log($"custom profile deleted: {name}");
-        DrainEvents();
-        return Status(null, includeProfiles: true);
-    }
-
-    private static string TranslatePowerError(PowerResult res) => res.Code switch
-    {
-        "power_battery" => "Pilde yalnız Ofis modu kullanılabilir; Oyun ve Yüksek performans için şarj aletini takın.",
-        "power_usbc" => "Bu USB-C adaptörü hızlı modlar için zayıf; kutudan çıkan adaptörü kullanın.",
-        "cpu_limit_invalid" => $"Geçersiz işlemci sınırı: {res.Message} (uzun süreli 15–55 W, kısa süreli 30–115 W, 5'in katı ve kısa ≥ uzun olmalı).",
-        "cpu_limit_failed" => "İşlemci güç sınırı yazılamadı (intel-rapl bulunamadı veya yetki yok).",
-        "gpu_limit_invalid" => $"Geçersiz ekran kartı sınırı: {res.Message} (30–175 W, 5'in katı olmalı).",
-        "gpu_limit_failed" => "Ekran kartı saat kilidi uygulanamadı (NVIDIA sürücüsü/NVML yanıt vermedi).",
-        _ => res.Message ?? "Güç ayarı uygulanamadı.",
-    };
-
-    private LinuxStatus Status(string? error, bool includeProfiles = false, bool includeBattery = false, int? historyMinutes = null)
-    {
-        FanStatus? s;
-        IReadOnlyList<string> events;
-        lock (_gate)
-        {
-            // The loop's own status: right after a command it already shows the change (the last tick's may not).
-            s = _loop?.Status ?? _last;
-            events = _loop?.Events.TakeLast(8).Select(e => $"{e.At:HH:mm:ss} {e.Message}").ToList() ?? [];
-        }
-        var snap = s?.Snapshot;
-        LinuxPowerDto? powerDto = null;
-        if (_power?.Status is { } ps)
-        {
-            powerDto = new LinuxPowerDto(
-                ps.Mode, ps.Preferred, ps.Source.OnBattery, ps.Source.BatteryPercent, ps.Lock,
-                ps.Cpu?.Watts, ps.Cpu?.Pl1Watts, ps.Cpu?.Pl2Watts, ps.CpuLimit,
-                ps.GpuPowerWatts, ps.GpuWatts, ps.GpuLimitWatts, ps.GpuLockMhz,
-                _settings.Current.PowerAutomation);
-        }
-        IReadOnlyList<LinuxProfileDto>? profiles = null;
-        if (includeProfiles)
-        {
-            var list = new List<LinuxProfileDto>();
-            foreach (var p in FanProfile.BuiltIn)
-                list.Add(p.IsEcAuto ? new(p.Name, true, null, null) : new(p.Name, true, p.CpuCurve.Points, p.GpuCurve.Points));
-            list.AddRange(_settings.Current.CustomProfiles.Select(c => new LinuxProfileDto(c.Name, false, c.Cpu, c.Gpu ?? c.Cpu)));
-            profiles = list;
-        }
-        LinuxBatteryDto? batDto = null;
-        if (includeBattery)
-        {
-            double? wattsNow = _simulate
-                ? (_simBattery?.OnBattery == true ? 14.0 : null)
-                : _linuxBattery?.ReadWattsNow();
-            batDto = new LinuxBatteryDto(
-                _battery.Live(), wattsNow, _battery.Health, _batteryRecorder.Last,
-                _settings.Current.BatteryReadMinutes, _batteryEstimates.All, _batteryEstimates.Idle);
-        }
-        LinuxHistoryDto? histDto = null;
-        if (historyMinutes is { } hm)
-        {
-            var toUtc = DateTime.UtcNow.AddSeconds(1);
-            var fromUtc = toUtc.AddMinutes(-hm);
-            var series = _history.Query(fromUtc, toUtc, 600);
-            histDto = new LinuxHistoryDto(_history.Mode, hm, HistorySummary.Of(series));
-        }
-        return new LinuxStatus(error is null, error, s?.Mode.ToString() ?? (_loop is null ? "Unavailable" : "Starting"), s?.Profile ?? _settings.Current.Profile,
-            s?.EcVersion, _simulate, _problem, snap?.CpuTempC, snap?.GpuTempC, snap?.CpuRpm, snap?.GpuRpm,
-            snap?.CpuAppliedPercent, snap?.GpuAppliedPercent, s?.HoldsFans ?? false,
-            s?.Trial is { } t ? $"{t.State}{(t.Problem is null ? "" : $" ({t.Problem})")}" : null, events,
-            powerDto, _settings.Current.Lighting, profiles, batDto, histDto);
+        return response;
     }
 
     private long _logged;

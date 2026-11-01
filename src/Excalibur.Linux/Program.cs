@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
+using Excalibur.Core.Fan.Ipc;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -124,98 +125,117 @@ string FormatMinutes(double totalMinutes)
     return mins >= 60 ? $"{mins / 60} sa {mins % 60:D2} dk" : $"{mins} dk";
 }
 
-LinuxStatus? Ask(LinuxRequest request)
+var client = FanPipeClient.ForUnixSocket(paths.Socket);
+
+FanResponse? Ask(FanRequest request)
 {
     try
     {
-        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        socket.Connect(new UnixDomainSocketEndPoint(paths.Socket));
-        using var stream = new NetworkStream(socket);
-        using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        writer.WriteLine(JsonSerializer.Serialize(request, Daemon.Json));
-        return JsonSerializer.Deserialize<LinuxStatus>(reader.ReadLine() ?? "", Daemon.Json);
+        return client.SendAsync(request with { Source = "cli" }).GetAwaiter().GetResult();
     }
-    catch (Exception ex) when (ex is SocketException or IOException or JsonException)
+    catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException or JsonException)
     {
         Console.Error.WriteLine("Fan servisine ulaşılamadı. Çalışıyor mu? sudo systemctl status excalibur-reimagined");
         return null;
     }
 }
 
-int PrintProfiles(LinuxStatus? s)
+ServiceSettings? Settings() => Ask(new FanRequest("getSettings"))?.Settings;
+
+// The service's error codes in plain Turkish; anything else keeps its (English) sentence.
+string ErrorText(FanResponse r) => r.Code switch
 {
-    if (s is null) return 2;
-    if (s.Error is not null) Console.Error.WriteLine($"Hata: {s.Error}");
-    if (s.Profiles is null) return s.Ok ? 0 : 1;
-    Console.WriteLine($"Profiller (aktif: {ProfileLabel(s.Profile)}):");
-    foreach (var p in s.Profiles)
+    "ec_unavailable" => r.Error ?? "Fan kontrolü kullanılamıyor.",
+    "power_battery" => "Pilde yalnız Ofis modu kullanılabilir; Oyun ve Yüksek performans için şarj aletini takın.",
+    "power_usbc" => "Bu USB-C adaptörü hızlı modlar için zayıf; kutudan çıkan adaptörü kullanın.",
+    "power_failed" => "Güç modu değiştirilemedi.",
+    "cpu_limit_invalid" => "Geçersiz işlemci sınırı (uzun süreli 15–55 W, kısa süreli 30–115 W, 5'in katı ve kısa ≥ uzun olmalı).",
+    "cpu_limit_failed" => "İşlemci güç sınırı yazılamadı (intel-rapl bulunamadı veya yetki yok).",
+    "gpu_limit_invalid" => "Geçersiz ekran kartı sınırı (30–175 W, 5'in katı olmalı).",
+    "gpu_limit_failed" => "Ekran kartı saat kilidi uygulanamadı (NVIDIA sürücüsü yanıt vermedi).",
+    "profile_builtin" => "Yerleşik profiller silinemez.",
+    "profile_not_found" => "Bu adda özel bir profil yok.",
+    "profile_invalid" => $"Profil geçersiz: {r.Error}",
+    "trial_unavailable" => $"Deneme başlatılamadı: {r.Error}",
+    _ => r.Error ?? "İstek kabul edilmedi.",
+};
+
+/// <summary>Prints the error (if any) and returns the exit code: 0 done, 1 refused, 2 no service.</summary>
+int Report(FanResponse? r)
+{
+    if (r is null) return 2;
+    if (!r.Ok) Console.Error.WriteLine($"Hata: {ErrorText(r)}");
+    return r.Ok ? 0 : 1;
+}
+
+int PrintProfiles(FanResponse? r)
+{
+    int code = Report(r);
+    if (r?.Profiles is not { } profiles) return code;
+    string active = r.Status?.Profile ?? "";
+    Console.WriteLine($"Profiller (aktif: {ProfileLabel(active)}):");
+    foreach (var p in profiles)
     {
-        string mark = string.Equals(p.Name, s.Profile, StringComparison.OrdinalIgnoreCase) ? "*" : " ";
+        string mark = string.Equals(p.Name, active, StringComparison.OrdinalIgnoreCase) ? "*" : " ";
         string kind = p.BuiltIn ? "yerleşik" : "özel";
         string label = p.BuiltIn ? $"{ProfileLabel(p.Name)} ({p.Name})" : p.Name;
         Console.WriteLine($" {mark} {label,-34} [{kind}]  {FormatCurve(p.Cpu)}");
         if (p.Gpu is not null && p.Cpu is not null && !p.Gpu.SequenceEqual(p.Cpu))
             Console.WriteLine($"   {"",-34}          Ekran kartı: {FormatCurve(p.Gpu)}");
     }
-    return s.Ok ? 0 : 1;
+    return code;
 }
 
-int PrintBattery(LinuxStatus? s)
+int PrintBattery(FanResponse? r, int readMinutes)
 {
-    if (s is null) return 2;
-    if (s.Error is not null) Console.Error.WriteLine($"Hata: {s.Error}");
-    if (s.Battery is not { } b) return s.Ok ? 0 : 1;
+    int code = Report(r);
+    if (r?.Status is not { } st) return code;
     Console.WriteLine($"Excalibur Reimagined {version} (Linux) — Pil Durumu");
-    if (b.Live is { } live)
-    {
-        string stateText = live.State switch
-        {
-            BatteryState.OnBattery => "Pilde çalışıyor",
-            BatteryState.Charging => "Şarj oluyor",
-            BatteryState.Full => "Tam dolu",
-            BatteryState.NotCharging => "Prizde (şarj duraklatıldı)",
-            _ => live.State.ToString(),
-        };
-        string pct = live.Percent is { } p ? $"%{p}" : "?";
-        string rem = live.RemainingMinutes is { } m ? $", tahmini kalan: {FormatMinutes(m)}" : "";
-        string draw = b.WattsNow is { } w ? $", anlık: {w:F1} W" : "";
-        Console.WriteLine($"Durum:        {pct} — {stateText}{draw}{rem}");
-    }
-    else
+    if (st.Battery is not { } b)
     {
         Console.WriteLine("Durum:        Pil bulunamadı");
+        return code;
     }
-    if (b.Health is { } h)
+    string stateText = b.State switch
     {
-        string cyc = h.Cycles is { } c ? $", {c} döngü" : "";
-        Console.WriteLine($"Pil sağlığı:  %{h.Percent ?? 0} ({h.FullMWh} / {h.DesignedMWh} mWh, {h.Chemistry ?? "?"}{cyc})");
+        BatteryState.OnBattery => "Pilde çalışıyor",
+        BatteryState.Charging => "Şarj oluyor",
+        BatteryState.Full => "Tam dolu",
+        BatteryState.NotCharging => "Prizde (şarj duraklatıldı)",
+        _ => b.State.ToString(),
+    };
+    string pct = b.Percent is { } p ? $"%{p}" : "?";
+    string rem = b.RemainingMinutes is { } m ? $", tahmini kalan: {FormatMinutes(m)}" : "";
+    Console.WriteLine($"Durum:        {pct} — {stateText}{rem}");
+    if (b.FullMWh is { } full && b.DesignedMWh is { } designed)
+    {
+        string cyc = b.Cycles is { } c ? $", {c} döngü" : "";
+        Console.WriteLine($"Pil sağlığı:  %{b.HealthPercent ?? 0} ({full} / {designed} mWh, {b.Chemistry ?? "?"}{cyc})");
     }
-    if (b.LastInterval is { } last)
-        Console.WriteLine($"Son ölçüm:    {last.Watts:F1} W ortalama ({last.Span.TotalMinutes:F0} dk)");
-    Console.WriteLine($"Okuma aralığı: pildeyken her {b.ReadMinutes} dakikada bir");
-    if (b.Estimates.Count > 0)
+    if (b.AverageWatts is { } avg)
+        Console.WriteLine($"Son ölçüm:    {avg:F1} W ortalama ({b.AverageMinutes ?? 0} dk)");
+    Console.WriteLine($"Okuma aralığı: pildeyken her {readMinutes} dakikada bir");
+    if (b.Estimates is { Count: > 0 } estimates)
     {
-        int fullMWh = b.Health?.FullMWh ?? 60000;
+        int fullMWh = b.FullMWh ?? 60000;
         Console.WriteLine("Mod ve profile göre pil tüketimi:");
-        foreach (var e in b.Estimates)
+        foreach (var e in estimates)
         {
             string hours = e.Hours(fullMWh) is { } hr ? $" (~{FormatMinutes(hr * 60)} tam pil süresi)" : "";
             Console.WriteLine($"  {ModeLabel(e.Mode)} + {ProfileLabel(e.Profile)}: {e.Watts:F1} W ortalama ({FormatMinutes(e.Minutes)} veri){hours}");
         }
     }
-    return s.Ok ? 0 : 1;
+    return code;
 }
 
-int PrintHistory(LinuxStatus? s)
+int PrintHistory(FanResponse? r, HistoryMode mode, int minutes)
 {
-    if (s is null) return 2;
-    if (s.Error is not null) Console.Error.WriteLine($"Hata: {s.Error}");
-    if (s.History is not { } h) return s.Ok ? 0 : 1;
+    int code = Report(r);
+    if (r is not { Ok: true }) return code;
     Console.WriteLine($"Excalibur Reimagined {version} (Linux) — Fan ve Sıcaklık Geçmişi");
-    Console.WriteLine($"Saklama modu: {HistoryModeLabel(h.Mode)}");
-    Console.WriteLine($"Aralık:       son {FormatMinutes(h.RangeMinutes)}");
-    if (h.Summary is { } sum)
+    Console.WriteLine($"Saklama modu: {HistoryModeLabel(mode)}");
+    Console.WriteLine($"Aralık:       son {FormatMinutes(minutes)}");
+    if (r.History is { } series && HistorySummary.Of(series) is { } sum)
     {
         Console.WriteLine($"İşlemci:      ortalama {sum.Cpu.Average} °C, en yüksek {sum.Cpu.Max} °C, ≥{HistorySummary.HotC} °C süre: {FormatMinutes(sum.Cpu.Hot.TotalMinutes)}");
         Console.WriteLine($"Ekran kartı:  ortalama {sum.Gpu.Average} °C, en yüksek {sum.Gpu.Max} °C, ≥{HistorySummary.HotC} °C süre: {FormatMinutes(sum.Gpu.Hot.TotalMinutes)}");
@@ -224,26 +244,30 @@ int PrintHistory(LinuxStatus? s)
     {
         Console.WriteLine("Bu aralıkta henüz kayıt yok.");
     }
-    return s.Ok ? 0 : 1;
+    return code;
 }
 
-int Print(LinuxStatus? s)
+/// <summary>The status as "exr status" prints it; lighting and automation come from the settings, events from "events".</summary>
+int Print(FanResponse? r)
 {
-    if (s is null) return 2;
-    if (s.Error is not null) Console.Error.WriteLine($"Hata: {s.Error}");
-    Console.WriteLine($"Excalibur Reimagined {version} (Linux){(s.Simulated ? " — deneme modu" : "")}");
-    if (s.Problem is not null)
+    if (r is null) return 2;
+    if (!r.Ok && r.Code != "ec_unavailable") Console.Error.WriteLine($"Hata: {ErrorText(r)}");
+    var s = r.Status ?? (r.Code == "ec_unavailable" ? null : Ask(new FanRequest("status"))?.Status);
+    bool simulated = s?.Simulated ?? simulate;
+    Console.WriteLine($"Excalibur Reimagined {version} (Linux){(simulated ? " — deneme modu" : "")}");
+    if (r.Code == "ec_unavailable" || s is null)
     {
-        Console.WriteLine($"Fan kontrolü kapalı: {s.Problem}");
-        return s.Ok ? 0 : 1;
+        Console.WriteLine($"Fan kontrolü kapalı: {r.Error}");
+        return 1;
     }
+    var events = Ask(new FanRequest("events"))?.Events ?? [];
+    var settings = Settings();
     string mode = s.Mode switch
     {
-        "Running" => "açık",
-        "MonitorOnly" => "yalnız izleniyor (bu EC sürümü tanınmadı; denemek için: excalibur-reimagined trial)",
-        "Faulted" => "sorun var, fanlar dizüstünün kendi ayarında",
-        "Starting" => "başlıyor",
-        _ => s.Mode,
+        FanLoopMode.Running => "açık",
+        FanLoopMode.MonitorOnly => "yalnız izleniyor (bu EC sürümü tanınmadı; denemek için: excalibur-reimagined trial)",
+        FanLoopMode.Faulted => "sorun var, fanlar dizüstünün kendi ayarında",
+        _ => "kapalı",
     };
     Console.WriteLine($"Fan kontrolü: {mode}");
     Console.WriteLine($"Profil:       {ProfileLabel(s.Profile)}");
@@ -260,51 +284,48 @@ int Print(LinuxStatus? s)
     Console.WriteLine($"EC sürümü:    {s.EcVersion ?? "?"}");
     if (s.CpuTempC is not null)
     {
-        string cpuPower = "";
-        if (s.Power is { } cp)
+        string cpuPower = "", gpuPower = "";
+        if (s.Power is { } p)
         {
             var parts = new List<string>();
-            if (cp.CpuWatts is { } cw) parts.Add($"{cw} W");
-            if (cp.CpuLimit is { } ul) parts.Add($"özel sınır: {ul.Pl1Watts}/{ul.Pl2Watts} W");
-            else if (cp.CpuPl1Watts is { } pl1) parts.Add($"sınır: {pl1}{(cp.CpuPl2Watts is { } pl2 ? $"/{pl2}" : "")} W");
+            if (p.CpuWatts is { } cw) parts.Add($"{cw} W");
+            if (p.CpuLimit is { } ul) parts.Add($"özel sınır: {ul.Pl1Watts}/{ul.Pl2Watts} W");
+            else if (p.CpuPl1Watts is { } pl1) parts.Add($"sınır: {pl1}{(p.CpuPl2Watts is { } pl2 ? $"/{pl2}" : "")} W");
             if (parts.Count > 0) cpuPower = $"   ({string.Join(", ", parts)})";
-        }
-        string gpuPower = "";
-        if (s.Power is { } gp)
-        {
-            var parts = new List<string>();
-            if (gp.GpuPowerWatts is { } gw) parts.Add(gp.GpuTgpWatts is { } tgp ? $"{gw}/{tgp} W" : $"{gw} W");
-            else if (gp.GpuTgpWatts is { } tgpOnly) parts.Add($"tavan {tgpOnly} W");
-            if (gp.GpuLimitWatts is { } gl) parts.Add($"özel hedef: {gl} W{(gp.GpuLockMhz is { } mhz ? $" @ {mhz} MHz" : "")}");
+            parts.Clear();
+            int? cap = p.GpuLimitWatts ?? p.GpuWatts;
+            if (p.GpuPowerWatts is { } gw) parts.Add(cap is { } c ? $"{gw}/{c} W" : $"{gw} W");
+            else if (cap is { } capOnly) parts.Add($"sınır {capOnly} W");
+            if (p.GpuLimitWatts is { } gl) parts.Add($"özel hedef: {gl} W{(p.GpuLockMhz is { } mhz ? $" @ {mhz} MHz" : "")}");
             if (parts.Count > 0) gpuPower = $"   ({string.Join(", ", parts)})";
         }
-        Console.WriteLine($"İşlemci:      {s.CpuTempC} °C   fan %{s.CpuPercent}  {s.CpuRpm} devir{cpuPower}");
-        Console.WriteLine($"Ekran kartı:  {s.GpuTempC} °C   fan %{s.GpuPercent}  {s.GpuRpm} devir{gpuPower}");
+        Console.WriteLine($"İşlemci:      {s.CpuTempC} °C   fan %{s.CpuAppliedPercent}  {s.CpuRpm} devir{cpuPower}");
+        string gpuTemp = s.GpuTempC is { } g ? $"{g} °C" : "uykuda";
+        Console.WriteLine($"Ekran kartı:  {gpuTemp}   fan %{s.GpuAppliedPercent}  {s.GpuRpm} devir{gpuPower}");
     }
-    if (s.Lighting is { } l)
+    if (settings?.Lighting is { } l)
     {
         string colors = l.Effect switch
         {
-            LightEffect.Off => "",
-            LightEffect.ColorCycle => "",
+            LightEffect.Off or LightEffect.ColorCycle => "",
             LightEffect.Breathing => $" {l.Left}",
             _ => l.Left == l.Middle && l.Middle == l.Right ? $" {l.Left}" : $" {l.Left} / {l.Middle} / {l.Right}",
         };
         Console.WriteLine($"Klavye ışığı: {EffectLabel(l.Effect)}{colors} (parlaklık {l.Brightness}/2)");
     }
-    if (s.Power?.Automation is { } auto && (auto.Enabled || !auto.IsDefault))
+    if (settings?.PowerAutomation is { } auto && (auto.Enabled || !auto.IsDefault))
     {
         string acRule = $"{(auto.OnAc.Mode is { } am ? ModeLabel(am) : "-")} / {(auto.OnAc.FanProfile is { } ap ? ProfileLabel(ap) : "-")}";
-        string batRule = $"Ofis / {(auto.OnBattery.FanProfile is { } bp ? ProfileLabel(bp) : "-")}";
+        string batRule = $"Ofis / {(auto.OnBattery.FanProfile is { } bp2 ? ProfileLabel(bp2) : "-")}";
         Console.WriteLine($"Otomasyon:    {(auto.Enabled ? "açık" : "kapalı")} (prizde: {acRule} · pilde: {batRule})");
     }
-    if (s.Trial is not null) Console.WriteLine($"Deneme:       {s.Trial}");
-    if (s.Events.Count > 0)
+    if (s.Trial is { } t) Console.WriteLine($"Deneme:       {t.State}{(t.Problem is null ? "" : $" ({t.Problem})")}");
+    if (events.Count > 0)
     {
         Console.WriteLine("Son olaylar:");
-        foreach (var e in s.Events) Console.WriteLine($"  {e}");
+        foreach (var e in events.TakeLast(8)) Console.WriteLine($"  {e.At:HH:mm:ss} {e.Message}");
     }
-    return s.Ok ? 0 : 1;
+    return r.Ok ? 0 : 1;
 }
 
 switch (rest.FirstOrDefault()?.ToLowerInvariant())
@@ -332,21 +353,21 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             Console.Error.WriteLine("Grafik masaüstü oturumu (DISPLAY / WAYLAND_DISPLAY) bulunamadı. Komut satırı için: exr status");
             return 2;
         }
-        return LinuxGuiApp.Run(paths, version, snapshotDir);
+        return LinuxGuiApp.Run(paths, snapshotDir);
     }
 
     case null:
         return LinuxGuiApp.HasDisplaySession()
-            ? LinuxGuiApp.Run(paths, version)
-            : Print(Ask(new LinuxRequest("status")));
+            ? LinuxGuiApp.Run(paths)
+            : Print(Ask(new FanRequest("status")));
 
     case "status":
     case "durum":
-        return Print(Ask(new LinuxRequest("status")));
+        return Print(Ask(new FanRequest("status")));
 
     case "profiles":
     case "profiller":
-        return PrintProfiles(Ask(new LinuxRequest("profiles")));
+        return PrintProfiles(Ask(new FanRequest("listProfiles")));
 
     case "profile":
     case "profil":
@@ -364,7 +385,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
         }
         string sub = rest[1].ToLowerInvariant();
         if (sub is "list" or "liste")
-            return PrintProfiles(Ask(new LinuxRequest("profiles")));
+            return PrintProfiles(Ask(new FanRequest("listProfiles")));
 
         if (sub is "save" or "kaydet")
         {
@@ -390,7 +411,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                 }
                 gpuCurve = parsedGpu;
             }
-            return PrintProfiles(Ask(new LinuxRequest("saveProfile", CustomProfile: new CustomProfile(name, cpuCurve, gpuCurve))));
+            return PrintProfiles(Ask(new FanRequest("saveProfile", Definition: new CustomProfile(name, cpuCurve, gpuCurve))));
         }
 
         if (sub is "delete" or "sil" or "remove")
@@ -400,10 +421,10 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                 Console.Error.WriteLine("Kullanım: exr profile delete <özel-profil-adı>");
                 return 2;
             }
-            return PrintProfiles(Ask(new LinuxRequest("deleteProfile", Profile: rest[2])));
+            return PrintProfiles(Ask(new FanRequest("deleteProfile", Profile: rest[2])));
         }
 
-        return Print(Ask(new LinuxRequest("setProfile", ProfileKey(rest[1]))));
+        return Print(Ask(new FanRequest("setProfile", ProfileKey(rest[1]))));
     }
 
     case "manual":
@@ -416,7 +437,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
         }
         int gpuPct = rest.Length >= 3 && int.TryParse(rest[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int g) ? g : cpuPct;
         int mins = rest.Length >= 4 && int.TryParse(rest[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out int m) ? m : 10;
-        return Print(Ask(new LinuxRequest("setManual", CpuPercent: cpuPct, GpuPercent: gpuPct, Minutes: mins)));
+        return Print(Ask(new FanRequest("setManual", Cpu: cpuPct, Gpu: gpuPct, Minutes: mins)));
     }
 
     case "mode":
@@ -430,14 +451,14 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             Console.Error.WriteLine("Kullanım: exr mode ofis|oyun|yuksek  (office|gaming|high)");
             return 2;
         }
-        return Print(Ask(new LinuxRequest("setPowerMode", PowerMode: pmode)));
+        return Print(Ask(new FanRequest("setPowerMode", PowerMode: pmode)));
     }
 
     case "cpu-limit":
     case "cpulimit":
     {
         if (rest.Length == 2 && IsOffWord(rest[1]))
-            return Print(Ask(new LinuxRequest("setCpuLimit", CpuLimit: null)));
+            return Print(Ask(new FanRequest("setCpuLimit")));
         if (rest.Length < 3
             || !int.TryParse(rest[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int pl1)
             || !int.TryParse(rest[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int pl2))
@@ -446,37 +467,37 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             Console.Error.WriteLine("          exr cpu-limit off                              (özel sınırı kaldırır, güç moduna bırakır)");
             return 2;
         }
-        return Print(Ask(new LinuxRequest("setCpuLimit", CpuLimit: new CpuLimit(pl1, pl2))));
+        return Print(Ask(new FanRequest("setCpuLimit", CpuLimit: new CpuLimit(pl1, pl2))));
     }
 
     case "gpu-limit":
     case "gpulimit":
     {
         if (rest.Length == 2 && IsOffWord(rest[1]))
-            return Print(Ask(new LinuxRequest("setGpuLimit", GpuLimitWatts: null)));
+            return Print(Ask(new FanRequest("setGpuLimit")));
         if (rest.Length < 2 || !int.TryParse(rest[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int watts))
         {
             Console.Error.WriteLine("Kullanım: exr gpu-limit <hedef-W>  (30–175 W, 5'in katı; ör. exr gpu-limit 60)");
             Console.Error.WriteLine("          exr gpu-limit off        (saat kilidini kaldırır, güç moduna bırakır)");
             return 2;
         }
-        return Print(Ask(new LinuxRequest("setGpuLimit", GpuLimitWatts: watts)));
+        return Print(Ask(new FanRequest("setGpuLimit", GpuLimitWatts: watts)));
     }
 
     case "auto":
     case "otomasyon":
     {
-        var currentStatus = Ask(new LinuxRequest("status"));
-        if (currentStatus is null) return 2;
-        var auto = currentStatus.Power?.Automation ?? new PowerAutomation();
         if (rest.Length < 2)
-            return Print(currentStatus);
+            return Print(Ask(new FanRequest("status")));
+        if (Settings() is not { } currentSettings) return 2;
+        var auto = currentSettings.PowerAutomation;
+        FanResponse? SetAutomation(PowerAutomation a) => Ask(new FanRequest("updateSettings", Settings: new ServiceSettingsPatch(PowerAutomation: a)));
 
         string sub = rest[1].ToLowerInvariant();
         if (sub is "on" or "acik" or "açık" or "enable")
-            return Print(Ask(new LinuxRequest("setAutomation", Automation: auto with { Enabled = true })));
+            return Print(SetAutomation(auto with { Enabled = true }));
         if (sub is "off" or "kapali" or "kapalı" or "disable" or "kapat")
-            return Print(Ask(new LinuxRequest("setAutomation", Automation: auto with { Enabled = false })));
+            return Print(SetAutomation(auto with { Enabled = false }));
 
         if (sub is "ac" or "priz" or "bat" or "pil" or "battery")
         {
@@ -517,7 +538,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             var updated = isAc
                 ? auto with { Enabled = true, OnAc = rule }
                 : auto with { Enabled = true, OnBattery = rule with { Mode = PowerMode.Office } };
-            return Print(Ask(new LinuxRequest("setAutomation", Automation: updated)));
+            return Print(SetAutomation(updated));
         }
 
         Console.Error.WriteLine("""
@@ -535,7 +556,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
     case "led":
     {
         if (rest.Length < 2)
-            return Print(Ask(new LinuxRequest("status")));
+            return Print(Ask(new FanRequest("status")));
 
         if (rest[1].ToLowerInvariant() is "help" or "--help" or "-h" or "yardim" or "yardım")
         {
@@ -551,7 +572,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                 """);
             return 0;
         }
-        var current = Ask(new LinuxRequest("status"))?.Lighting ?? new KeyboardLighting();
+        var current = Settings()?.Lighting ?? new KeyboardLighting();
         var tokens = rest.Skip(1).ToList();
         int brightness = current.Brightness;
         for (int i = 0; i < tokens.Count - 1; i++)
@@ -568,7 +589,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             }
         }
         if (tokens.Count == 0)
-            return Print(Ask(new LinuxRequest("setLighting", Lighting: current with { Brightness = brightness })));
+            return Print(Ask(new FanRequest("setLighting", Lighting: current with { Brightness = brightness })));
 
         string first = tokens[0].ToLowerInvariant();
         if (first is "zones" or "bolgeler" or "bölgeler")
@@ -633,7 +654,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                 Brightness = brightness == 0 ? 1 : brightness,
             };
         }
-        return Print(Ask(new LinuxRequest("setLighting", Lighting: next)));
+        return Print(Ask(new FanRequest("setLighting", Lighting: next)));
     }
 
     case "battery":
@@ -646,9 +667,10 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                 Console.Error.WriteLine("Kullanım: exr battery interval 2|5|10|30");
                 return 2;
             }
-            return PrintBattery(Ask(new LinuxRequest("setBatteryInterval", BatteryReadMinutes: mins)));
+            var set = Ask(new FanRequest("updateSettings", Settings: new ServiceSettingsPatch(BatteryReadMinutes: mins)));
+            return PrintBattery(set, set?.Settings?.BatteryReadMinutes ?? mins);
         }
-        return PrintBattery(Ask(new LinuxRequest("battery")));
+        return PrintBattery(Ask(new FanRequest("status")), Settings()?.BatteryReadMinutes ?? 0);
     }
 
     case "history":
@@ -662,10 +684,15 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                 Console.Error.WriteLine("Kullanım: exr history mode 7g|30g|1s|kapali  (7d|30d|1h|off)");
                 return 2;
             }
-            return PrintHistory(Ask(new LinuxRequest("setHistoryMode", HistoryMode: hm)));
+            var set = Ask(new FanRequest("updateSettings", Settings: new ServiceSettingsPatch(History: hm)));
+            int code = Report(set);
+            if (code == 0) Console.WriteLine($"Saklama modu: {HistoryModeLabel(hm)}");
+            return code;
         }
-        int mins = rest.Length >= 2 && int.TryParse(rest[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int m) ? m : 60;
-        return PrintHistory(Ask(new LinuxRequest("history", Minutes: mins)));
+        int mins = Math.Clamp(rest.Length >= 2 && int.TryParse(rest[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int m) ? m : 60, 1, 8 * 24 * 60);
+        var now = DateTimeOffset.Now;
+        var histMode = Settings()?.History ?? HistoryMode.Days7;
+        return PrintHistory(Ask(new FanRequest("history", From: now.AddMinutes(-mins), To: now, MaxPoints: 600)), histMode, mins);
     }
 
     case "sim-power":
@@ -676,7 +703,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             return 2;
         }
         bool onBat = rest[1].ToLowerInvariant() is "bat" or "pil";
-        return Print(Ask(new LinuxRequest("simPower", OnBattery: onBat)));
+        return Print(Ask(new FanRequest(onBat ? "simPowerBattery" : "simPowerAc")));
     }
 
     case "trial":
@@ -685,11 +712,11 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
         Console.WriteLine("dizüstünün kendi ayarına döner. Geçerse bu bilgisayarda fan kontrolü açılır. Başlatılsın mı? [e/H]");
         if (Console.ReadLine()?.Trim().ToLowerInvariant() is not ("e" or "evet" or "y"))
             return 0;
-        return Print(Ask(new LinuxRequest("trial")));
+        return Print(Ask(new FanRequest("trialEc")));
 
     case "sleep":
         // systemd's sleep hook: "pre" before suspend, "post" after resume.
-        Ask(new LinuxRequest(rest.ElementAtOrDefault(1) == "post" ? "wake" : "sleep"));
+        Ask(new FanRequest(rest.ElementAtOrDefault(1) == "post" ? "wake" : "sleep"));
         return 0;
 
     case "release":
@@ -706,9 +733,9 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
     case "report":
     case "rapor":
     {
-        var s = Ask(new LinuxRequest("status"));
-        string summary = $"Excalibur Reimagined {version} (Linux) · EC: {s?.EcVersion ?? "?"} · Mod: {s?.Mode ?? "servis yok"}" +
-                         (s?.Problem is { } p ? $" · Sorun: {p}" : "") + $" · Çekirdek: {Environment.OSVersion.VersionString}";
+        var r = Ask(new FanRequest("status"));
+        string summary = $"Excalibur Reimagined {version} (Linux) · EC: {r?.Status?.EcVersion ?? "?"} · Mod: {r?.Status?.Mode.ToString() ?? "servis yok"}" +
+                         (r?.Code == "ec_unavailable" ? $" · Sorun: {r.Error}" : "") + $" · Çekirdek: {Environment.OSVersion.VersionString}";
         string home = Environment.GetEnvironmentVariable("SUDO_USER") is { Length: > 0 } user ? $"/home/{user}" : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         string zip = BugReport.Create(home, paths.Data, summary, [], DateTime.Now, paths.Logs);
         Console.WriteLine($"Rapor hazır: {zip}");

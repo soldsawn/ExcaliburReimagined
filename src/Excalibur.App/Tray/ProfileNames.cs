@@ -1,6 +1,3 @@
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace Excalibur.App.Tray;
 
 /// <summary>Built-in profiles in the order the tray shows them, with their Turkish labels.</summary>
