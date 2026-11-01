@@ -63,7 +63,7 @@ internal sealed class DisplayPage : UserControl
             Children =
             {
                 InfoPage.Text("Ekran", "PageTitle"),
-                InfoPage.Text("Yenileme hızı prize ve pile göre kendiliğinden değişir.", "Caption", top: 2, bottom: 18),
+                InfoPage.Text("Ekranın yenileme hızı ve hangi ekran kartının çalışacağı.", "Caption", top: 2, bottom: 18),
                 InfoPage.Card("Yenileme hızı",
                     _info,
                     _enabled, grid,
