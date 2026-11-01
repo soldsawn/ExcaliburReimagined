@@ -16,6 +16,11 @@ internal sealed class LinuxFanHardware(LinuxEc ec, Action<string>? log = null) :
     private const long FanSpeedAddress = 0xFE400530; // FS1H FS1L FS2H FS2L (high byte first)
     private const int MaxTempC = 110, MaxRpm = 8000;
     private readonly string? _coretemp = FindCoretemp();
+    // As on Windows: the CPU's sensor jumps 5-30 C between single readings (idle 80-86 C spikes tripped the hot rule on
+    // Linux, 2026-11-01), so it is sampled every 200 ms and the median of the last 2 s is used (TemperatureMedian).
+    private readonly TemperatureMedian _cpuMedian = new(TimeSpan.FromSeconds(2));
+    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    private Timer? _cpuSampler;
     private bool _rpmFromMemory = true;
 
     // Windows uses SET 0x0205 through WMI where a BIOS supports it; Linux has no way to call it without a kernel module.
@@ -25,7 +30,7 @@ internal sealed class LinuxFanHardware(LinuxEc ec, Action<string>? log = null) :
     {
         try
         {
-            int cpuC = CoretempC() ?? ec.Read(EcCpuTemp);
+            int cpuC = CpuMedianC() ?? ec.Read(EcCpuTemp);
             int gpuRaw = ec.Read(GpuTemp);
             // The EC reports 0 or 30 while the GPU sleeps or has no reading (Windows: ResolveGpuTemperature); the NVIDIA
             // driver is asked only then, and when it has none either the GPU fan follows the CPU.
@@ -71,6 +76,14 @@ internal sealed class LinuxFanHardware(LinuxEc ec, Action<string>? log = null) :
             return v.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z') ? v : null;
         }
         catch (IOException) { return null; }
+    }
+
+    /// <summary>The median of the last 2 s of coretemp readings (sampling starts on the first call), or null.</summary>
+    private int? CpuMedianC()
+    {
+        if (_coretemp is null) return null;
+        _cpuSampler ??= new Timer(_ => { if (CoretempC() is { } c) _cpuMedian.Add(c, _clock.Elapsed); }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(200));
+        return _cpuMedian.Value(_clock.Elapsed) ?? CoretempC();
     }
 
     /// <summary>The CPU package temperature from coretemp ("Package id 0"), or null.</summary>
