@@ -231,12 +231,13 @@ public sealed class LinuxHardwareTests : IDisposable
         byte ReadEc(byte addr) => regs[addr];
         void WriteEc(byte addr, byte val)
         {
+            byte before = regs[addr];
             regs[addr] = val;
             if (addr == LinuxEcSmiChannel.RegControl)
             {
                 writtenControl.Add(val);
-                // Simulate EC acknowledging LKCC (bit 0) or LKBS (bit 3) by setting LKBE (bit 1)
-                if ((val & 0x09) != 0) regs[addr] = (byte)(val | 0x02);
+                // Simulate the EC acknowledging a rising LKCC (bit 0) or LKBS (bit 3) by setting LKBE (bit 1)
+                if ((val & ~before & 0x09) != 0) regs[addr] = (byte)(val | 0x02);
             }
         }
 
@@ -250,8 +251,8 @@ public sealed class LinuxHardwareTests : IDisposable
         Assert.Equal(0x56, regs[LinuxEcSmiChannel.RegBlue]);
         // Brightness 2 maps to LKBL = 1; Effect Static = 1 -> 0xC1 = 0x11
         Assert.Equal(0x11, regs[LinuxEcSmiChannel.RegModeLevel]);
-        // Control writes for zone 5 (0x50): 0x50, then 0x51 (LKCC), then 0x58 (LKBS)
-        Assert.Equal(new byte[] { 0x50, 0x51, 0x58 }, writtenControl);
+        // Control writes field by field, like the BIOS: LKBC = 0, zone 5, LKCC = 1, LKBE = 0, LKBS = 1 (LKCC kept)
+        Assert.Equal(new byte[] { 0x00, 0x50, 0x51, 0x51, 0x59 }, writtenControl);
 
         // Key brightness level mapping from EC 0x48 (LKCL): 0->1, 1->2, 2->0
         regs[LinuxEcSmiChannel.RegKeyLevel] = 0;

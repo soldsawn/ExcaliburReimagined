@@ -16,7 +16,7 @@ internal sealed class LinuxEcSmiChannel(Func<byte, byte> readEc, Action<byte, by
     public const byte RegControl = 0xAC;    // [LKBA:4 (bits 4..7)][LKBS:1 (bit 3)][LKBC:1 (bit 2)][LKBE:1 (bit 1)][LKCC:1 (bit 0)]
     public const byte RegModeLevel = 0xC1;  // [LKBM:4 (bits 4..7)][LKBL:4 (bits 0..3)]
 
-    private const byte BitLkcc = 0x01, BitLkbe = 0x02, BitLkbs = 0x08;
+    private const byte BitLkcc = 0x01, BitLkbe = 0x02, BitLkbc = 0x04, BitLkbs = 0x08;
     private const int HandshakePolls = 100;
     private readonly object _gate = new();
 
@@ -70,22 +70,26 @@ internal sealed class LinuxEcSmiChannel(Func<byte, byte> readEc, Action<byte, by
             _ => 1,
         };
 
-        // Write zone (LKBA) with LKBC = 0, then RGB and mode/level.
-        byte zoneShifted = (byte)(zone << 4);
-        writeEc(RegControl, zoneShifted);
+        // The BIOS writes each 0xAC bit field on its own (read-modify-write), so the other bits keep their value;
+        // do the same, in the same order. LKBC = 0, then the zone (LKBA), then RGB and mode/level.
+        UpdateControl(c => (byte)(c & ~BitLkbc));
+        UpdateControl(c => (byte)((c & 0x0F) | (zone << 4)));
         writeEc(RegBlue, blue);
         writeEc(RegGreen, green);
         writeEc(RegRed, red);
         writeEc(RegModeLevel, (byte)((effect << 4) | (lkbl & 0x0F)));
 
         // Handshake 1: set LKCC = 1, wait for EC to set LKBE = 1.
-        writeEc(RegControl, (byte)(zoneShifted | BitLkcc));
+        UpdateControl(c => (byte)(c | BitLkcc));
         WaitForAck("colour");
 
-        // Handshake 2: clear LKBE = 0 and set LKBS = 1, wait for EC to set LKBE = 1.
-        writeEc(RegControl, (byte)(zoneShifted | BitLkbs));
+        // Handshake 2: clear LKBE, then set LKBS (LKCC stays as it is), wait for EC to set LKBE = 1.
+        UpdateControl(c => (byte)(c & ~BitLkbe));
+        UpdateControl(c => (byte)(c | BitLkbs));
         WaitForAck("apply");
     }
+
+    private void UpdateControl(Func<byte, byte> change) => writeEc(RegControl, change(readEc(RegControl)));
 
     private void WaitForAck(string step)
     {
