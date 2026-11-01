@@ -86,6 +86,20 @@ public sealed class HistoryTests : IDisposable
         Assert.Equal(50, Assert.Single(rec.Samples(t0, t0.AddSeconds(1))).CpuTempC);
     }
 
+    [Fact]
+    public void Recording_goes_on_after_the_clock_jumps_back()
+    {
+        // A dual boot with Windows can start Linux 3 hours ahead until the time sync pulls the clock back.
+        using var rec = new HistoryRecorder(_dir, HistoryMode.Hour1);
+        var ahead = Utc(20, 13, 0, 0);
+        for (int i = 0; i < 10; i++) rec.Record(Sample(ahead.AddSeconds(i), cpuC: 90));
+        var real = ahead.AddHours(-3);
+        for (int i = 0; i < 10; i++) rec.Record(Sample(real.AddSeconds(i), cpuC: 50));
+
+        Assert.Equal(10, rec.Samples(real, real.AddMinutes(1)).Count);
+        Assert.Empty(rec.Samples(ahead, ahead.AddMinutes(1)));
+    }
+
     // ---- disk -----------------------------------------------------------------------------
 
     [Fact]

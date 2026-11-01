@@ -81,7 +81,9 @@ public sealed class HistoryRecorder : IDisposable
         {
             if (_mode == HistoryMode.Off) return;
             // One sample per second; a second tick in the same second replaces nothing, it is skipped.
-            if (_ringCount > 0 && Last().AtUtc >= sample.AtUtc) return;
+            if (_ringCount > 0 && Last().AtUtc == sample.AtUtc) return;
+            // The clock went back (e.g. a dual boot's time sync): forget what now lies in the future, keep recording.
+            while (_ringCount > 0 && Last().AtUtc >= sample.AtUtc) _ringCount--;
             _ring[(_ringStart + _ringCount) % RingSeconds] = sample;
             if (_ringCount < RingSeconds) _ringCount++;
             else _ringStart = (_ringStart + 1) % RingSeconds;
