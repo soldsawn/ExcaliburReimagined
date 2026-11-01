@@ -11,16 +11,55 @@ if [ "$1" = configure ]; then
   modprobe ec_sys write_support=1 2>/dev/null || echo "UYARI: ec_sys yüklenemedi (bu çekirdekte olmayabilir)."
   mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
 
+  # Secure Boot: the kernel is locked down, ec_sys cannot write, only our signed module works.
+  SB=no
+  if [ -f /sys/kernel/security/lockdown ] && ! grep -q "\[none\]" /sys/kernel/security/lockdown; then SB=yes; fi
+  if [ $SB = yes ]; then FALLBACK="Secure Boot açıkken fan kontrolü yalnız bu modülle çalışır."
+  else FALLBACK="Fan kontrolü ec_sys ile sürüyor."; fi
+
   # Our own module (the BIOS's commands; works with Secure Boot once signed): DKMS builds it for this kernel and the
-  # next ones. When it cannot, the service goes on through ec_sys.
+  # next ones. With Secure Boot on, DKMS signs it with Ubuntu's MOK key (/var/lib/shim-signed/mok, the NVIDIA driver's
+  # key too) and may ask for a password to enroll a new key, so its output is not hidden then.
   if command -v dkms >/dev/null 2>&1; then
     dkms add -m excalibur-ec -v @VERSION@ >/dev/null 2>&1 || true
-    if dkms install -m excalibur-ec -v @VERSION@ >/dev/null 2>&1; then
+    if [ $SB = yes ]; then dkms install -m excalibur-ec -v @VERSION@ && BUILT=yes || BUILT=no
+    else dkms install -m excalibur-ec -v @VERSION@ >/dev/null 2>&1 && BUILT=yes || BUILT=no; fi
+    if [ $BUILT = yes ]; then
       modprobe -r excalibur_ec 2>/dev/null || true
-      modprobe excalibur_ec 2>/dev/null || echo "UYARI: excalibur_ec modülü yüklenemedi; fan kontrolü ec_sys ile sürüyor."
+      if ! modprobe excalibur_ec 2>/dev/null; then
+        if [ $SB = yes ] && command -v mokutil >/dev/null 2>&1; then
+          CERT=/var/lib/shim-signed/mok/MOK.der
+          [ -f $CERT ] || CERT=/var/lib/dkms/mok.pub
+          KEY=$(mokutil --test-key $CERT 2>&1 || true)
+          case "$KEY" in
+            *"already enrolled"*)
+              echo "UYARI: excalibur_ec modülü yüklenemedi ('journalctl -k | grep -i excalibur' ile bakın). $FALLBACK" ;;
+            *"enrollment request"*)
+              echo "!! Modülün anahtarı onay bekliyor. Bilgisayarı yeniden başlatın; açılışta çıkan mavi ekranda"
+              echo "   Enroll MOK > Continue > Yes seçip belirlediğiniz parolayı yazın. Sonra fan kontrolü çalışır." ;;
+            *)
+              echo "!! Secure Boot açık: modülün imza anahtarını bir kez onaylamanız gerekiyor."
+              if [ -t 0 ] && [ -f $CERT ]; then
+                echo "   Şimdi tek kullanımlık bir parola belirleyin (yeniden başlatınca bir kez sorulacak):"
+                if mokutil --import $CERT; then
+                  echo "   Bilgisayarı yeniden başlatın; mavi ekranda Enroll MOK > Continue > Yes seçip bu parolayı yazın."
+                else
+                  echo "   Olmadı. Elle: sudo mokutil --import $CERT , sonra yeniden başlatıp mavi ekranda Enroll MOK."
+                fi
+              else
+                echo "   Terminalde: sudo mokutil --import $CERT (bir parola belirleyin), sonra yeniden başlatıp"
+                echo "   mavi ekranda Enroll MOK > Continue > Yes seçip parolayı yazın."
+              fi ;;
+          esac
+        else
+          echo "UYARI: excalibur_ec modülü yüklenemedi. $FALLBACK"
+        fi
+      fi
     else
-      echo "UYARI: excalibur_ec modülü derlenemedi (gerekirse: sudo apt install linux-headers-$(uname -r)); fan kontrolü ec_sys ile sürüyor."
+      echo "UYARI: excalibur_ec modülü derlenemedi (gerekirse: sudo apt install linux-headers-$(uname -r)). $FALLBACK"
     fi
+  elif [ $SB = yes ]; then
+    echo "UYARI: dkms kurulu değil, modül derlenemedi (sudo apt install dkms, sonra paketi yeniden kurun). $FALLBACK"
   fi
 
   if [ -d /run/systemd/system ]; then
@@ -29,8 +68,8 @@ if [ "$1" = configure ]; then
     systemctl restart $APP.service || true
   fi
 
-  if [ ! -e /dev/excalibur_ec ] && [ -f /sys/kernel/security/lockdown ] && ! grep -q "\[none\]" /sys/kernel/security/lockdown; then
-    echo "!! Secure Boot açık: Linux bu modda EC'ye yazmaya izin vermiyor. Fan kontrolü için BIOS'ta (açılışta F2 > Security) Secure Boot'u kapatın."
+  if [ $SB = yes ] && [ ! -e /dev/excalibur_ec ]; then
+    echo "   (Anahtarı onaylamak istemezseniz BIOS'ta, açılışta F2 > Security, Secure Boot'u kapatabilirsiniz.)"
   fi
   echo "Excalibur Reimagined kuruldu. Uygulama menüsünden açabilir ya da terminalde 'exr status' yazabilirsiniz."
 fi
