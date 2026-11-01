@@ -343,6 +343,12 @@ internal sealed class Daemon
         // Without the EC (Secure Boot, no ec_sys) there is no fan control to talk to; the reason goes to the window.
         if (_commands is null) return new FanResponse(false, _problem ?? "EC is not available.", Code: "ec_unavailable");
         var response = _commands.Handle(line);
+        // A power command's answer shows its effect at once (the limits are otherwise read on the next 2 s poll).
+        if (req?.Cmd?.ToLowerInvariant() is "setpowermode" or "setcpulimit" or "setgpulimit" && _power is not null && response.Status is not null)
+        {
+            try { _power.Poll(); response = response with { Status = _commands.Status() }; }
+            catch (Exception ex) when (ex is IOException or PowerException) { }
+        }
         DrainEvents();
         return response;
     }
