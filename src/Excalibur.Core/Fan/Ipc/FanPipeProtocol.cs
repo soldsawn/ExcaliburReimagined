@@ -37,7 +37,10 @@ public static class FanPipe
     /// 13: + setGpuLimit(gpuLimitWatts) (none = the power mode decides; response Code gpu_limit_invalid / gpu_limit_failed),
     ///     status Power GpuLimitWatts / GpuLockMhz / Modes (what each power mode allows here, measured), settings GpuLimitWatts.
     /// 14: + casperScan, casperDisable, casperRestore (Casper Control Center parts off / back on; response Casper).
-    /// 15: + status GraphicsMode (Hybrid / Discrete / Integrated, as the BIOS reports it).
+    /// 15: + status GraphicsMode (Hybrid / Discrete / Integrated, as the BIOS reports it) and GraphicsSwitch (a change running /
+    ///     how the last ended: ErrorCode graphics_hdmi / graphics_discrete / graphics_devices / graphics_not_set / graphics_busy /
+    ///     graphics_unsupported / graphics_firmware / graphics_failed; RestartAdvised), setGraphicsMode(graphicsMode) (starts it;
+    ///     the outcome shows in the status).
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
     public const int ProtocolVersion = 15;
@@ -70,14 +73,15 @@ public static class FanSource
 /// getSettings, updateSettings(settings), history(from, to, maxPoints), setPowerMode(powerMode),
 /// shutdown (stops the guardian and this service; fans go back to the EC),
 /// listProfiles, saveProfile(definition), deleteProfile(profile), setSlots(names), setCpuLimit(cpuLimit), setGpuLimit(gpuLimitWatts), trialEc,
-/// setLighting(lighting), setLightIdle(idle), setAppOverride(appOverride).
+/// setLighting(lighting), setLightIdle(idle), setAppOverride(appOverride), setGraphicsMode(graphicsMode).
 /// <see cref="Source"/> is one of <see cref="FanSource"/>.
 /// </summary>
 public sealed record FanRequest(string Cmd, string? Profile = null, int? Cpu = null, int? Gpu = null, int? Minutes = null,
     string? Source = null, ServiceSettingsPatch? Settings = null,
     DateTimeOffset? From = null, DateTimeOffset? To = null, int? MaxPoints = null,
     PowerMode? PowerMode = null, CustomProfile? Definition = null, IReadOnlyList<string>? Names = null, CpuLimit? CpuLimit = null,
-    KeyboardLighting? Lighting = null, bool? Idle = null, AppOverride? AppOverride = null, int? GpuLimitWatts = null);
+    KeyboardLighting? Lighting = null, bool? Idle = null, AppOverride? AppOverride = null, int? GpuLimitWatts = null,
+    Excalibur.Core.Graphics.GraphicsMode? GraphicsMode = null);
 
 /// <param name="Code">A stable machine-readable reason when <paramref name="Ok"/> is false and the UI should word it itself
 /// (power_battery, power_usbc, power_failed); <paramref name="Error"/> stays an English sentence for logs.</param>
@@ -181,7 +185,8 @@ public sealed record FanStatusDto(
     BatteryStatusDto? Battery = null,
     string? AppProgram = null,
     FanWritePath WritePath = FanWritePath.Ec,
-    Excalibur.Core.Graphics.GraphicsMode? GraphicsMode = null)
+    Excalibur.Core.Graphics.GraphicsMode? GraphicsMode = null,
+    Excalibur.Core.Graphics.GraphicsSwitchState? GraphicsSwitch = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {

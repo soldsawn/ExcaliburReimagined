@@ -33,7 +33,8 @@ public sealed class FanCommandHandler(
     CasperCleaner? casper = null,
     Action? shutdown = null,
     Action<string>? warn = null,
-    Excalibur.Core.Graphics.GraphicsModeMonitor? graphics = null)
+    Excalibur.Core.Graphics.GraphicsModeMonitor? graphics = null,
+    Excalibur.Core.Graphics.GraphicsSwitcher? graphicsSwitch = null)
 {
     public const int MaxLineLength = 4096;
 
@@ -107,6 +108,13 @@ public sealed class FanCommandHandler(
                     return gpuResult.Ok
                         ? new FanResponse(true, Status: Status())
                         : new FanResponse(false, gpuResult.Message, Status: Status(), Code: gpuResult.Code);
+                case "setgraphicsmode":
+                    if (req.GraphicsMode is not { } gm || !Enum.IsDefined(gm)) return new FanResponse(false, "setGraphicsMode needs a graphicsMode");
+                    if (graphicsSwitch is null) return new FanResponse(false, "graphics modes are not available here", Code: "graphics_unsupported");
+                    var refused = graphicsSwitch.Start(gm, req.Source ?? FanSource.Window);
+                    return refused is null
+                        ? new FanResponse(true, Status: Status())
+                        : new FanResponse(false, refused.Error, Status: Status(), Code: refused.ErrorCode);
                 case "getsettings":
                     return new FanResponse(true, Status: Status(), Settings: settings.Current);
                 case "updatesettings":
@@ -239,5 +247,6 @@ public sealed class FanCommandHandler(
             AppProgram = _appProgram,
             Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last, batteryEstimates.All, batteryEstimates.Idle),
             GraphicsMode = graphics?.Current?.Mode,
+            GraphicsSwitch = graphicsSwitch?.State is { Target: not null } gs ? gs : null,
         };
 }

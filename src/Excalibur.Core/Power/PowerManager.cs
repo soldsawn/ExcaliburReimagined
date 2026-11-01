@@ -223,6 +223,12 @@ public sealed class PowerManager
         }
     }
 
+    /// <summary>Takes the GPU clock lock off before the NVIDIA GPU is switched off; the next polls find no GPU to hold.</summary>
+    public void ReleaseGpuLimit()
+    {
+        lock (_gate) ApplyGpuLimit(null);
+    }
+
     /// <summary>When the service stops: the firmware's CPU limits go back and the GPU runs free (the saved choices stay for the next start).</summary>
     public void RestoreCpuLimit()
     {

@@ -7,8 +7,11 @@ namespace Excalibur.FanService;
 /// Keeps the graphics mode reading current (WMI 0x0203): 10 s after start (out of the start's burst of firmware calls),
 /// 5 s after a wake, and 3 s after the firmware's HDMI event (GMC_WMIEvent byte 1 = 4; raised when a cable goes in, not out; 3 s = the EC
 /// quiet spell every firmware event starts). Runs apart from the fan loop: a slow firmware call can only delay it.
+/// Started in Integrated, NVML stays closed (the GPU is off). An HDMI cable going in while Integrated brings Hybrid back,
+/// as the stock software does (the port is on the NVIDIA GPU). After a wake in Integrated the read also writes the EC's GFXT
+/// back to 0 (the BIOS sets it to 1 on waking).
 /// </summary>
-public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal signal, FanRuntime runtime, ILogger<GraphicsWorker> logger) : BackgroundService
+public sealed class GraphicsWorker(GraphicsModeMonitor graphics, GraphicsSwitcher switcher, PowerSignal signal, FanRuntime runtime, Excalibur.Core.Fan.FanFileLog fileLog, ILogger<GraphicsWorker> logger) : BackgroundService
 {
     public const byte HdmiEvent = 4;
     private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(10), ResumeDelay = TimeSpan.FromSeconds(5), HdmiDelay = TimeSpan.FromSeconds(3);
@@ -25,6 +28,11 @@ public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal sig
         {
             await Task.Delay(StartDelay, stoppingToken);
             await Task.Run(() => graphics.Refresh("start"), stoppingToken);
+            if (graphics.Current is { Mode: GraphicsMode.Integrated })
+            {
+                Excalibur.Core.Power.Nvml.Release();
+                fileLog.Write(DateTimeOffset.Now, "graphics: Integrated at start, the NVIDIA driver is not asked");
+            }
             while (!stoppingToken.IsCancellationRequested)
             {
                 await _wake.WaitAsync(stoppingToken);
@@ -35,6 +43,11 @@ public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal sig
                 if (_why is not { } why) continue;
                 _why = null;
                 await Task.Run(() => graphics.Refresh(why), stoppingToken);
+                if (why == "HDMI" && graphics.Current is { Mode: GraphicsMode.Integrated, HdmiConnected: true })
+                {
+                    fileLog.Write(DateTimeOffset.Now, "graphics: HDMI cable in while Integrated, back to Hybrid");
+                    switcher.Start(GraphicsMode.Hybrid, "HDMI");
+                }
             }
         }
         catch (OperationCanceledException) { }

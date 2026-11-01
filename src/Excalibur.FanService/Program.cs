@@ -147,7 +147,17 @@ builder.Services.AddSingleton(new Excalibur.Core.Casper.CasperCleaner(
     simulate ? new Excalibur.Core.Casper.SimulatedCasperSystem() : new WindowsCasperSystem(), Path.Combine(runtimeDir, "casper-state.json")));
 builder.Services.AddHostedService<FanPipeServer>();
 builder.Services.AddHostedService<LightingWorker>();
-builder.Services.AddSingleton(new Excalibur.Core.Graphics.GraphicsModeMonitor(new Excalibur.Core.Graphics.GraphicsModeReader(firmware).Read, m => fileLog.Write(DateTimeOffset.Now, m)));
+var graphicsMonitor = new Excalibur.Core.Graphics.GraphicsModeMonitor(new Excalibur.Core.Graphics.GraphicsModeReader(firmware).Read, m => fileLog.Write(DateTimeOffset.Now, m));
+builder.Services.AddSingleton(graphicsMonitor);
+builder.Services.AddSingleton(sp =>
+{
+    // Before the NVIDIA GPU switches off: its clock lock comes off and NVML closes (a handle left open crashed the service).
+    var power = sp.GetRequiredService<PowerManager>();
+    void Log(string m) => fileLog.Write(DateTimeOffset.Now, m);
+    return new Excalibur.Core.Graphics.GraphicsSwitcher(graphicsMonitor, new Excalibur.Core.Graphics.GraphicsModeWriter(firmware),
+        simulate ? new SimulatedGpuDevices() : new Excalibur.Core.Graphics.PnpGpuDevices(Log),
+        () => { power.ReleaseGpuLimit(); Nvml.Release(); }, Nvml.Resume, Log);
+});
 builder.Services.AddHostedService<GraphicsWorker>();
 builder.Services.AddHostedService<BatteryWorker>();
 

@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using Excalibur.App.Ui.Controls;
+using Excalibur.Core.Fan.Ipc;
 using Excalibur.Core.Graphics;
 using Excalibur.Core.Settings;
 
@@ -20,8 +22,12 @@ internal sealed class DisplayPage : UserControl
     private readonly ComboBox _onAc, _onBattery;
     private readonly TextBlock _info;
     private readonly TextBlock _gpuNow = InfoPage.Text("", "Body", bottom: 8);
+    private readonly TextBlock _gpuError = InfoPage.Text("", "Caption", top: 4);
+    private readonly TextBlock _gpuRestart = InfoPage.Text(
+        "Ekran kartının güç ayarlarının tam yerine gelmesi için bilgisayarı yeniden başlatmanız önerilir.", "Caption", top: 4);
+    private readonly Dictionary<GraphicsMode, RadioButton> _gpuButtons = [];
     private readonly FanConnection _connection;
-    private bool _loading;
+    private bool _loading, _rendering;
 
     public DisplayPage(FanConnection connection)
     {
@@ -64,24 +70,94 @@ internal sealed class DisplayPage : UserControl
                     InfoPage.Text("Pilde düşük hız şarjı daha uzun tutar; prizde yüksek hız görüntüyü akıcı yapar. Kural, simge alanındaki uygulama açıkken çalışır.", "Caption", top: 6)),
                 InfoPage.Card("Ekran kartı modu",
                     _gpuNow,
-                    InfoPage.Text("• Hibrit: iki ekran kartı birlikte; NVIDIA kartı yalnız gerektiğinde çalışır. Önerilen.", "Caption"),
-                    InfoPage.Text("• Dahili: yalnız Intel; NVIDIA kartı kapanır, pil daha uzun gider. HDMI çıkışı çalışmaz.", "Caption", top: 2),
-                    InfoPage.Text("• Harici: yalnız NVIDIA; oyunlarda en yüksek hız, pil daha kısa. Yeniden başlatma gerekir.", "Caption", top: 2),
-                    InfoPage.Text("Modu buradan değiştirmek yakında gelecek.", "Caption", top: 8)),
+                    GraphicsButtons(),
+                    _gpuError, _gpuRestart,
+                    InfoPage.Text("• Hibrit: iki ekran kartı birlikte; NVIDIA kartı yalnız gerektiğinde çalışır. Önerilen.", "Caption", top: 6),
+                    InfoPage.Text("• Dahili: yalnız Intel; NVIDIA kartı kapanır, pil daha uzun gider. HDMI çıkışı çalışmaz; HDMI kablosu takılınca kendiliğinden Hibrit'e dönülür.", "Caption", top: 2),
+                    InfoPage.Text("• Harici: yalnız NVIDIA; oyunlarda en yüksek hız, pil daha kısa. Yeniden başlatma gerekir (yakında).", "Caption", top: 2)),
             },
         };
 
+        ShowError(null);
         _connection.Changed += RenderGraphics;
         RenderGraphics();
     }
 
+    private WrapPanel GraphicsButtons()
+    {
+        var panel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        string group = "graphics" + GetHashCode();
+        foreach (var (mode, label, detail) in new[]
+        {
+            (GraphicsMode.Hybrid, "Hibrit", "iki ekran kartı · önerilen"),
+            (GraphicsMode.Integrated, "Dahili", "yalnız Intel · pil uzun"),
+            (GraphicsMode.Discrete, "Harici", "yalnız NVIDIA · yakında"),
+        })
+        {
+            var b = new RadioButton
+            {
+                GroupName = group, Margin = new Thickness(0, 0, 8, 8), MinWidth = 180, Height = 58,
+                Content = new StackPanel { Children = { new TextBlock { Text = label, FontWeight = FontWeights.SemiBold }, InfoPage.Text(detail, "Caption", top: 2) } },
+            };
+            b.SetResourceReference(StyleProperty, "Segment");
+            b.Checked += async (_, _) =>
+            {
+                if (_rendering) return;
+                if (mode == GraphicsMode.Integrated && !ConfirmDialog.Ask(this, "Dahili moda geç",
+                        "NVIDIA ekran kartı kapanacak; açık oyun ya da ekran kartını kullanan programlar kapanabilir. Kaydedilmemiş işleriniz varsa önce kaydedin.",
+                        "Dahili moda geç"))
+                {
+                    RenderGraphics();
+                    return;
+                }
+                var r = await _connection.RequestAsync(new FanRequest("setGraphicsMode", GraphicsMode: mode));
+                ShowError(r is null ? "Fan servisine ulaşılamadı." : r.Ok ? null : GraphicsMessage(r.Code, r.Error));
+                RenderGraphics();
+            };
+            _gpuButtons[mode] = b;
+            panel.Children.Add(b);
+        }
+        return panel;
+    }
+
     private void RenderGraphics()
     {
-        var s = _connection.Status;
-        _gpuNow.Text = !_connection.Connected || s is null ? "Fan hizmetine bağlanılamıyor; mod okunamadı."
+        var s = _connection.Connected ? _connection.Status : null;
+        var sw = s?.GraphicsSwitch;
+        bool busy = sw?.Busy == true;
+        GraphicsMode? shown = busy ? sw!.Target : s?.GraphicsMode;
+        _gpuNow.Text = s is null ? "Fan hizmetine bağlanılamıyor; mod okunamadı."
             : s.GraphicsMode is not { } mode ? "Bu bilgisayar ekran kartı modunu bildirmiyor."
+            : busy ? $"{GraphicsName(sw!.Target!.Value)} moduna geçiliyor, birkaç saniye sürer…"
             : $"Şu an: {GraphicsName(mode)}";
+        _rendering = true;
+        foreach (var (m, b) in _gpuButtons)
+        {
+            b.IsChecked = m == shown;
+            b.IsEnabled = s?.GraphicsMode is not null && !busy && m != GraphicsMode.Discrete;
+        }
+        _rendering = false;
+        if (busy) ShowError(null);
+        else if (sw?.ErrorCode is { } code) ShowError(GraphicsMessage(code, sw.Error));
+        _gpuRestart.Visibility = sw?.RestartAdvised == true ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    private void ShowError(string? text)
+    {
+        _gpuError.Text = text ?? "";
+        _gpuError.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static string GraphicsMessage(string? code, string? error) => code switch
+    {
+        "graphics_hdmi" => "HDMI kablosu takılıyken Dahili moda geçilemez: HDMI çıkışı NVIDIA kartına bağlı. Kabloyu çıkarıp yeniden deneyin.",
+        "graphics_discrete" => "Bilgisayar Harici modda açıldı; önce Hibrit'i seçip yeniden başlatın.",
+        "graphics_devices" => "NVIDIA ekran kartı açılıp kapatılamadı; mod değişmedi.",
+        "graphics_not_set" => "BIOS Dahili modu kabul etmedi; NVIDIA kartı yeniden açıldı.",
+        "graphics_busy" => "Bir mod değişikliği zaten sürüyor.",
+        "graphics_unsupported" => "Bu mod şimdilik kullanılamıyor.",
+        _ => error is null ? "Mod değiştirilemedi." : $"Mod değiştirilemedi ({error}).",
+    };
 
     private static string GraphicsName(GraphicsMode mode) => mode switch
     {
