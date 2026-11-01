@@ -43,6 +43,7 @@ public sealed class GraphicsWorker(GraphicsModeMonitor graphics, GraphicsSwitche
                 if (_why is not { } why) continue;
                 _why = null;
                 await Task.Run(() => graphics.Refresh(why), stoppingToken);
+                if (why == "wake") switcher.Woke();
                 if (why == "HDMI" && graphics.Current is { Mode: GraphicsMode.Integrated, HdmiConnected: true })
                 {
                     fileLog.Write(DateTimeOffset.Now, "graphics: HDMI cable in while Integrated, back to Hybrid");

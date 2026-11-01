@@ -24,7 +24,7 @@ internal sealed class DisplayPage : UserControl
     private readonly TextBlock _gpuNow = InfoPage.Text("", "Body", bottom: 8);
     private readonly TextBlock _gpuError = InfoPage.Text("", "Caption", top: 4);
     private readonly TextBlock _gpuRestart = InfoPage.Text(
-        "Ekran kartının güç ayarlarının tam yerine gelmesi için bilgisayarı yeniden başlatmanız önerilir.", "Caption", top: 4);
+        "Fan denetleyicisinin ekran kartı sıcaklığını yeniden görmesi için bilgisayarı bir kez uyutup uyandırın ya da yeniden başlatın. O zamana kadar fanlar sıcaklığı NVIDIA sürücüsünden alır.", "Caption", top: 4);
     private readonly Dictionary<GraphicsMode, RadioButton> _gpuButtons = [];
     private readonly FanConnection _connection;
     private bool _loading, _rendering;

@@ -75,6 +75,17 @@ public class GraphicsSwitcherTests
     }
 
     [Fact]
+    public void A_wake_in_Hybrid_ends_the_advice()
+    {
+        _switcher.Switch(GraphicsMode.Integrated, "window");
+        _switcher.Woke(); // still Integrated: nothing to end
+        _switcher.Switch(GraphicsMode.Hybrid, "window");
+        Assert.True(_switcher.State.RestartAdvised);
+        _switcher.Woke();
+        Assert.False(_switcher.State.RestartAdvised);
+    }
+
+    [Fact]
     public void Asking_for_the_mode_in_force_changes_nothing()
     {
         _switcher.Switch(GraphicsMode.Hybrid, "window");

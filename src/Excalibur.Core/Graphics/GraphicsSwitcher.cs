@@ -49,8 +49,10 @@ public sealed record GraphicsSwitchState(bool Busy, GraphicsMode? Target, string
 /// NVIDIA GPU; the cable is read fresh, the BIOS raises no event when it comes out) or after a Discrete boot; the GPU's
 /// clock lock and NVML are let go (<paramref name="releaseGpu"/>: a handle left open crashed the service, 2026-10-23),
 /// the GPU and its framework device are switched off, then the BIOS is told. Hybrid: devices on, BIOS told, NVML may open
-/// again (<paramref name="resumeGpu"/>); a restart is advised (the driver's power management came back incomplete:
-/// no power limit, full clocks at idle, 2026-10-23). A failed step puts back what was done.
+/// again (<paramref name="resumeGpu"/>); a sleep or a restart is advised until the next wake (<see cref="Woke"/>): the EC's
+/// GFXT stays 0 after Integrated (the BIOS sets it to 1 only at boot and on waking), so the EC itself does not see the GPU
+/// temperature (our fans take it from the NVIDIA driver meanwhile). The driver's power limit came back at once on
+/// 2026-11-02 (85 W); on 2026-10-23, with NVML left open, it had not. A failed step puts back what was done.
 /// </summary>
 public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWriter writer, IGpuDevices devices,
     Action releaseGpu, Action resumeGpu, Action<string> log)
@@ -100,6 +102,17 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
             log($"graphics: {target} failed ({source}): {ex}");
         }
         lock (_gate) _state = new GraphicsSwitchState(false, target, code, error, _restartAdvised);
+    }
+
+    /// <summary>After a wake: the BIOS has set GFXT back to 1, so the advice ends (once Hybrid).</summary>
+    public void Woke()
+    {
+        lock (_gate)
+        {
+            if (!_restartAdvised || _state.Busy || monitor.Current?.Mode != GraphicsMode.Hybrid) return;
+            _restartAdvised = false;
+            _state = _state with { RestartAdvised = false };
+        }
     }
 
     private GraphicsReading Fresh(string source)
@@ -156,7 +169,7 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
         lock (_gate) _restartAdvised = true;
         writer.Set(GraphicsMode.Hybrid);
         var after = Fresh(source);
-        log(after.Mode == GraphicsMode.Hybrid ? "graphics: Hybrid (NVIDIA GPU on; a restart is advised)" : $"graphics: the BIOS still reports {after.Mode}");
+        log(after.Mode == GraphicsMode.Hybrid ? "graphics: Hybrid (NVIDIA GPU on; a sleep or restart is advised)" : $"graphics: the BIOS still reports {after.Mode}");
     }
 
     private void TryEnable()
