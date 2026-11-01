@@ -64,6 +64,7 @@ public partial class MainWindow : Window
             // edge, which then shows as a thin line on the neighbouring monitor. No frame while maximized.
             int border = WindowState == WindowState.Maximized ? DwmColorNone : DwmColorDefault;
             DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DwmaBorderColor, ref border, sizeof(int));
+            SetFrame();
         };
 
         _connection.Changed += RenderStatus;
@@ -120,7 +121,9 @@ public partial class MainWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
-        int round = 2, dark = (bool)FindResource("IsDark") ? 1 : 0;
+        // Rounded corners make DWM draw the window's shadow even while maximized: it fell on the neighbouring monitor past
+        // the clipped 8 px overhang, a thin unshadowed strip then a shadow (measured 2026-11-02). Not rounded while maximized.
+        int round = WindowState == WindowState.Maximized ? 1 : 2, dark = (bool)FindResource("IsDark") ? 1 : 0;
         DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));
         DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
     }
