@@ -7,7 +7,7 @@ Casper Excalibur için fan kontrolü, güç modu, işlemci/ekran kartı watt sı
   Linux'ta güç modu şimdilik ekran kartının watt tavanını değiştirmez (Windows'ta değiştirir); ekran kartı için
   "exr gpu-limit" kullanın.
 - İşlemci (PL1/PL2) ve ekran kartı watt sınırları.
-- Üç bölgeli klavye ışığı, parlaklık (0–2), efektler ve boşta kapatma.
+- Üç bölgeli klavye ışığı, parlaklık (0–2) ve efektler.
 - Pil sağlığı, anlık çekiş/süre tahminleri ve yerel sıcaklık/fan geçmişi.
 
 ŞART: BIOS'ta Secure Boot KAPALI olmalı (açılışta F2 > Security > Secure Boot). Açıkken Linux EC'ye yazmaya izin vermez.

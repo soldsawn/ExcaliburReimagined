@@ -274,7 +274,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
-    <Style Selector="TextBox:disabled /template/ TextPresenter#PART_TextPresenter">
+    <Style Selector="TextBox:disabled">
         <Setter Property="Foreground" Value="{DynamicResource Text}" />
     </Style>
     <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement, TextBox:focus /template/ Border#PART_BorderElement">

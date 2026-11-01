@@ -567,7 +567,6 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
                   exr light breathing #RRGGBB [--level 0|1|2]          nefes alma efekti
                   exr light cycle [--level 0|1|2]                      renk döngüsü efekti
                   exr light level 0|1|2                                parlaklık kademesi (0 kapalı, 1 düşük, 2 yüksek)
-                  exr light idle 0|1|5|15                              boşta kalınca kapatma süresi (dakika, 0 = kapalı)
                   exr light off                                        klavye ışığını kapat
                 """);
             return 0;
@@ -602,17 +601,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
         {
             next = current with { Effect = LightEffect.Off };
         }
-        else if (first is "idle" or "bosta" or "boşta")
-        {
-            int idleMins = tokens.Count >= 2 && IsOffWord(tokens[1]) ? 0
-                : (tokens.Count >= 2 && int.TryParse(tokens[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int im) ? im : -1);
-            if (idleMins < 0)
-            {
-                Console.Error.WriteLine("Kullanım: exr light idle 0|1|5|15");
-                return 2;
-            }
-            next = current with { IdleOffMinutes = idleMins };
-        }
+        // No "idle": turning the light off when idle needs someone to notice idle input (the Windows tray does); not on Linux yet.
         else if (first is "level" or "parlaklik" or "parlaklık")
         {
             if (tokens.Count < 2 || !int.TryParse(tokens[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int lvl) || lvl is < 0 or > 2)

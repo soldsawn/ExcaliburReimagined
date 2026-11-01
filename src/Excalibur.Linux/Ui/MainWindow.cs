@@ -53,7 +53,7 @@ internal sealed class MainWindow : Window
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
             new("battery", "Pil", "", () => new BatteryPage(_connection)),
-            new("lighting", "Aydınlatma", "", () => Soon("Aydınlatma")),
+            new("lighting", "Aydınlatma", "", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", char.ConvertFromUtf32(0xF013D), () => Soon("Otomasyon")),
             new("settings", "Ayarlar", "", () => Soon("Ayarlar"), Bottom: true),
         ];
