@@ -142,6 +142,9 @@ internal sealed class OverviewPage : UserControl
         var nameText = Kit.Text(name ?? "", "Caption");
         nameText.HorizontalAlignment = HorizontalAlignment.Right;
         nameText.TextWrapping = TextWrapping.NoWrap;
+        // A long name (lspci's) never runs into the title: a gap, then cut with "…".
+        nameText.TextTrimming = TextTrimming.CharacterEllipsis;
+        nameText.Margin = new Thickness(16, 0, 0, 0);
         var titleText = new TextBlock { Text = title, FontSize = 12, FontWeight = FontWeight.SemiBold }.Res(TextBlock.ForegroundProperty, "SubText");
         header.Children.Add(titleText);
         header.Children.Add(nameText);

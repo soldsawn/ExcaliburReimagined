@@ -28,7 +28,6 @@ internal sealed class LinuxGuiApp : Application
     private MainWindow? _window;
     private FanConnection? _connection;
     private UserSettingsStore? _userSettings;
-    private NativeMenuItem? _tempItem;
 
     public static bool HasDisplaySession() =>
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DISPLAY")) ||
@@ -108,7 +107,6 @@ internal sealed class LinuxGuiApp : Application
             using var iconStream = OpenEmbeddedIcon();
             if (iconStream is null) return false;
 
-            _tempItem = new NativeMenuItem("Excalibur Reimagined — Bağlanıyor...") { IsEnabled = false };
             var openItem = new NativeMenuItem("Pencereyi aç");
             openItem.Click += (_, _) => ShowMainWindow();
 
@@ -139,8 +137,6 @@ internal sealed class LinuxGuiApp : Application
             {
                 Items =
                 {
-                    _tempItem,
-                    new NativeMenuItemSeparator(),
                     openItem,
                     new NativeMenuItem("Fan profili") { Menu = profileMenu },
                     new NativeMenuItem("Güç modu") { Menu = powerMenu },
@@ -159,12 +155,15 @@ internal sealed class LinuxGuiApp : Application
             tray.Clicked += (_, _) => ShowMainWindow();
             TrayIcon.SetIcons(this, [tray]);
 
+            // Nothing in the menu changes while it may be open: GNOME's AppIndicator rebuilds an open menu on every change, which
+            // closed the submenus a second after they opened (live temperatures were in the first row, 2026-11-01). The tooltip
+            // names the profile and changes only with it.
+            string? shownProfile = null;
             connection.Changed += () =>
             {
-                if (connection.Status is not { } s) return;
-                string summary = $"İşlemci {s.CpuTempC?.ToString() ?? "-"} °C · Ekran kartı {s.GpuTempC?.ToString() ?? "-"} °C · {Excalibur.App.Tray.ProfileNames.Label(s.Profile)}";
-                if (_tempItem is not null) _tempItem.Header = summary;
-                tray.ToolTipText = $"Excalibur Reimagined — {summary}";
+                if (connection.Status is not { } s || s.Profile == shownProfile) return;
+                shownProfile = s.Profile;
+                tray.ToolTipText = $"Excalibur Reimagined — {Excalibur.App.Tray.ProfileNames.Label(s.Profile)}";
             };
             // The window polls only while it exists; the tray's line needs it running even while the window is hidden.
             connection.Start();

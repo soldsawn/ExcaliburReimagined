@@ -44,7 +44,10 @@ internal static class HardwareNames
             p.WaitForExit(2000);
             var line = output.Split('\n').FirstOrDefault(l => l.Contains("NVIDIA", StringComparison.Ordinal)
                 && (l.Contains("VGA", StringComparison.Ordinal) || l.Contains("3D controller", StringComparison.Ordinal)));
-            return line?.Split(": ", 2) is [_, var desc] ? desc.Replace("NVIDIA Corporation", "NVIDIA").Trim() : null;
+            if (line?.Split(": ", 2) is not [_, var desc]) return null;
+            // "NVIDIA Corporation AD107M [GeForce RTX 4060 Max-Q / Mobile] (rev a1)": the marketing name is in the brackets.
+            int open = desc.LastIndexOf('['), close = desc.LastIndexOf(']');
+            return open >= 0 && close > open ? "NVIDIA " + desc[(open + 1)..close].Trim() : desc.Replace("NVIDIA Corporation", "NVIDIA").Trim();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException) { return null; }
     }
