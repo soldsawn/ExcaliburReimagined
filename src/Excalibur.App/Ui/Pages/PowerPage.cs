@@ -317,8 +317,12 @@ internal sealed class PowerPage : UserControl
         _cpuPl2.Text = power?.CpuPl2Watts is { } pl2 ? $"Kısa süreli sınır {pl2} W" : "";
         _cpuPl2.Parent.SetValue(VisibilityProperty, power?.CpuPl2Watts is null ? Visibility.Collapsed : Visibility.Visible);
         _gpuWatts.Text = power?.GpuPowerWatts is { } gw ? $"{gw} W" : "–";
-        _gpuBar.Percent = power is { GpuPowerWatts: { } w2, GpuWatts: > 0 } ? Math.Min(100, w2 * 100 / power.GpuWatts.Value) : null;
-        _gpuLimit.Text = power?.GpuWatts is { } gl ? $"Sınır {gl} W" : "Ekran kartı okunamıyor";
+        // With the user's own limit set, the bar and text follow it; the driver's limit (the power mode's) stays above it.
+        int? gpuCap = power?.GpuLimitWatts ?? power?.GpuWatts;
+        _gpuBar.Percent = power?.GpuPowerWatts is { } w2 && gpuCap is > 0 ? Math.Min(100, w2 * 100 / gpuCap.Value) : null;
+        _gpuLimit.Text = power?.GpuLimitWatts is { } own
+            ? power.GpuWatts is { } drv ? $"Sınırınız {own} W (güç modunun sınırı {drv} W)" : $"Sınırınız {own} W"
+            : power?.GpuWatts is { } gl ? $"Sınır {gl} W" : "Ekran kartı okunamıyor";
 
         RenderLimit();
         RenderGpuLimit();

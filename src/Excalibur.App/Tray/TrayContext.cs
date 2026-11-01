@@ -80,6 +80,8 @@ internal sealed class TrayContext : ApplicationContext
         // Not while taking snapshots: those only read.
         if (snapshot is null)
         {
+            // "Exit" stopped the services; opening the app brings them back (off the UI thread: starting takes a moment).
+            if (!simulated) _ = Task.Run(FanServices.StartIfStopped);
             _apps = new AppAutomation(_client, _userSettings, _refresh,
                 (title, subtitle) => { if (_userSettings.Current.Osd) _osd.Flash(title, subtitle, Theme.Ok); });
             _refresh.Held = () => _apps.HoldsRefreshRate;

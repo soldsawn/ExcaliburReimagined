@@ -79,6 +79,12 @@ try {
                 # Restart 5 s after each failure (the count resets after a day); a non-zero exit code counts as a failure.
                 & sc.exe failure $s.Name reset= 86400 actions= restart/5000/restart/5000/restart/5000 | Out-Null
                 & sc.exe failureflag $s.Name 1 | Out-Null
+                # The tray's Exit stops both services and the app starts them again when it opens; it runs without administrator
+                # rights, so the signed-in (interactive) user may start and query them, nothing more.
+                $sddl = ((& sc.exe sdshow $s.Name) -join '').Trim()
+                if ($sddl -notmatch '\(A;;RPLCLO;;;IU\)') {
+                    & sc.exe sdset $s.Name ($sddl -replace '^(D:(\([^)]*\))*)', '$1(A;;RPLCLO;;;IU)') | Out-Null
+                }
             }
             foreach ($s in $services) {
                 Say "start $($s.Name)"

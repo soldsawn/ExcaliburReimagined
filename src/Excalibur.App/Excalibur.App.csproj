@@ -31,6 +31,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Excalibur.Core\Excalibur.Core.csproj" />
+    <!-- Starts the fan services again after the tray's Exit stopped them (Tray/FanServices.cs). -->
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
   </ItemGroup>
 
 </Project>
