@@ -150,7 +150,10 @@ internal sealed class PowerPage : UserControl
                 Kit.Text("Dizüstünün güç ayarı ve işlemci ile ekran kartının şu an çektiği güç.", "Caption", top: 2, bottom: 18),
                 Kit.Card("Güç modu",
                     Kit.Text("İşlemcinin çekebileceği gücü ve dizüstünün kendi fan ayarını belirler. Daha yüksek mod daha hızlı ama daha sıcak ve daha gürültülüdür. " +
-                             "Linux'ta güç modu ekran kartının sınırını değiştirmez; ekran kartını aşağıdaki sınırla kısabilirsiniz.", "Caption"),
+                             (File.Exists("/dev/excalibur_ec")
+                                 // Measured on the G870 through the module (2026-11-01): Office/Gaming 70 W, High 80 W; Windows 75/85/100 W.
+                                 ? "Linux'ta güç modu ekran kartının sınırını da değiştirir, ama sınır Windows'takinden biraz düşük kalabilir."
+                                 : "Linux'ta güç modu ekran kartının sınırını değiştirmez; ekran kartını aşağıdaki sınırla kısabilirsiniz."), "Caption"),
                     buttons, _now, _note, _error),
                 Kit.Card("Anlık güç", meters),
                 SideBySide(
