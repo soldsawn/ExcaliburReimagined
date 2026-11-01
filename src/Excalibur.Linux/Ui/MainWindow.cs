@@ -54,8 +54,8 @@ internal sealed class MainWindow : Window
             new("power", "Performans", "", () => new PowerPage(_connection)),
             new("battery", "Pil", "", () => new BatteryPage(_connection)),
             new("lighting", "Aydınlatma", "", () => new LightingPage(_connection)),
-            new("automation", "Otomasyon", char.ConvertFromUtf32(0xF013D), () => Soon("Otomasyon")),
-            new("settings", "Ayarlar", "", () => Soon("Ayarlar"), Bottom: true),
+            new("automation", "Otomasyon", char.ConvertFromUtf32(0xF013D), () => new AutomationPage(_connection)),
+            new("settings", "Ayarlar", "", () => SettingsPage.Create(_connection), Bottom: true),
         ];
 
         // sidebar: brand, navigation, settings at the bottom
@@ -131,9 +131,6 @@ internal sealed class MainWindow : Window
         _exiting = true;
         Close();
     }
-
-    private static Control Soon(string title) =>
-        Kit.Page(title, "Bu sayfa Linux'a taşınıyor; şimdilik komut satırından (exr) kullanılabilir.");
 
     private void ShowPage(PageDef def)
     {

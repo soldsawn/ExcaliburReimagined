@@ -64,7 +64,7 @@ internal sealed class KeyboardView : Control
     /// <summary>Left, middle, right.</summary>
     public Color[] Colours { get => _colours; set { _colours = value; InvalidateVisual(); } }
 
-    public LightEffect Effect { get => _effect; set { _effect = value; UpdateAnimation(); InvalidateVisual(); } }
+    public new LightEffect Effect { get => _effect; set { _effect = value; UpdateAnimation(); InvalidateVisual(); } }
 
     /// <summary>0 = light off, 1 low, 2 high.</summary>
     public int Brightness { get => _brightness; set { _brightness = value; UpdateAnimation(); InvalidateVisual(); } }
