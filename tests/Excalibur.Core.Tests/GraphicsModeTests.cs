@@ -30,17 +30,18 @@ public class GraphicsModeTests
         => Assert.Null(GraphicsModeReader.Parse(new SmiCommand { A2 = a2 }));
 
     [Fact]
-    public void The_monitor_logs_the_first_answer_and_changes_only()
+    public void The_monitor_logs_the_first_answer_and_mode_changes_only()
     {
         var log = new List<string>();
         GraphicsReading? next = new(GraphicsMode.Hybrid, false);
         var monitor = new GraphicsModeMonitor(() => next, log.Add);
         monitor.Refresh("start");
-        monitor.Refresh("wake");
         next = new GraphicsReading(GraphicsMode.Hybrid, true);
         monitor.Refresh("HDMI");
-        Assert.Equal(next, monitor.Current);
-        Assert.Equal(["graphics: Hybrid, HDMI cable out (start)", "graphics: Hybrid, HDMI cable in (HDMI)"], log);
+        Assert.Equal(next, monitor.Current); // the cable is kept, not logged
+        next = new GraphicsReading(GraphicsMode.Integrated, false);
+        monitor.Refresh("wake");
+        Assert.Equal(["graphics: Hybrid (start)", "graphics: Integrated (wake)"], log);
     }
 
     [Fact]

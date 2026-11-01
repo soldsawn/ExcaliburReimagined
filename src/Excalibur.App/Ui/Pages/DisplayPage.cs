@@ -80,7 +80,7 @@ internal sealed class DisplayPage : UserControl
         var s = _connection.Status;
         _gpuNow.Text = !_connection.Connected || s is null ? "Fan hizmetine bağlanılamıyor; mod okunamadı."
             : s.GraphicsMode is not { } mode ? "Bu bilgisayar ekran kartı modunu bildirmiyor."
-            : $"Şu an: {GraphicsName(mode)}" + (s.HdmiConnected == true ? " · HDMI kablosu takılı" : "");
+            : $"Şu an: {GraphicsName(mode)}";
     }
 
     private static string GraphicsName(GraphicsMode mode) => mode switch

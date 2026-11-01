@@ -239,6 +239,5 @@ public sealed class FanCommandHandler(
             AppProgram = _appProgram,
             Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last, batteryEstimates.All, batteryEstimates.Idle),
             GraphicsMode = graphics?.Current?.Mode,
-            HdmiConnected = graphics?.Current?.HdmiConnected,
         };
 }

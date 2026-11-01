@@ -34,7 +34,11 @@ public sealed class GraphicsModeReader(ISmiChannel firmware)
         reply.A2 is >= 1 and <= 3 ? new GraphicsReading((GraphicsMode)reply.A2, reply.A3 == 1) : null;
 }
 
-/// <summary>The last graphics mode reading; read at start, after a wake and when an HDMI cable comes or goes.</summary>
+/// <summary>
+/// The last graphics mode reading; read at start, after a wake and after the firmware's HDMI event. Its HDMI flag is only
+/// as fresh as the read: the BIOS raises the event when a cable goes in, not when it comes out (2026-11-02), so a
+/// decision that needs the cable reads again first, as the stock Control Center does.
+/// </summary>
 public sealed class GraphicsModeMonitor(Func<GraphicsReading?> read, Action<string> log)
 {
     private readonly object _gate = new();
@@ -55,13 +59,14 @@ public sealed class GraphicsModeMonitor(Func<GraphicsReading?> read, Action<stri
         }
         lock (_gate)
         {
-            if (_answered && now == Current) return;
+            bool same = _answered && now?.Mode == Current?.Mode;
             _answered = true;
             Current = now;
+            if (same) return;
         }
         log(now is null
             ? $"graphics: this BIOS does not report the graphics mode ({why})"
-            : $"graphics: {now.Mode}, HDMI cable {(now.HdmiConnected ? "in" : "out")} ({why})");
+            : $"graphics: {now.Mode} ({why})");
     }
 
     // WMI's failures (a stalled call is an InvalidOperationException); anything else is a bug and is not hidden.
