@@ -1,12 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
+using Excalibur.Core.Graphics;
 using Excalibur.Core.Settings;
 
 namespace Excalibur.App.Ui.Pages;
 
 /// <summary>
 /// Ekran: the screen's refresh rate follows the charger (docs/08 3.1). The tray applies the rule; this page only
-/// edits <see cref="UserSettings.RefreshRate"/>, which both processes share through the settings file.
+/// edits <see cref="UserSettings.RefreshRate"/>, which both processes share through the settings file. Below it the
+/// graphics mode the BIOS reports (the service reads it; .scratch/ekran-karti-modu).
 /// </summary>
 internal sealed class DisplayPage : UserControl
 {
@@ -17,10 +19,13 @@ internal sealed class DisplayPage : UserControl
     private readonly CheckBox _enabled = new() { Content = "Prizde yüksek, pilde düşük yenileme hızı kullan", FontSize = 14 };
     private readonly ComboBox _onAc, _onBattery;
     private readonly TextBlock _info;
+    private readonly TextBlock _gpuNow = InfoPage.Text("", "Body", bottom: 8);
+    private readonly FanConnection _connection;
     private bool _loading;
 
-    public DisplayPage()
+    public DisplayPage(FanConnection connection)
     {
+        _connection = connection;
         _enabled.SetResourceReference(Control.ForegroundProperty, "Text");
         _onAc = Combo();
         _onBattery = Combo();
@@ -57,11 +62,33 @@ internal sealed class DisplayPage : UserControl
                     _info,
                     _enabled, grid,
                     InfoPage.Text("Pilde düşük hız şarjı daha uzun tutar; prizde yüksek hız görüntüyü akıcı yapar. Kural, simge alanındaki uygulama açıkken çalışır.", "Caption", top: 6)),
-                InfoPage.Card("Yakında",
-                    InfoPage.Text("• Ekran kartı modu: karma, yalnız harici ya da yalnız dahili (değiştirmek için yeniden başlatma gerekir)", "Caption")),
+                InfoPage.Card("Ekran kartı modu",
+                    _gpuNow,
+                    InfoPage.Text("• Hibrit: iki ekran kartı birlikte; NVIDIA kartı yalnız gerektiğinde çalışır. Önerilen.", "Caption"),
+                    InfoPage.Text("• Dahili: yalnız Intel; NVIDIA kartı kapanır, pil daha uzun gider. HDMI çıkışı çalışmaz.", "Caption", top: 2),
+                    InfoPage.Text("• Harici: yalnız NVIDIA; oyunlarda en yüksek hız, pil daha kısa. Yeniden başlatma gerekir.", "Caption", top: 2),
+                    InfoPage.Text("Modu buradan değiştirmek yakında gelecek.", "Caption", top: 8)),
             },
         };
+
+        _connection.Changed += RenderGraphics;
+        RenderGraphics();
     }
+
+    private void RenderGraphics()
+    {
+        var s = _connection.Status;
+        _gpuNow.Text = !_connection.Connected || s is null ? "Fan hizmetine bağlanılamıyor; mod okunamadı."
+            : s.GraphicsMode is not { } mode ? "Bu bilgisayar ekran kartı modunu bildirmiyor."
+            : $"Şu an: {GraphicsName(mode)}" + (s.HdmiConnected == true ? " · HDMI kablosu takılı" : "");
+    }
+
+    private static string GraphicsName(GraphicsMode mode) => mode switch
+    {
+        GraphicsMode.Integrated => "Dahili (yalnız Intel)",
+        GraphicsMode.Discrete => "Harici (yalnız NVIDIA)",
+        _ => "Hibrit (iki ekran kartı)",
+    };
 
     private static string Format(int hz) => $"{hz} Hz";
 

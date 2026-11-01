@@ -38,7 +38,7 @@ public partial class MainWindow : Window
             new("profiles", "Profiller", "", () => new ProfilesPage(_connection)),
             new("power", "Performans", "", () => new PowerPage(_connection)),
             new("battery", "Pil", "", () => new BatteryPage(_connection)),
-            new("display", "Ekran", "", () => new DisplayPage()),
+            new("display", "Ekran", "", () => new DisplayPage(_connection)),
             new("lighting", "Aydınlatma", "\uE765", () => new LightingPage(_connection)),
             new("automation", "Otomasyon", "", () => new AutomationPage(_connection)),
             new("settings", "Ayarlar", "\uE713", () => InfoPage.Settings(_connection), Bottom: true),

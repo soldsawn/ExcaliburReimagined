@@ -32,7 +32,8 @@ public sealed class FanCommandHandler(
     FanFileLog fileLog,
     CasperCleaner? casper = null,
     Action? shutdown = null,
-    Action<string>? warn = null)
+    Action<string>? warn = null,
+    Excalibur.Core.Graphics.GraphicsModeMonitor? graphics = null)
 {
     public const int MaxLineLength = 4096;
 
@@ -237,5 +238,7 @@ public sealed class FanCommandHandler(
             LightBrightness = settings.Current.Lighting?.Brightness,
             AppProgram = _appProgram,
             Battery = BatteryStatusDto.From(battery.Live(), battery.Health, batteryRecorder.Last, batteryEstimates.All, batteryEstimates.Idle),
+            GraphicsMode = graphics?.Current?.Mode,
+            HdmiConnected = graphics?.Current?.HdmiConnected,
         };
 }

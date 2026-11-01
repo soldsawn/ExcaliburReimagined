@@ -33,6 +33,7 @@ public sealed class FanPipeServer(
     IHostApplicationLifetime lifetime,
     FanFileLog fileLog,
     Excalibur.Core.Casper.CasperCleaner casper,
+    Excalibur.Core.Graphics.GraphicsModeMonitor graphics,
     ILogger<FanPipeServer> logger) : BackgroundService
 {
     private const int MaxClients = 8;
@@ -43,7 +44,7 @@ public sealed class FanPipeServer(
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _handler = new FanCommandHandler(loop, runtime.Simulated, runtime.StartedAt, settings, history, power, lighting, battery,
-            batteryRecorder, batteryEstimates, switcher, fileLog, casper, ScheduleShutdown, m => logger.LogWarning("{Message}", m));
+            batteryRecorder, batteryEstimates, switcher, fileLog, casper, ScheduleShutdown, m => logger.LogWarning("{Message}", m), graphics);
         return Task.WhenAll(Enumerable.Range(0, Listeners).Select(_ => Task.Run(() => ListenAsync(stoppingToken), stoppingToken)));
     }
 

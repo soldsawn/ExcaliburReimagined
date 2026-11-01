@@ -37,9 +37,10 @@ public static class FanPipe
     /// 13: + setGpuLimit(gpuLimitWatts) (none = the power mode decides; response Code gpu_limit_invalid / gpu_limit_failed),
     ///     status Power GpuLimitWatts / GpuLockMhz / Modes (what each power mode allows here, measured), settings GpuLimitWatts.
     /// 14: + casperScan, casperDisable, casperRestore (Casper Control Center parts off / back on; response Casper).
+    /// 15: + status GraphicsMode (Hybrid / Discrete / Integrated, as the BIOS reports it) / HdmiConnected.
     /// New fields are optional both ways, so an older client still works against a newer service.
     /// </summary>
-    public const int ProtocolVersion = 14;
+    public const int ProtocolVersion = 15;
 
     public const string Name = "ExcaliburFan";
     /// <summary>The --simulate instance, so it can run beside the real service.</summary>
@@ -179,7 +180,9 @@ public sealed record FanStatusDto(
     bool EcSeenElsewhere = false,
     BatteryStatusDto? Battery = null,
     string? AppProgram = null,
-    FanWritePath WritePath = FanWritePath.Ec)
+    FanWritePath WritePath = FanWritePath.Ec,
+    Excalibur.Core.Graphics.GraphicsMode? GraphicsMode = null,
+    bool? HdmiConnected = null)
 {
     public static FanStatusDto From(FanStatus s, bool simulated, DateTimeOffset startedAt)
     {
