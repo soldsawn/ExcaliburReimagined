@@ -118,7 +118,11 @@ internal sealed class DisplayPage : UserControl
         return panel;
     }
 
-    /// <summary>Integrated closes what uses the NVIDIA GPU; Discrete, and leaving a Discrete start, restart Windows.</summary>
+    /// <summary>
+    /// Integrated closes what uses the NVIDIA GPU; Discrete, and leaving a Discrete start, restart Windows. The BIOS then
+    /// powers the laptop off and on while it moves the screen (78 and 89 s from shutdown to start on 2026-11-02, 74-77 s
+    /// after the stock software's change on 10-23; a plain restart takes 25-29 s); once it waited for the power button.
+    /// </summary>
     private bool Confirm(GraphicsMode mode)
     {
         bool startedDiscrete = _connection.Status?.GraphicsMode == GraphicsMode.Discrete;
@@ -129,11 +133,11 @@ internal sealed class DisplayPage : UserControl
                 "Dahili moda geç");
         if (mode == GraphicsMode.Discrete && !startedDiscrete && !pending)
             return ConfirmDialog.Ask(this, "Harici moda geç",
-                "Bilgisayar birkaç saniye içinde yeniden başlayacak; açık işlerinizi şimdi kaydedin. Harici modda NVIDIA kartı hep açık olur: oyunlarda en yüksek hız, ama pil daha kısa gider ve fan daha sık çalışabilir.",
+                "Bilgisayar birkaç saniye içinde yeniden başlayacak; açık işlerinizi şimdi kaydedin. Harici modda NVIDIA kartı hep açık olur: oyunlarda en yüksek hız, ama pil daha kısa gider ve fan daha sık çalışabilir. Bu açılış normalden uzun sürer (1-2 dakika): bilgisayar bir kez kapanıp açılabilir, güç ışığı yanıp sönebilir. Bir süre görüntü gelmezse güç düğmesine basın.",
                 "Kaydettim, yeniden başlat");
         if (mode == GraphicsMode.Hybrid && startedDiscrete && !pending)
             return ConfirmDialog.Ask(this, "Hibrit moda dön",
-                "Bilgisayar birkaç saniye içinde yeniden başlayacak; açık işlerinizi şimdi kaydedin.",
+                "Bilgisayar birkaç saniye içinde yeniden başlayacak; açık işlerinizi şimdi kaydedin. Bu açılış normalden uzun sürer (1-2 dakika): bilgisayar bir kez kapanıp açılabilir, güç ışığı yanıp sönebilir. Bir süre görüntü gelmezse güç düğmesine basın.",
                 "Kaydettim, yeniden başlat");
         return true;
     }
