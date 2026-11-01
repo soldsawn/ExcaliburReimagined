@@ -439,16 +439,19 @@ internal sealed class Daemon
                 if (_power is null || req.PowerMode is not { } mode || !Enum.IsDefined(mode))
                     return Status("geçersiz güç modu");
                 var modeRes = _power.SetMode(mode);
+                try { _power.Poll(); } catch { }
                 return Status(modeRes.Ok ? null : TranslatePowerError(modeRes));
 
             case "setcpulimit":
                 if (_power is null) return Status("güç yönetimi kullanılamıyor");
                 var cpuRes = _power.SetCpuLimit(req.CpuLimit);
+                try { _power.Poll(); } catch { }
                 return Status(cpuRes.Ok ? null : TranslatePowerError(cpuRes));
 
             case "setgpulimit":
                 if (_power is null) return Status("güç yönetimi kullanılamıyor");
                 var gpuRes = _power.SetGpuLimit(req.GpuLimitWatts);
+                try { _power.Poll(); } catch { }
                 return Status(gpuRes.Ok ? null : TranslatePowerError(gpuRes));
 
             case "setautomation":

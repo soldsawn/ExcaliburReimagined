@@ -80,7 +80,26 @@ internal sealed class LinuxPowerHardware(
 
     public int? ReadGpuPowerWatts() => Nvml.PowerUsageWatts();
 
-    public CpuPower? ReadCpuPower() => rapl?.Read(_clock.Elapsed);
+    public CpuPower? ReadCpuPower()
+    {
+        if (rapl is null) return null;
+        int? ecModePl1 = null;
+        if (ec is not null)
+        {
+            try
+            {
+                ecModePl1 = ec.Read(EcPowerModeRegister) switch
+                {
+                    0 => 55,
+                    1 => 45,
+                    2 => 35,
+                    _ => (int?)null,
+                };
+            }
+            catch (IOException) { }
+        }
+        return rapl.Read(_clock.Elapsed, ecModePl1);
+    }
 
     public void ApplyCpuLimit(CpuLimit? limit)
     {
@@ -133,11 +152,12 @@ internal sealed class LinuxPowerHardware(
 /// </summary>
 internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
 {
-    private readonly string? _pkgDir = FindPackageDir(powercapRoot);
+    private readonly string? _pkgDir = FindPackageDir(powercapRoot, mmio: false);
+    private readonly string? _mmioPkgDir = FindPackageDir(powercapRoot, mmio: true);
     private (ulong EnergyUj, TimeSpan At)? _last;
-    private ulong? _originalPl1Uw, _originalPl2Uw;
+    private ulong? _originalPl1Uw, _originalPl2Uw, _originalMmioPl1Uw;
 
-    public CpuPower? Read(TimeSpan now)
+    public CpuPower? Read(TimeSpan now, int? fallbackModePl1Watts = null)
     {
         if (_pkgDir is null) return null;
         try
@@ -157,10 +177,14 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
                 _last = (energy, now);
             }
 
-            int? pl1 = ReadUwAsWatts(Path.Combine(_pkgDir, "constraint_0_power_limit_uw"));
-            int? pl2 = ReadUwAsWatts(Path.Combine(_pkgDir, "constraint_1_power_limit_uw"));
-            int? modePl1 = _originalPl1Uw is { } orig ? (int)Math.Round(orig / 1_000_000.0) : pl1;
-            return new CpuPower(watts, pl1, pl2, modePl1);
+            int? msrPl1 = ReadUwAsWatts(Path.Combine(_pkgDir, "constraint_0_power_limit_uw"));
+            int? msrPl2 = ReadUwAsWatts(Path.Combine(_pkgDir, "constraint_1_power_limit_uw"));
+            int? mmioPl1 = (_mmioPkgDir is { } md ? ReadUwAsWatts(Path.Combine(md, "constraint_0_power_limit_uw")) : null)
+                           ?? fallbackModePl1Watts;
+
+            int? pl1 = Lower(msrPl1, mmioPl1);
+            int? modePl1 = mmioPl1 ?? (_originalPl1Uw is { } orig ? (int)Math.Round(orig / 1_000_000.0) : msrPl1);
+            return new CpuPower(watts, pl1, msrPl2, modePl1);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -191,12 +215,25 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
 
             if (curPl1 != wantedPl1) File.WriteAllText(pl1Path, wantedPl1.ToString(CultureInfo.InvariantCulture));
             if (curPl2 != wantedPl2) File.WriteAllText(pl2Path, wantedPl2.ToString(CultureInfo.InvariantCulture));
+
+            if (_mmioPkgDir is { } md)
+            {
+                string mmioPl1Path = Path.Combine(md, "constraint_0_power_limit_uw");
+                if (ReadUlong(mmioPl1Path) is { } curMmioPl1)
+                {
+                    _originalMmioPl1Uw ??= curMmioPl1;
+                    ulong wantedMmioPl1 = limit is null ? _originalMmioPl1Uw.Value : wantedPl1;
+                    if (curMmioPl1 != wantedMmioPl1) File.WriteAllText(mmioPl1Path, wantedMmioPl1.ToString(CultureInfo.InvariantCulture));
+                }
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new PowerException($"Could not write CPU power limits ({ex.Message}).", ex);
         }
     }
+
+    private static int? Lower(int? a, int? b) => a is { } x && b is { } y ? Math.Min(x, y) : a ?? b;
 
     private static int? ReadUwAsWatts(string path) =>
         ReadUlong(path) is { } uw and > 0 ? (int)Math.Round(uw / 1_000_000.0) : null;
@@ -212,13 +249,15 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    private static string? FindPackageDir(string root)
+    private static string? FindPackageDir(string root, bool mmio)
     {
         try
         {
             if (!Directory.Exists(root)) return null;
             foreach (var dir in Directory.GetDirectories(root, "intel-rapl*"))
             {
+                bool isMmio = Path.GetFileName(dir).StartsWith("intel-rapl-mmio", StringComparison.OrdinalIgnoreCase);
+                if (isMmio != mmio) continue;
                 string namePath = Path.Combine(dir, "name");
                 if (File.Exists(namePath) && File.ReadAllText(namePath).Trim().StartsWith("package", StringComparison.OrdinalIgnoreCase))
                     return dir;
