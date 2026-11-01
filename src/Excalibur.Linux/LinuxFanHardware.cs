@@ -26,10 +26,12 @@ internal sealed class LinuxFanHardware(LinuxEc ec, Action<string>? log = null) :
         {
             int cpuC = CoretempC() ?? ec.Read(EcCpuTemp);
             int gpuRaw = ec.Read(GpuTemp);
-            // The EC reports 0 or 30 while the GPU sleeps or has no reading (Windows: ResolveGpuTemperature); the GPU fan
-            // then follows the CPU, as on Windows when the driver has no reading either.
-            bool gpuOff = gpuRaw is 0 or 30;
-            int gpuC = gpuOff ? cpuC : gpuRaw;
+            // The EC reports 0 or 30 while the GPU sleeps or has no reading (Windows: ResolveGpuTemperature); the NVIDIA
+            // driver is asked only then, and when it has none either the GPU fan follows the CPU.
+            bool gpuPlaceholder = gpuRaw is 0 or 30;
+            int? driverGpuC = gpuPlaceholder ? Excalibur.Core.Power.Nvml.TemperatureC() : null;
+            bool gpuOff = gpuPlaceholder && driverGpuC is not (>= 1 and <= MaxTempC);
+            int gpuC = gpuPlaceholder ? (gpuOff ? cpuC : driverGpuC!.Value) : gpuRaw;
             int cpuApplied = ec.Read(FanRegisters.CpuApplied), gpuApplied = ec.Read(FanRegisters.GpuApplied);
             var (cpuRpm, gpuRpm) = Rpm() ?? (cpuApplied * 54, gpuApplied * 52);
             var cpuTarget = FanTarget.FromRaw(ec.Read(FanRegisters.CpuTarget)) ?? FanTarget.Auto;

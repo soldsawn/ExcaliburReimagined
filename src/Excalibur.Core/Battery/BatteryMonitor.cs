@@ -24,8 +24,7 @@ public sealed class BatteryMonitor(IBatteryHardware hardware, Action<string>? lo
                   $"cycles {health.Cycles?.ToString() ?? "-"} ({watch.ElapsedMilliseconds} ms)");
             return true;
         }
-        catch (Exception ex) when (ex is System.Management.ManagementException or System.Runtime.InteropServices.COMException
-                                       or UnauthorizedAccessException or InvalidCastException or FormatException or OverflowException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             log?.Invoke($"battery: read failed after {watch.ElapsedMilliseconds} ms: {ex.Message}");
             return false;

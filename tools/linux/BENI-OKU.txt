@@ -1,24 +1,38 @@
-Excalibur Reimagined — Linux (ilk sürüm)
+Excalibur Reimagined — Linux
 
-Casper Excalibur için fan kontrolü: Sessiz, Dengeli, Performans profilleri ve dizüstünün kendi ayarı (Orijinal),
-Windows sürümüyle aynı güvenlik kuralları (fan en az %25; 70 °C'de en az %80, 78 °C'de %90; 80 °C'de 3 sn sürerse %100).
+Casper Excalibur için fan kontrolü, güç modu, işlemci/ekran kartı watt sınırları, klavye aydınlatması, pil durumu ve geçmiş:
+- Fan profilleri (Sessiz, Dengeli, Performans, Orijinal ve özel profiller), Windows sürümüyle aynı güvenlik kuralları
+  (fan en az %25; 70 °C'de en az %80, 78 °C'de %90; 80 °C'de 3 sn sürerse %100).
+- Güç modları (Ofis, Oyun, Yüksek performans; pilde otomatik Ofis kilidi) ve şarja/pile göre otomatik geçiş.
+- İşlemci (PL1/PL2) ve ekran kartı watt sınırları.
+- Üç bölgeli klavye ışığı, parlaklık (0–2), efektler ve boşta kapatma.
+- Pil sağlığı, anlık çekiş/süre tahminleri ve yerel sıcaklık/fan geçmişi.
 
 ŞART: BIOS'ta Secure Boot KAPALI olmalı (açılışta F2 > Security > Secure Boot). Açıkken Linux EC'ye yazmaya izin vermez.
 
 KURULUM (paketi açtığınız klasörde terminal açın):
     sudo bash install.sh
 
-KOMUTLAR:
-    excalibur-reimagined status          sıcaklıklar, fanlar, profil
-    excalibur-reimagined profile sessiz  (dengeli | performans | orijinal)
-    excalibur-reimagined report          sorun bildirmek için günlükler zip'e
-    Kısa yol: exr status
+KOMUTLAR (kısa yol: exr):
+    exr status                               sıcaklıklar, fanlar, güç modu, watt sınırları
+    exr profile sessiz                       profil seç (dengeli | performans | orijinal | <özel-ad>)
+    exr profiles                             tüm profilleri ve fan eğrilerini listele
+    exr profile save Gece 45:25,60:40,75:80  özel fan profili kaydet (silmek için: exr profile delete Gece)
+    exr manual 60                            fanları geçici olarak sabit yüzdede tut (1–10 dk)
+    exr mode oyun                            güç modu seç (ofis | oyun | yuksek; pilde yalnız Ofis)
+    exr cpu-limit 35 60                      işlemci uzun/kısa süreli watt sınırı (kaldırmak için: exr cpu-limit off)
+    exr gpu-limit 65                         ekran kartı watt hedefi (kaldırmak için: exr gpu-limit off)
+    exr auto ac mode oyun profile dengeli    şarja takılınca otomatik mod ve profil (pilde: exr auto bat ...)
+    exr light #00FFFF --level 2              klavye rengi/efekti (breathing, cycle, wave, zones, off)
+    exr battery                              pil durumu, sağlık ve süre tahminleri
+    exr history 60                           son 60 dakikanın sıcaklık ve fan özeti
+    exr report                               sorun bildirmek için günlükleri zip'e koyar
 
 KALDIRMA:
     sudo /opt/excalibur-reimagined/uninstall.sh
 
-Bu ilk sürümde yok (sırayla gelecek): pencereli arayüz, güç modu, klavye ışığı, Secure Boot açıkken çalışma.
-Doğrulanmış EC sürümleri: P008B0, P009B0, P006B0. Diğerlerinde fanlar önce yalnız izlenir; "excalibur-reimagined trial" ile kısa bir deneme yapılır.
+Bu sürümde henüz yok (sırayla gelecek): pencereli arayüz, Secure Boot açıkken çalışma.
+Doğrulanmış EC sürümleri: P008B0, P009B0, P006B0. Diğerlerinde fanlar önce yalnız izlenir; "exr trial" ile kısa bir deneme yapılır.
 Windows ile birlikte kullanıyorsanız: Linux donanım saatini UTC tutar, Windows yerel saat; Windows'a geçince saat 3 saat
 kayık görünebilir. Linux'ta bir kez: sudo timedatectl set-local-rtc 1
 

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0-windows</TargetFramework>
@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Excalibur.Core\Excalibur.Core.csproj" />
+    <Compile Include="..\..\src\Excalibur.Linux\Linux*.cs" Link="Linux\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

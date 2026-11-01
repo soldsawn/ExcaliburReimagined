@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <CoreWindowsOnly Include="..\Excalibur.Core\Battery\WmiBatteryHardware.cs;..\Excalibur.Core\Battery\BatteryMonitor.cs" />
+    <CoreWindowsOnly Include="..\Excalibur.Core\Battery\WmiBatteryHardware.cs" />
     <CoreWindowsOnly Include="..\Excalibur.Core\Fan\EcFanHardware.cs;..\Excalibur.Core\Hardware\EmbeddedController.cs" />
     <CoreWindowsOnly Include="..\Excalibur.Core\Hardware\GmWmiGateway.cs;..\Excalibur.Core\Hardware\PawnIoCpuPowerRegisters.cs;..\Excalibur.Core\Hardware\PawnIoSession.cs;..\Excalibur.Core\Power\EcPowerHardware.cs" />
   </ItemGroup>

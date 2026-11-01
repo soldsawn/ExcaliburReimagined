@@ -72,18 +72,3 @@ public sealed class WmiBatteryHardware : IBatteryHardware, IBatteryMeter
         return null;
     }
 }
-
-/// <summary>The G870's battery as read on 2026-10-24, for the --simulate service.</summary>
-public sealed class SimulatedBatteryHardware : IBatteryHardware, IBatteryMeter
-{
-    private readonly DateTime _started = DateTime.UtcNow;
-
-    /// <summary>Set to true to pretend the charger was unplugged; the battery then loses about 14 W.</summary>
-    public bool OnBattery { get; set; }
-
-    public BatteryReading? Read() => new((int)(40000 - (DateTime.UtcNow - _started).TotalHours * 14000), 50);
-
-    public BatteryHealth? ReadHealth() => new(61500, 62800, "LION", null, DateTimeOffset.Now);
-
-    public BatteryLive? ReadLive() => new BatteryLive(64, OnBattery ? BatteryState.OnBattery : BatteryState.Charging, OnBattery ? 172 : null);
-}
