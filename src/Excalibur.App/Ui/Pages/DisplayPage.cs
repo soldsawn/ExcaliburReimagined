@@ -89,9 +89,9 @@ internal sealed class DisplayPage : UserControl
         string group = "graphics" + GetHashCode();
         foreach (var (mode, label, detail) in new[]
         {
-            (GraphicsMode.Hybrid, "Hibrit", "iki ekran kartı · önerilen"),
-            (GraphicsMode.Integrated, "Dahili", "yalnız Intel · pil uzun"),
-            (GraphicsMode.Discrete, "Harici", "yalnız NVIDIA · yeniden başlatır"),
+            (GraphicsMode.Hybrid, "Hibrit", "Intel + NVIDIA"),
+            (GraphicsMode.Integrated, "Dahili", "yalnız Intel"),
+            (GraphicsMode.Discrete, "Harici", "yalnız NVIDIA"),
         })
         {
             var b = new RadioButton
