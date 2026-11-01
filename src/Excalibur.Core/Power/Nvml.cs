@@ -17,13 +17,21 @@ public sealed class NvmlGpuClocks : IGpuClocks
 
     public void Unlock() => Nvml.ResetGraphicsClock();
 }
-
-/// <summary>Reads the GPU power limit the driver enforces and the power drawn now; every failure is "unknown" (null).</summary>
+/// <summary>
+/// Reads the GPU power limit the driver enforces and the power drawn now; every failure is "unknown" (null). NVML's
+/// opening and closing is <see cref="NvmlSession"/>: <see cref="Release"/> before the NVIDIA GPU is switched off.
+/// </summary>
 public static class Nvml
 {
-    private static readonly object Gate = new();
-    private static bool _tried, _ready;
-    private static IntPtr _device;
+    private static readonly NvmlSession Session = new(new NativeApi(), () => Environment.TickCount64);
+
+    /// <summary>Closes NVML; nothing is asked until <see cref="Resume"/>.</summary>
+    public static void Release() => Session.Release();
+
+    /// <summary>NVML may be opened again; watts wait a minute (<see cref="NvmlSession.SettleMs"/>).</summary>
+    public static void Resume() => Session.Resume();
+
+    public static bool IsReleased => Session.Released;
 
     public static int? EnforcedPowerLimitWatts() => Milliwatts(GetEnforcedPowerLimit);
 
@@ -44,39 +52,23 @@ public static class Nvml
 
     public static int? ResetGraphicsClock() => Run(ResetGpuLockedClocks);
 
-    private delegate int NvmlQuery(IntPtr device, out uint value);
-
     private static int? Run(Func<IntPtr, int> call)
     {
         int code = -1;
         return Query((IntPtr device, out uint value) => { code = call(device); value = 0; return 0; }) is null ? null : code;
     }
 
-    private static int? Milliwatts(NvmlQuery query) => Query(query) is { } mw ? (int)Math.Round(mw / 1000.0) : null;
+    // On Linux any NVML call wakes a runtime-suspended GPU (NVIDIA's driver README: "nvidia-smi will wake the GPU"),
+    // and the service asks every few seconds: a sleeping GPU is "unknown" instead. Windows' driver answers without that.
+    private static int? Milliwatts(NvmlCall call) => OperatingSystem.IsLinux() && LinuxGpuAsleep() ? null : Session.Milliwatts(call);
 
-    private static int? Query(NvmlQuery query)
+    private static int? Query(NvmlCall call) => OperatingSystem.IsLinux() && LinuxGpuAsleep() ? null : Session.Query(call);
+
+    private sealed class NativeApi : INvmlApi
     {
-        lock (Gate)
-        {
-            // On Linux any NVML call wakes a runtime-suspended GPU (NVIDIA's driver README: "nvidia-smi will wake the GPU"),
-            // and the service asks every few seconds: a sleeping GPU is "unknown" instead. Windows' driver answers without that.
-            if (OperatingSystem.IsLinux() && LinuxGpuAsleep()) return null;
-            if (!_tried)
-            {
-                _tried = true;
-                try
-                {
-                    _ready = Init() == 0 && GetHandleByIndex(0, out _device) == 0;
-                }
-                catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { }
-            }
-            if (!_ready) return null;
-            try
-            {
-                return query(_device, out uint value) == 0 ? (int)value : null;
-            }
-            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
-        }
+        public int Init() => OperatingSystem.IsLinux() ? Lin.nvmlInit_v2() : Win.nvmlInit_v2();
+        public int Shutdown() => OperatingSystem.IsLinux() ? Lin.nvmlShutdown() : Win.nvmlShutdown();
+        public int GetHandle(out IntPtr device) => OperatingSystem.IsLinux() ? Lin.nvmlDeviceGetHandleByIndex_v2(0, out device) : Win.nvmlDeviceGetHandleByIndex_v2(0, out device);
     }
 
     private static string? _runtimeStatusPath;
@@ -106,8 +98,6 @@ public static class Nvml
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
-    private static int Init() => OperatingSystem.IsLinux() ? Lin.nvmlInit_v2() : Win.nvmlInit_v2();
-    private static int GetHandleByIndex(uint index, out IntPtr device) => OperatingSystem.IsLinux() ? Lin.nvmlDeviceGetHandleByIndex_v2(index, out device) : Win.nvmlDeviceGetHandleByIndex_v2(index, out device);
     private static int GetEnforcedPowerLimit(IntPtr device, out uint mw) => OperatingSystem.IsLinux() ? Lin.nvmlDeviceGetEnforcedPowerLimit(device, out mw) : Win.nvmlDeviceGetEnforcedPowerLimit(device, out mw);
     private static int GetPowerUsage(IntPtr device, out uint mw) => OperatingSystem.IsLinux() ? Lin.nvmlDeviceGetPowerUsage(device, out mw) : Win.nvmlDeviceGetPowerUsage(device, out mw);
     private static int GetTemperature(IntPtr device, int sensor, out uint c) => OperatingSystem.IsLinux() ? Lin.nvmlDeviceGetTemperature(device, sensor, out c) : Win.nvmlDeviceGetTemperature(device, sensor, out c);
@@ -119,6 +109,7 @@ public static class Nvml
     private static class Win
     {
         [DllImport("nvml.dll")] public static extern int nvmlInit_v2();
+        [DllImport("nvml.dll")] public static extern int nvmlShutdown();
         [DllImport("nvml.dll")] public static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
         [DllImport("nvml.dll")] public static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
         [DllImport("nvml.dll")] public static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
@@ -132,6 +123,7 @@ public static class Nvml
     private static class Lin
     {
         [DllImport("libnvidia-ml.so.1")] public static extern int nvmlInit_v2();
+        [DllImport("libnvidia-ml.so.1")] public static extern int nvmlShutdown();
         [DllImport("libnvidia-ml.so.1")] public static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
         [DllImport("libnvidia-ml.so.1")] public static extern int nvmlDeviceGetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
         [DllImport("libnvidia-ml.so.1")] public static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);

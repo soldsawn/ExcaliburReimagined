@@ -30,6 +30,9 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(o => o.ServiceName = "ExcaliburFanGuardian");
 // The guardian reads only the WMI sensors (ReadSensors); the EC is touched just to hand the fans back.
 // The RPM scale is the one the service learns (FanRpmScale).
+// No NVML in the guardian: nobody closes it here when the service switches the NVIDIA GPU off, and a handle left open
+// then crashed the service (2026-10-23). An EC without a GPU reading makes the GPU follow the CPU (ResolveGpuTemperature).
+Excalibur.Core.Power.Nvml.Release();
 builder.Services.AddSingleton(new EcFanHardware(ec, new GmWmiGateway(),
     scale: new FanRpmScale(Path.Combine(FanPaths.DataDirectory, FanRpmScale.FileName))));
 var fileLog = new FanFileLog(FanPaths.LogDirectory, "guardian");
