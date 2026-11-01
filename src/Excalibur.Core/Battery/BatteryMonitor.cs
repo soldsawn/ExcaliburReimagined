@@ -24,7 +24,7 @@ public sealed class BatteryMonitor(IBatteryHardware hardware, Action<string>? lo
                   $"cycles {health.Cycles?.ToString() ?? "-"} ({watch.ElapsedMilliseconds} ms)");
             return true;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             log?.Invoke($"battery: read failed after {watch.ElapsedMilliseconds} ms: {ex.Message}");
             return false;
@@ -32,4 +32,12 @@ public sealed class BatteryMonitor(IBatteryHardware hardware, Action<string>? lo
     }
 
     public BatteryLive? Live() => hardware.ReadLive();
+
+    // WMI's failures on Windows, sysfs' (IOException) on Linux; anything else is a bug and is not hidden.
+    private static bool IsReadFailure(Exception ex) =>
+#if !LINUX
+        ex is System.Management.ManagementException ||
+#endif
+        ex is System.Runtime.InteropServices.COMException or IOException
+            or UnauthorizedAccessException or InvalidCastException or FormatException or OverflowException;
 }

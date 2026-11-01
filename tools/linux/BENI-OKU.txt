@@ -4,6 +4,8 @@ Casper Excalibur için fan kontrolü, güç modu, işlemci/ekran kartı watt sı
 - Fan profilleri (Sessiz, Dengeli, Performans, Orijinal ve özel profiller), Windows sürümüyle aynı güvenlik kuralları
   (fan en az %25; 70 °C'de en az %80, 78 °C'de %90; 80 °C'de 3 sn sürerse %100).
 - Güç modları (Ofis, Oyun, Yüksek performans; pilde otomatik Ofis kilidi) ve şarja/pile göre otomatik geçiş.
+  Linux'ta güç modu şimdilik ekran kartının watt tavanını değiştirmez (Windows'ta değiştirir); ekran kartı için
+  "exr gpu-limit" kullanın.
 - İşlemci (PL1/PL2) ve ekran kartı watt sınırları.
 - Üç bölgeli klavye ışığı, parlaklık (0–2), efektler ve boşta kapatma.
 - Pil sağlığı, anlık çekiş/süre tahminleri ve yerel sıcaklık/fan geçmişi.
@@ -15,7 +17,8 @@ KURULUM (paketi açtığınız klasörde terminal açın):
 
 KULLANIM:
     Uygulama menüsünden "Excalibur Reimagined" simgesine tıklayın veya terminalde "exr" / "exr gui" yazın.
-    Pencere kapatıldığında sistem tepsisinde (saatin yanında) çalışmaya devam eder.
+    Masaüstü tepsi simgelerini gösteriyorsa pencere kapatılınca tepside (saatin yanında) kalır; göstermiyorsa
+    pencere kapanır. Fan servisi her iki durumda da arkada çalışmaya devam eder.
 
 KOMUTLAR (kısa yol: exr):
     exr [gui]                                pencereli masaüstü arayüzünü ve tepsi simgesini açar
@@ -28,7 +31,7 @@ KOMUTLAR (kısa yol: exr):
     exr cpu-limit 35 60                      işlemci uzun/kısa süreli watt sınırı (kaldırmak için: exr cpu-limit off)
     exr gpu-limit 65                         ekran kartı watt hedefi (kaldırmak için: exr gpu-limit off)
     exr auto ac mode oyun profile dengeli    şarja takılınca otomatik mod ve profil (pilde: exr auto bat ...)
-    exr light #00FFFF --level 2              klavye rengi/efekti (breathing, cycle, wave, zones, off)
+    exr light #00FFFF --level 2              klavye rengi/efekti (breathing, cycle, zones, off)
     exr battery                              pil durumu, sağlık ve süre tahminleri
     exr history 60                           son 60 dakikanın sıcaklık ve fan özeti
     exr report                               sorun bildirmek için günlükleri zip'e koyar

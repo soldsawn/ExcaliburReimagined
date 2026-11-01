@@ -61,6 +61,7 @@ internal sealed class LinuxMainWindow : Window
     private int _gpuWattsInput = 65;
     private string? _infoBanner;
     private bool _allowExit;
+    private bool _limitInputsSeeded;
 
     public LinuxMainWindow(LinuxGuiClient client, bool hideToTrayOnClose, Stream? iconStream)
     {
@@ -211,13 +212,6 @@ internal sealed class LinuxMainWindow : Window
         Opened += (_, _) =>
         {
             _client.Poll();
-            if (_client.Status?.Power?.CpuLimit is { } cl)
-            {
-                _cpuPl1Input = cl.Pl1Watts;
-                _cpuPl2Input = cl.Pl2Watts;
-            }
-            if (_client.Status?.Power?.GpuLimitWatts is { } gw)
-                _gpuWattsInput = gw;
             SelectTab(_activeTab);
             _timer.Start();
         };
@@ -261,7 +255,7 @@ internal sealed class LinuxMainWindow : Window
     {
         Directory.CreateDirectory(outputDir);
         _timer.Stop();
-        _client.Poll();
+        await Task.Run(() => _client.SendNow(new LinuxRequest("guiStatus", Minutes: _client.HistoryMinutes)));
         foreach (var (key, _, _) in Tabs)
         {
             SelectTab(key);
@@ -283,6 +277,17 @@ internal sealed class LinuxMainWindow : Window
     {
         RenderStatusBar();
         var s = _client.Status;
+        if (!_limitInputsSeeded && s?.Power is { } seed)
+        {
+            // The sliders start from the limits in force, once the first answer has arrived.
+            _limitInputsSeeded = true;
+            if (seed.CpuLimit is { } cl)
+            {
+                _cpuPl1Input = cl.Pl1Watts;
+                _cpuPl2Input = cl.Pl2Watts;
+            }
+            if (seed.GpuLimitWatts is { } gw) _gpuWattsInput = gw;
+        }
         if (s?.Error is { Length: > 0 } err)
         {
             _bannerError.Text = $"Hata: {err}";
@@ -598,9 +603,9 @@ internal sealed class LinuxMainWindow : Window
         var modeWrap = new WrapPanel();
         foreach (var (mode, label, sub) in new[]
         {
-            (PowerMode.Office, "Ofis", "35 W CPU · 75 W GPU"),
-            (PowerMode.Gaming, "Oyun", "45 W CPU · 85 W GPU"),
-            (PowerMode.HighPerformance, "Yüksek performans", "55 W CPU · 100 W GPU"),
+            (PowerMode.Office, "Ofis", "İşlemci 35 W"),
+            (PowerMode.Gaming, "Oyun", "İşlemci 45 W"),
+            (PowerMode.HighPerformance, "Yüksek performans", "İşlemci 55 W"),
         })
         {
             PowerMode target = mode;
@@ -610,7 +615,7 @@ internal sealed class LinuxMainWindow : Window
         page.Children.Add(LinuxTheme.MakeCard("Donanım Güç Modu",
             LinuxTheme.Caption(pwr?.OnBattery == true
                 ? "Bilgisayar şu an pilde çalıştığı için Ofis moduna kilitlidir. Şarja takıldığında seçtiğiniz priz tercihine geçer."
-                : "Güç modu EC (0x95) ve ACPI platform_profile üzerinden uygulanır."),
+                : "Linux'ta güç modu şimdilik işlemci gücünü ve dizüstünün kendi fan ayarını değiştirir; ekran kartının watt tavanı değişmez. Ekran kartını sınırlamak için aşağıdaki watt hedefini kullanın."),
             modeWrap));
 
         // CPU Limit card (PL1 / PL2)
@@ -1045,8 +1050,15 @@ internal sealed class LinuxMainWindow : Window
                     string home = Environment.GetEnvironmentVariable("SUDO_USER") is { Length: > 0 } user
                         ? $"/home/{user}"
                         : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                    string zip = BugReport.Create(home, _client.Paths.Data, summary.Replace('\n', ' '), [], DateTime.Now, _client.Paths.Logs);
-                    _infoBanner = $"Sorun raporu kaydedildi: {zip}";
+                    try
+                    {
+                        string zip = BugReport.Create(home, _client.Paths.Data, summary.Replace('\n', ' '), [], DateTime.Now, _client.Paths.Logs);
+                        _infoBanner = $"Sorun raporu kaydedildi: {zip}";
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _infoBanner = $"Sorun raporu oluşturulamadı ({ex.Message}). Terminalde deneyin: sudo exr report";
+                    }
                     RefreshUi();
                 }),
             },
@@ -1056,14 +1068,21 @@ internal sealed class LinuxMainWindow : Window
         {
             actions.Children.Add(LinuxTheme.MakeActionButton("Kısa Fan Denemesini Başlat (EC Doğrulama)", () =>
             {
-                _infoBanner = "Kısa fan denemesi çalıştırılıyor (yaklaşık 20 saniye)...";
+                _infoBanner = "Kısa fan denemesi başlatılıyor...";
                 RefreshUi();
                 Task.Run(() =>
                 {
-                    var res = _client.Send(new LinuxRequest("trial"));
-                    _infoBanner = res?.HoldsFans == true
-                        ? "Deneme başarılı! Fan kontrolü bu bilgisayarda etkinleştirildi."
-                        : $"Deneme tamamlandı: {res?.Trial ?? res?.Error ?? "fanlar dizüstünün kendi ayarına bırakıldı"}";
+                    // The service only starts the trial here; its outcome shows up later in the status and recent events.
+                    var res = _client.SendNow(new LinuxRequest("trial"));
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        _infoBanner = res is null
+                            ? "Servise ulaşılamadı; deneme başlatılamadı."
+                            : res.Error is { } err
+                                ? $"Deneme başlatılamadı: {err}"
+                                : "Deneme başladı (yaklaşık bir dakika). Sonuç bu sayfada ve Panel'deki son olaylarda görünecek.";
+                        RefreshUi();
+                    });
                 });
             }));
         }

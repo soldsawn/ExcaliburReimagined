@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Net.Sockets;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
@@ -43,6 +46,8 @@ internal sealed class LinuxGuiApp : Application
 
     public static int Run(LinuxPaths paths, string version, string? snapshotDir = null)
     {
+        // One window per user: a second launch (menu, terminal) brings the running one forward instead.
+        if (snapshotDir is null && TryShowRunningInstance()) return 0;
         _client = new LinuxGuiClient(paths, version);
         _snapshotDir = snapshotDir;
         _headless = snapshotDir is not null && !HasDisplaySession();
@@ -72,7 +77,10 @@ internal sealed class LinuxGuiApp : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && _client is not null)
         {
             using var iconStream = OpenEmbeddedIcon();
-            bool hasTray = !_headless && SetupTrayIcon(desktop);
+            // Hide to the tray only where the desktop shows tray icons (GNOME without its AppIndicator extension does not);
+            // otherwise closing the window would leave it running with no way back.
+            bool hasTray = !_headless && TrayHostAvailable() && SetupTrayIcon(desktop);
+            if (_snapshotDir is null) ListenForOtherInstances();
             _window = new LinuxMainWindow(_client, hideToTrayOnClose: hasTray && _snapshotDir is null, iconStream);
             desktop.MainWindow = _window;
 
@@ -173,6 +181,90 @@ internal sealed class LinuxGuiApp : Application
             return true;
         }
         catch
+        {
+            return false;
+        }
+    }
+
+    private static string InstanceSocketPath() =>
+        Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } runtime
+            ? Path.Combine(runtime, "excalibur-reimagined-gui.sock")
+            : Path.Combine(Path.GetTempPath(), $"excalibur-reimagined-gui-{Environment.UserName}.sock");
+
+    /// <summary>True when another window of this user answered and was asked to show itself.</summary>
+    private static bool TryShowRunningInstance()
+    {
+        string path = InstanceSocketPath();
+        if (!File.Exists(path)) return false;
+        try
+        {
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            socket.Connect(new UnixDomainSocketEndPoint(path));
+            socket.Send("show\n"u8);
+            return true;
+        }
+        catch (SocketException)
+        {
+            // Left over from a window that did not close cleanly.
+            try { File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            return false;
+        }
+    }
+
+    private void ListenForOtherInstances()
+    {
+        string path = InstanceSocketPath();
+        Socket listener;
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+            listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            listener.Bind(new UnixDomainSocketEndPoint(path));
+            listener.Listen(4);
+        }
+        catch (Exception ex) when (ex is SocketException or IOException or UnauthorizedAccessException)
+        {
+            return; // no single-instance guard; the window still works
+        }
+        var thread = new Thread(() =>
+        {
+            while (true)
+            {
+                try
+                {
+                    using var client = listener.Accept();
+                    Dispatcher.UIThread.Post(ShowMainWindow);
+                }
+                catch (SocketException) { return; }
+            }
+        }) { IsBackground = true, Name = "gui-instance" };
+        thread.Start();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { listener.Dispose(); File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SocketException) { }
+        };
+    }
+
+    /// <summary>Whether a tray host (StatusNotifierWatcher, which Avalonia's tray icon needs) runs on the session bus.</summary>
+    private static bool TrayHostAvailable()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("dbus-send",
+                "--session --print-reply --reply-timeout=2000 --dest=org.freedesktop.DBus /org/freedesktop/DBus " +
+                "org.freedesktop.DBus.NameHasOwner string:org.kde.StatusNotifierWatcher")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using var process = Process.Start(psi);
+            if (process is null) return false;
+            string output = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(3000)) return false;
+            return output.Contains("boolean true", StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
         {
             return false;
         }

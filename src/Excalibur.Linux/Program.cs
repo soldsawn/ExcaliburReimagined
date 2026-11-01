@@ -31,7 +31,7 @@ string ProfileLabel(string profile) => profile switch
 {
     "Quiet" => "Sessiz",
     "Balanced" => "Dengeli",
-    "Performance" => "Performance" == profile ? "Performans" : profile,
+    "Performance" => "Performans",
     "EcAuto" => "Orijinal (dizüstünün kendi ayarı)",
     "Manual" => "Manuel",
     _ => profile,

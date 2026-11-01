@@ -173,7 +173,7 @@ internal sealed class Daemon
         {
             hardware = new LinuxFanHardware(ec, Log);
             powerHardware = new LinuxPowerHardware(ec, new LinuxRapl(), new GpuLimiter(new NvmlGpuClocks()));
-            smiChannel = _smi = new LinuxEcSmiChannel(ec);
+            smiChannel = _smi = new LinuxEcSmiChannel(ec, Log);
         }
         else
         {

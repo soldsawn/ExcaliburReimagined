@@ -6,27 +6,46 @@ namespace Excalibur.Linux.Ui;
 
 /// <summary>
 /// Talks to the Linux daemon over the Unix control socket and keeps the latest <see cref="LinuxStatus"/> for the Avalonia
-/// window and tray icon.
+/// window and tray icon. Requests run one after another on a background queue, so a slow service never freezes the window;
+/// <see cref="Changed"/> fires on that background thread after each answer.
 /// </summary>
 internal sealed class LinuxGuiClient(LinuxPaths paths, string version)
 {
+    private readonly object _queueGate = new();
+    private Task _tail = Task.CompletedTask;
+    private int _pollQueued;
+    private volatile LinuxStatus? _status;
+
     public LinuxPaths Paths => paths;
     public string Version => version;
-    public LinuxStatus? Status { get; private set; }
+    public LinuxStatus? Status => _status;
     public bool Connected { get; private set; }
     public DateTimeOffset? LastUpdated { get; private set; }
     public int HistoryMinutes { get; set; } = 60;
 
     public event Action? Changed;
 
-    public LinuxStatus? Poll() => Send(new LinuxRequest("guiStatus", Minutes: HistoryMinutes));
+    /// <summary>Queues a status refresh; skipped while one is still waiting, so a slow service does not pile them up.</summary>
+    public void Poll()
+    {
+        if (Interlocked.Exchange(ref _pollQueued, 1) == 1) return;
+        Enqueue(() =>
+        {
+            Volatile.Write(ref _pollQueued, 0);
+            SendNow(new LinuxRequest("guiStatus", Minutes: HistoryMinutes));
+        });
+    }
 
-    public LinuxStatus? Send(LinuxRequest request)
+    /// <summary>Queues a command; commands keep their order (e.g. save a profile, then select it).</summary>
+    public void Send(LinuxRequest request) => Enqueue(() => SendNow(request));
+
+    /// <summary>Sends now on the calling thread and returns the answer; for snapshots and background work only.</summary>
+    public LinuxStatus? SendNow(LinuxRequest request)
     {
         try
         {
             using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            socket.ReceiveTimeout = request.Cmd.Equals("trial", StringComparison.OrdinalIgnoreCase) ? 60_000 : 5_000;
+            socket.ReceiveTimeout = 5_000;
             socket.Connect(new UnixDomainSocketEndPoint(paths.Socket));
             using var stream = new NetworkStream(socket);
             using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -36,8 +55,8 @@ internal sealed class LinuxGuiClient(LinuxPaths paths, string version)
             if (reply is not null)
             {
                 // Keep cached profiles/battery/history when a quick command returns a compact status.
-                var prev = Status;
-                Status = reply with
+                var prev = _status;
+                _status = reply with
                 {
                     Profiles = reply.Profiles ?? prev?.Profiles,
                     Battery = reply.Battery ?? prev?.Battery,
@@ -47,7 +66,7 @@ internal sealed class LinuxGuiClient(LinuxPaths paths, string version)
                 LastUpdated = DateTimeOffset.Now;
                 Changed?.Invoke();
             }
-            return Status;
+            return reply is null ? null : _status;
         }
         catch (Exception ex) when (ex is SocketException or IOException or JsonException)
         {
@@ -55,5 +74,11 @@ internal sealed class LinuxGuiClient(LinuxPaths paths, string version)
             Changed?.Invoke();
             return null;
         }
+    }
+
+    private void Enqueue(Action work)
+    {
+        lock (_queueGate)
+            _tail = _tail.ContinueWith(_ => work(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
     }
 }

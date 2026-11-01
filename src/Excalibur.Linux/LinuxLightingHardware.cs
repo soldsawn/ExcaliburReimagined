@@ -7,7 +7,7 @@ namespace Excalibur.Linux;
 /// ACPI registers (DSDT Method WSAA, lines 104846-105000), so <see cref="Excalibur.Core.Lighting.KeyboardLight"/> and
 /// <see cref="Excalibur.Core.Lighting.LightingManager"/> work identically on Linux without needing a WMI kernel driver.
 /// </summary>
-internal sealed class LinuxEcSmiChannel(Func<byte, byte> readEc, Action<byte, byte> writeEc) : ISmiChannel
+internal sealed class LinuxEcSmiChannel(Func<byte, byte> readEc, Action<byte, byte> writeEc, Action<string>? log = null) : ISmiChannel
 {
     public const byte RegKeyLevel = 0x48;   // LKCL (0 -> level 1, 1 -> level 2, 2 -> level 0)
     public const byte RegRed = 0x89;        // LKBR
@@ -20,7 +20,7 @@ internal sealed class LinuxEcSmiChannel(Func<byte, byte> readEc, Action<byte, by
     private const int HandshakePolls = 100;
     private readonly object _gate = new();
 
-    public LinuxEcSmiChannel(LinuxEc ec) : this(ec.Read, ec.Write) { }
+    public LinuxEcSmiChannel(LinuxEc ec, Action<string>? log = null) : this(ec.Read, ec.Write, log) { }
 
     public SmiCommand Execute(SmiCommand request)
     {
@@ -80,19 +80,21 @@ internal sealed class LinuxEcSmiChannel(Func<byte, byte> readEc, Action<byte, by
 
         // Handshake 1: set LKCC = 1, wait for EC to set LKBE = 1.
         writeEc(RegControl, (byte)(zoneShifted | BitLkcc));
-        WaitForAck();
+        WaitForAck("colour");
 
         // Handshake 2: clear LKBE = 0 and set LKBS = 1, wait for EC to set LKBE = 1.
         writeEc(RegControl, (byte)(zoneShifted | BitLkbs));
-        WaitForAck();
+        WaitForAck("apply");
     }
 
-    private void WaitForAck()
+    private void WaitForAck(string step)
     {
         for (int i = 0; i < HandshakePolls; i++)
         {
             if ((readEc(RegControl) & BitLkbe) != 0) return;
             Thread.Sleep(1);
         }
+        // The BIOS waits forever here; we give up so the service never hangs, and say so.
+        log?.Invoke($"lighting: EC did not acknowledge the {step} step (0x{RegControl:X2} bit 1) within {HandshakePolls} polls");
     }
 }
