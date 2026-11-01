@@ -7,11 +7,15 @@ namespace Excalibur.FanService;
 /// Keeps the graphics mode reading current (WMI 0x0203): 10 s after start (out of the start's burst of firmware calls),
 /// 5 s after a wake, and 3 s after the firmware's HDMI event (GMC_WMIEvent byte 1 = 4, a cable in or out; 3 s = the EC
 /// quiet spell every firmware event starts). Runs apart from the fan loop: a slow firmware call can only delay it.
+/// The BIOS raises its HDMI event when a cable goes in but not when it comes out (2026-11-02: one event per in-out-in), so
+/// outside Integrated the reading is also refreshed every <see cref="PollPeriod"/>; that read touches only CMOS and the
+/// GPIO, not the EC. In Integrated it would write the EC's GFXT each time, and the event covers the cable going in.
 /// </summary>
 public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal signal, FanRuntime runtime, Excalibur.Core.Fan.FanFileLog fileLog, ILogger<GraphicsWorker> logger) : BackgroundService
 {
     public const byte HdmiEvent = 4;
     private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(10), ResumeDelay = TimeSpan.FromSeconds(5), HdmiDelay = TimeSpan.FromSeconds(3);
+    public static readonly TimeSpan PollPeriod = TimeSpan.FromSeconds(30);
 
     private readonly SemaphoreSlim _wake = new(0);
     private volatile string? _why;
@@ -27,7 +31,11 @@ public sealed class GraphicsWorker(GraphicsModeMonitor graphics, PowerSignal sig
             await Task.Run(() => graphics.Refresh("start"), stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
-                await _wake.WaitAsync(stoppingToken);
+                if (!await _wake.WaitAsync(PollPeriod, stoppingToken))
+                {
+                    if (graphics.Current is { Mode: not GraphicsMode.Integrated }) await Task.Run(() => graphics.Refresh("check"), stoppingToken);
+                    continue;
+                }
                 // Several events in a row: wait for the last one's delay, then read once.
                 TimeSpan wait;
                 while ((wait = new DateTime(Interlocked.Read(ref _dueTicks), DateTimeKind.Utc) - DateTime.UtcNow) > TimeSpan.Zero)
