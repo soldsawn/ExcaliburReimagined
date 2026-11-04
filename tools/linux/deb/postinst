@@ -40,14 +40,16 @@ if [ "$1" = configure ]; then
             *)
               echo "!! Secure Boot açık: modülün imza anahtarını bir kez onaylamanız gerekiyor."
               if [ -t 0 ] && [ -f $CERT ]; then
-                echo "   Şimdi tek kullanımlık bir parola belirleyin (yeniden başlatınca bir kez sorulacak):"
+                echo "   Şimdi tek kullanımlık bir parola belirleyin (yeniden başlatınca bir kez sorulacak)."
+                echo "   Parolayı yazarken ekranda hiçbir şey görünmez; aynı parolayı iki kez yazıp her seferinde Enter'a basın:"
                 if mokutil --import $CERT; then
                   echo "   Bilgisayarı yeniden başlatın; mavi ekranda Enroll MOK > Continue > Yes seçip bu parolayı yazın."
                 else
                   echo "   Olmadı. Elle: sudo mokutil --import $CERT , sonra yeniden başlatıp mavi ekranda Enroll MOK."
                 fi
               else
-                echo "   Terminalde: sudo mokutil --import $CERT (bir parola belirleyin), sonra yeniden başlatıp"
+                echo "   Terminalde: sudo mokutil --import $CERT (bir parola belirleyin; yazarken ekranda hiçbir şey"
+                echo "   görünmez, aynı parolayı iki kez yazın), sonra yeniden başlatıp"
                 echo "   mavi ekranda Enroll MOK > Continue > Yes seçip parolayı yazın."
               fi ;;
           esac

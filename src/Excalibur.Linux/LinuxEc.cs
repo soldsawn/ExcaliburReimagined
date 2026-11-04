@@ -49,9 +49,9 @@ internal sealed class LinuxEc : IDisposable
                 + "(Secure Boot'la çalışan modülü içerir) ya da BIOS'ta (açılışta F2 > Security) Secure Boot'u kapatın.";
         if (LockdownActive())
             return "Secure Boot açık ve uygulamanın modülü yüklü değil. Modülün anahtarını bir kez onaylayın: terminalde "
-                + "'sudo mokutil --import /var/lib/shim-signed/mok/MOK.der' yazıp bir parola belirleyin, bilgisayarı yeniden "
-                + "başlatın, mavi ekranda Enroll MOK > Continue > Yes seçip parolayı girin. Ya da BIOS'ta (açılışta F2 > Security) "
-                + "Secure Boot'u kapatın.";
+                + "'sudo mokutil --import /var/lib/shim-signed/mok/MOK.der' yazıp bir parola belirleyin (yazarken ekranda "
+                + "hiçbir şey görünmez, aynı parolayı iki kez yazın), bilgisayarı yeniden başlatın, mavi ekranda "
+                + "Enroll MOK > Continue > Yes seçip parolayı girin. Ya da BIOS'ta (açılışta F2 > Security) Secure Boot'u kapatın.";
         if (!File.Exists(IoPath))
             return "ec_sys modülü yüklü değil. Kurulum betiği yükler; elle: sudo modprobe ec_sys write_support=1";
         if (File.Exists(WriteSupportPath) && File.ReadAllText(WriteSupportPath).Trim() is not ("Y" or "1"))

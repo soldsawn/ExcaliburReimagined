@@ -39,7 +39,7 @@ KOMUTLAR (kısa yol: exr):
 KALDIRMA:
     sudo /opt/excalibur-reimagined/uninstall.sh
 
-Bu sürümde henüz yok (gelecek): Secure Boot açıkken çalışma ve .deb paketi.
+Secure Boot açıkken çalışma yalnız .deb paketinde var (sürüm sayfasındaki excalibur-reimagined_..._amd64.deb).
 Doğrulanmış EC sürümleri: P008B0, P009B0, P006B0. Diğerlerinde fanlar önce yalnız izlenir; "exr trial" ile kısa bir deneme yapılır.
 Windows ile birlikte kullanıyorsanız: Linux donanım saatini UTC tutar, Windows yerel saat; Windows'a geçince saat 3 saat
 kayık görünebilir. Linux'ta bir kez: sudo timedatectl set-local-rtc 1
