@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Excalibur.Core.Fan.Ipc;
+using Excalibur.Core.Graphics;
 using Excalibur.Core.Power;
 using Excalibur.Linux.Ui.Controls;
 
@@ -12,6 +13,8 @@ namespace Excalibur.Linux.Ui.Pages;
 /// Performans, as on Windows: the power mode, the power the CPU and graphics card draw right now, and the user's own CPU and
 /// graphics card limits. On Linux the power mode moves the CPU's limit and the laptop's own fan table but not the graphics
 /// card's (the BIOS does that through ACPI, which user space cannot call), so the page says so and shows only the CPU part.
+/// The graphics mode (Hybrid / Discrete, through the module; both start with the next boot) is the last card: Windows has it
+/// on its Ekran page, which Linux does not have.
 /// </summary>
 internal sealed class PowerPage : UserControl
 {
@@ -45,6 +48,8 @@ internal sealed class PowerPage : UserControl
     private readonly Slider _gpuSlider;
     private readonly TextBlock _gpuText, _gpuNote, _gpuError;
     private readonly StackPanel _gpuPanel;
+    private readonly Dictionary<GraphicsMode, RadioButton> _graphicsButtons = [];
+    private readonly TextBlock _graphicsNow, _graphicsError;
     private bool _rendering, _limitDirty, _gpuDirty;
 
     public PowerPage(FanConnection connection)
@@ -142,6 +147,30 @@ internal sealed class PowerPage : UserControl
             Children = { SliderRow("En yüksek güç", GpuLimitTip, _gpuSlider, _gpuText), _gpuNote, gpuApply },
         };
 
+        // ---- graphics mode ----
+        _graphicsNow = Kit.Text("", "Body", top: 4);
+        _graphicsError = ErrorText();
+        var graphicsButtons = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        string graphicsGroup = "graphics" + GetHashCode();
+        foreach (var (mode, label, detail) in new[] { (GraphicsMode.Hybrid, "Hibrit", "Intel + NVIDIA"), (GraphicsMode.Discrete, "Harici", "yalnız NVIDIA") })
+        {
+            var b = Choice(graphicsGroup, label, detail);
+            b.IsCheckedChanged += async (_, _) =>
+            {
+                if (_rendering || b.IsChecked != true) return;
+                if (!await ConfirmGraphics(mode))
+                {
+                    Render();
+                    return;
+                }
+                var r = await _connection.RequestAsync(new FanRequest("setGraphicsMode", GraphicsMode: mode));
+                Show(_graphicsError, r is null ? "Fan servisine ulaşılamadı." : r.Ok ? null : GraphicsTexts.Message(r.Code, r.Error));
+                Render();
+            };
+            _graphicsButtons[mode] = b;
+            graphicsButtons.Children.Add(b);
+        }
+
         Content = new StackPanel
         {
             Children =
@@ -166,6 +195,10 @@ internal sealed class PowerPage : UserControl
                         Kit.Text("Ekran kartının gücünü sürücünün izin verdiğinin altına indirebilirsiniz: daha az ısı ve fan sesi, oyunlarda biraz daha düşük kare hızı.", "Caption"),
                         new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Children = { _gpuByMode, _gpuOwn } },
                         _gpuPanel, _gpuError)),
+                Kit.Card("Ekran kartı modu",
+                    Kit.Text("Hibrit modda NVIDIA kartı yalnız gerektiğinde çalışır, pil daha uzun gider. Harici modda ekranı doğrudan NVIDIA kartı sürer: " +
+                             "oyunlarda en yüksek hız. Değişiklik bilgisayar yeniden başlayınca geçerli olur.", "Caption"),
+                    graphicsButtons, _graphicsNow, _graphicsError),
             },
         };
 
@@ -259,6 +292,18 @@ internal sealed class PowerPage : UserControl
         Render();
     }
 
+    /// <summary>A change of the boot mode restarts the computer; taking back a pending one does not.</summary>
+    private async Task<bool> ConfirmGraphics(GraphicsMode mode)
+    {
+        bool startedDiscrete = _connection.Status?.GraphicsMode == GraphicsMode.Discrete;
+        bool pending = _connection.Status?.GraphicsSwitch?.RestartPending == true;
+        if (mode == GraphicsMode.Discrete && !startedDiscrete && !pending)
+            return await ConfirmDialog.Ask(this, "Harici moda geç", GraphicsTexts.RestartNote + " " + GraphicsTexts.DiscreteNote, "Kaydettim, yeniden başlat");
+        if (mode == GraphicsMode.Hybrid && startedDiscrete && !pending)
+            return await ConfirmDialog.Ask(this, "Hibrit moda dön", GraphicsTexts.RestartNote, "Kaydettim, yeniden başlat");
+        return true;
+    }
+
     private static string Message(string? code, string? error) => code switch
     {
         "power_battery" => "Pilde yalnızca Ofis modu kullanılabilir.",
@@ -303,6 +348,7 @@ internal sealed class PowerPage : UserControl
 
         RenderLimit();
         RenderGpuLimit();
+        RenderGraphics();
 
         if (power is null)
         {
@@ -318,6 +364,29 @@ internal sealed class PowerPage : UserControl
             PowerLock.UsbCAdapter => "Bu USB-C adaptör yeterince güçlü değil; yalnız Ofis modu açık. Prize takınca seçtiğiniz mod geri gelir.",
             _ => power.Preferred is { } p ? $"Prizdeyken seçtiğiniz mod: {Modes.First(x => x.Mode == p).Label}." : "",
         };
+    }
+
+    private void RenderGraphics()
+    {
+        var s = _connection.Connected ? _connection.Status : null;
+        var sw = s?.GraphicsSwitch;
+        bool busy = sw?.Busy == true;
+        GraphicsMode? shown = busy || sw?.RestartPending == true ? sw!.Target : s?.GraphicsMode;
+        _graphicsNow.Text = s is null ? "Fan servisine bağlanılamıyor; mod okunamadı."
+            : s.GraphicsMode is not { } mode
+                ? File.Exists("/dev/excalibur_ec") ? "Mod henüz okunmadı ya da bu bilgisayar bildirmiyor." : "Ekran kartı modu yalnız .deb paketiyle (uygulamanın modülüyle) değiştirilebilir."
+            : busy ? $"{GraphicsTexts.Name(sw!.Target!.Value)} moduna geçiliyor…"
+            : sw is { RestartPending: true, Target: { } next } ? $"Şu an: {GraphicsTexts.Name(mode)} · yeniden başlayınca {GraphicsTexts.Name(next)}"
+            : $"Şu an: {GraphicsTexts.Name(mode)}";
+        _rendering = true;
+        foreach (var (m, b) in _graphicsButtons)
+        {
+            b.IsChecked = m == shown;
+            b.IsEnabled = s?.GraphicsMode is not null && !busy;
+        }
+        _rendering = false;
+        if (busy) Show(_graphicsError, null);
+        else if (sw?.ErrorCode is { } code) Show(_graphicsError, GraphicsTexts.Message(code, sw.Error));
     }
 
     private void RenderLimit()

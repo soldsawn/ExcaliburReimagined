@@ -74,5 +74,6 @@ public sealed class GraphicsModeMonitor(Func<GraphicsReading?> read, Action<stri
 #if !LINUX
         ex is System.Management.ManagementException ||
 #endif
-        ex is InvalidOperationException or TimeoutException or System.Runtime.InteropServices.COMException;
+        ex is InvalidOperationException or TimeoutException or System.Runtime.InteropServices.COMException
+            or IOException; // Linux: the excalibur_ec module's call failed
 }

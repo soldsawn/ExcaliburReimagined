@@ -166,4 +166,15 @@ public class GraphicsSwitcherTests
         var second = _switcher.Start(GraphicsMode.Hybrid, "window");
         Assert.True(second is null || second.ErrorCode == "graphics_busy");
     }
+
+    [Fact]
+    public void Integrated_is_refused_where_it_is_not_offered_and_nothing_is_touched()
+    {
+        var linux = new GraphicsSwitcher(_monitor, new GraphicsModeWriter(_bios), _gpu,
+            () => _calls.Add("release"), () => _calls.Add("resume"), _log.Add, () => false, () => _restarts++, integrated: false);
+        Assert.Equal("graphics_unsupported", linux.Start(GraphicsMode.Integrated, "window")?.ErrorCode);
+        Assert.Empty(_calls);
+        Assert.Null(_bios.LastSet);
+        Assert.Null(linux.Start(GraphicsMode.Discrete, "window")); // Discrete is still offered
+    }
 }

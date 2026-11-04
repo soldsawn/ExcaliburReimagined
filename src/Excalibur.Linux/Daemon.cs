@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
+using Excalibur.Core.Graphics;
 using Excalibur.Core.Hardware;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
@@ -37,6 +38,8 @@ internal sealed record LinuxPaths(string Data, string Logs, string Socket)
 internal sealed class Daemon
 {
     private static readonly TimeSpan ResumeDelay = TimeSpan.FromSeconds(5);
+    // The graphics mode is first read 10 s after start, out of the start's burst of firmware calls (as on Windows).
+    private const int GraphicsStartTick = 10;
 
     private readonly LinuxPaths _paths;
     private readonly bool _simulate;
@@ -59,6 +62,8 @@ internal sealed class Daemon
     private readonly LinuxPowerHardware? _linuxPower;
     private readonly string? _problem;
     private readonly FanCommandHandler? _commands;
+    private readonly GraphicsModeMonitor? _graphics;
+    private readonly GraphicsSwitcher? _graphicsSwitch;
     private readonly object _gate = new();
     private bool _asleep;
     private DateTimeOffset? _resumeAt;
@@ -136,6 +141,15 @@ internal sealed class Daemon
         }
         if (smiChannel is not null)
             _lighting = new LightingManager(new KeyboardLight(smiChannel), _settings, Log);
+        // The graphics mode needs the BIOS's own command: through the module only (ec_sys has no WMI).
+        if (smiChannel is SimulatedSmiChannel or ModuleSmiChannel)
+        {
+            _graphics = new GraphicsModeMonitor(new GraphicsModeReader(smiChannel).Read, Log);
+            _graphicsSwitch = new GraphicsSwitcher(_graphics, new GraphicsModeWriter(smiChannel), new LinuxGpuDevices(), () => { }, () => { }, Log,
+                simulate ? () => false : () => LinuxGraphicsSystem.BitLockerOn(Log),
+                simulate ? () => Log("graphics: (simulation) the computer would restart now") : () => LinuxGraphicsSystem.Restart(Log),
+                integrated: false);
+        }
 
         // A version that passed the trial stays trusted after a restart (as on Windows).
         _loop.EcTrusted += (v, profile, path) => _settings.Update(s => s with
@@ -148,7 +162,7 @@ internal sealed class Daemon
         // The same commands as the Windows service's pipe (no Casper clean-up, no "shutdown": systemd owns the service).
         if (_power is not null && _lighting is not null)
             _commands = new FanCommandHandler(_loop, simulate, DateTimeOffset.Now, _settings, _history, _power, _lighting, _battery,
-                _batteryRecorder, _batteryEstimates, _switcher, _log, warn: Log);
+                _batteryRecorder, _batteryEstimates, _switcher, _log, warn: Log, graphics: _graphics, graphicsSwitch: _graphicsSwitch);
     }
 
     public static int Run(bool simulate)
@@ -204,6 +218,7 @@ internal sealed class Daemon
                 ticks++;
                 if (ticks % 2 == 0) SafePollPowerAndLight();
                 if (ticks % 5 == 0) SafeTickBattery();
+                if (ticks == GraphicsStartTick) RefreshGraphics("start");
                 if (ticks % 60 == 0 && _last?.Snapshot is { } s)
                     Log($"status {_last.Mode} {_last.Profile}: CPU {s.CpuTempC}C {s.CpuRpm}rpm {s.CpuTarget}, GPU {s.GpuTempC}C {s.GpuRpm}rpm {s.GpuTarget}");
             }
@@ -227,6 +242,8 @@ internal sealed class Daemon
             _resumeAt = null;
             try { _power?.Reapply(); } catch (Exception ex) { Log($"power reapply failed: {ex.Message}"); }
             try { _lighting?.Reapply(); } catch (Exception ex) { Log($"lighting reapply failed: {ex.Message}"); }
+            RefreshGraphics("wake");
+            _graphicsSwitch?.Woke();
         }
         if (_power is not null)
         {
@@ -243,6 +260,12 @@ internal sealed class Daemon
             }
             catch (Exception) { }
         }
+    }
+
+    private void RefreshGraphics(string why)
+    {
+        try { _graphics?.Refresh(why); }
+        catch (Exception ex) { Log($"graphics: mode not read ({why}): {ex.Message}"); }
     }
 
     private void SafeTickBattery()

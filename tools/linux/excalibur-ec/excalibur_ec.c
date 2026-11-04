@@ -7,7 +7,9 @@
  *   - EXR_WMI_CALL: the same 32-byte block the Windows app sends through RW_GMWMI (set = WSAA, then query = WQAA),
  *     so the BIOS itself applies a power mode (EC + NVIDIA Dynamic Boost + DPTF) or the keyboard light, and GET
  *     0x0200 returns temperatures and fan speeds. Only the reads (0xFA00) and the sets the app uses are let through;
- *     the others (e.g. 0xFB00/0x0203, the display switch, which writes CMOS) are refused.
+ *     the others are refused. The graphics mode (0xFB00/0x0203, written to CMOS, takes effect at the next boot) only
+ *     as Hybrid (1) or Discrete (2): Integrated (3) also turns the EC's GPU temperature reading off and needs the
+ *     GPU switched off first, which Linux cannot do while it runs.
  *   - EXR_EC_READ: any EC register, through the kernel's EC driver (queued with ACPI's own accesses).
  *   - EXR_EC_WRITE: only the two fan target registers.
  * Works with Secure Boot when the module is signed (DKMS signs it with the machine's MOK), where ec_sys and /dev/mem
@@ -37,13 +39,15 @@ static bool exr_wmi_allowed(const u8 *buf)
 {
 	u16 op = buf[0] | buf[1] << 8;
 	u16 fn = buf[2] | buf[3] << 8;
+	u32 a2 = buf[4] | buf[5] << 8 | buf[6] << 16 | (u32)buf[7] << 24;
 
 	if (op == OP_GET)
 		return true; /* every GET case of WSAA only reads */
 	if (op == OP_SET)
 		return fn == 0x0100  /* keyboard light */
 		    || fn == 0x0205  /* fan targets (empty on the G870; used where a BIOS has it) */
-		    || fn == 0x0300; /* performance mode */
+		    || fn == 0x0300  /* performance mode */
+		    || (fn == 0x0203 && (a2 == 1 || a2 == 2)); /* graphics mode: Hybrid, Discrete */
 	return false;
 }
 

@@ -29,6 +29,7 @@ public sealed class GraphicsModeWriter(ISmiChannel firmware)
         command.A2 = (uint)mode;
         try { firmware.Execute(command); }
         catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or System.Runtime.InteropServices.COMException
+            or IOException // Linux: the excalibur_ec module refused or failed the call
 #if !LINUX
             or System.Management.ManagementException
 #endif
@@ -59,9 +60,11 @@ public sealed record GraphicsSwitchState(bool Busy, GraphicsMode? Target, string
 /// Integrated, the BIOS told, then <paramref name="restart"/>. Leaving a Discrete boot is Hybrid and a restart; choosing
 /// Hybrid before the restart takes Discrete back. The user said Discrete worked on this machine with the stock software
 /// (its internal screen stayed on), so there is no automatic way back.
+/// <paramref name="integrated"/> false refuses Integrated (Linux: the GPU cannot be switched off while the system runs).
 /// </summary>
 public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWriter writer, IGpuDevices devices,
-    Action releaseGpu, Action resumeGpu, Action<string> log, Func<bool>? bitLockerOn = null, Action? restart = null)
+    Action releaseGpu, Action resumeGpu, Action<string> log, Func<bool>? bitLockerOn = null, Action? restart = null,
+    bool integrated = true)
 {
     private readonly object _gate = new();
     private GraphicsSwitchState _state = new(false, null);
@@ -79,6 +82,8 @@ public sealed class GraphicsSwitcher(GraphicsModeMonitor monitor, GraphicsModeWr
         lock (_gate)
         {
             if (_state.Busy) return new GraphicsSwitchState(true, _state.Target, "graphics_busy", "A graphics mode change is running.");
+            if (target == GraphicsMode.Integrated && !integrated)
+                return new GraphicsSwitchState(false, target, "graphics_unsupported", "Integrated is not available here.");
             if (target == GraphicsMode.Discrete && restart is null)
                 return new GraphicsSwitchState(false, target, "graphics_unsupported", "Discrete needs a restart, which is not available here.");
             _state = new GraphicsSwitchState(true, target, RestartAdvised: _restartAdvised, RestartPending: _pending is not null);

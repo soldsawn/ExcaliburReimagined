@@ -6,6 +6,7 @@ using System.Text.Json;
 using Excalibur.Core.Battery;
 using Excalibur.Core.Fan;
 using Excalibur.Core.Fan.Ipc;
+using Excalibur.Core.Graphics;
 using Excalibur.Core.History;
 using Excalibur.Core.Lighting;
 using Excalibur.Core.Power;
@@ -157,6 +158,7 @@ string ErrorText(FanResponse r) => r.Code switch
     "profile_not_found" => "Bu adda özel bir profil yok.",
     "profile_invalid" => $"Profil geçersiz: {r.Error}",
     "trial_unavailable" => $"Deneme başlatılamadı: {r.Error}",
+    { } g when g.StartsWith("graphics_", StringComparison.Ordinal) => GraphicsTexts.Message(r.Code, r.Error),
     _ => r.Error ?? "İstek kabul edilmedi.",
 };
 
@@ -282,6 +284,9 @@ int Print(FanResponse? r)
         Console.WriteLine($"Güç modu:     {ModeLabel(pw.Mode)} ({src}{pref})");
     }
     Console.WriteLine($"EC sürümü:    {s.EcVersion ?? "?"}");
+    if (s.GraphicsMode is { } gm)
+        Console.WriteLine($"Ekran kartı modu: {GraphicsTexts.Name(gm)}" +
+            (s.GraphicsSwitch is { RestartPending: true, Target: { } next } ? $" · yeniden başlayınca {GraphicsTexts.Name(next)}" : ""));
     if (s.CpuTempC is not null)
     {
         string cpuPower = "", gpuPower = "";
@@ -482,6 +487,65 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
             return 2;
         }
         return Print(Ask(new FanRequest("setGpuLimit", GpuLimitWatts: watts)));
+    }
+
+    case "gpu":
+    case "ekran-karti":
+    {
+        if (rest.Length < 2)
+        {
+            var st = Ask(new FanRequest("status"))?.Status;
+            Console.WriteLine(st?.GraphicsMode is { } now
+                ? $"Ekran kartı modu: {GraphicsTexts.Name(now)}"
+                : "Ekran kartı modu okunamadı (yalnız .deb paketinin modülüyle, açılıştan ~10 sn sonra okunur).");
+            Console.WriteLine("Değiştirmek için: exr gpu hibrit | harici");
+            return st?.GraphicsMode is null ? 1 : 0;
+        }
+        GraphicsMode? target = rest[1].ToLowerInvariant() switch
+        {
+            "hibrit" or "hybrid" => GraphicsMode.Hybrid,
+            "harici" or "discrete" or "nvidia" => GraphicsMode.Discrete,
+            _ => null,
+        };
+        if (target is not { } gmode)
+        {
+            Console.Error.WriteLine("Kullanım: exr gpu [hibrit|harici]  (Dahili Linux'ta yok)");
+            return 2;
+        }
+        var before = Ask(new FanRequest("status"))?.Status;
+        bool startedDiscrete = before?.GraphicsMode == GraphicsMode.Discrete;
+        bool pending = before?.GraphicsSwitch?.RestartPending == true;
+        // A restart follows only when the boot mode changes (as in the window).
+        if (gmode == GraphicsMode.Discrete ? !startedDiscrete && !pending : startedDiscrete && !pending)
+        {
+            if (gmode == GraphicsMode.Discrete) Console.WriteLine(GraphicsTexts.DiscreteNote);
+            Console.WriteLine(GraphicsTexts.RestartNote);
+            Console.WriteLine("Devam edilsin mi? [e/H]");
+            if (Console.ReadLine()?.Trim().ToLowerInvariant() is not ("e" or "evet" or "y"))
+                return 0;
+        }
+        var started = Ask(new FanRequest("setGraphicsMode", GraphicsMode: gmode));
+        if (started is null) return 2;
+        if (!started.Ok)
+        {
+            Console.Error.WriteLine($"Hata: {ErrorText(started)}");
+            return 1;
+        }
+        // The change runs in the background; wait for its outcome (a restart may come first).
+        for (int i = 0; i < 20; i++)
+        {
+            Thread.Sleep(500);
+            var sw = Ask(new FanRequest("status"))?.Status?.GraphicsSwitch;
+            if (sw is null || sw.Busy) continue;
+            if (sw.ErrorCode is { } code)
+            {
+                Console.Error.WriteLine($"Hata: {GraphicsTexts.Message(code, sw.Error)}");
+                return 1;
+            }
+            Console.WriteLine(sw.RestartPending ? $"Yeniden başlayınca {GraphicsTexts.Name(gmode)} modu açılır." : $"Ekran kartı modu: {GraphicsTexts.Name(gmode)}");
+            return 0;
+        }
+        return 0;
     }
 
     case "auto":
@@ -756,6 +820,7 @@ switch (rest.FirstOrDefault()?.ToLowerInvariant())
               exr mode <ofis|oyun|yuksek>                      güç modunu değiştirir (pilde yalnız Ofis)
               exr cpu-limit <pl1> <pl2> | off                  işlemci uzun/kısa süreli watt sınırı (15–55 / 30–115 W)
               exr gpu-limit <watt> | off                       ekran kartı watt hedefi (30–175 W)
+              exr gpu [hibrit|harici]                          ekran kartı modu (değişince bilgisayar yeniden başlar)
               exr auto on | off | ac ... | bat ...             şarja takılınca / pile geçince otomatik mod ve profil
               exr light #RRGGBB | breathing | cycle | off      klavye aydınlatması (3 bölge renk, efekt, parlaklık 0–2)
               exr battery [interval 2|5|10|30]                 pil durumu, sağlık ve süre tahminleri
