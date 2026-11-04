@@ -16,6 +16,12 @@ public interface IPowerHardware
     /// <summary>The GPU power limit the driver enforces right now, in watts; null when it cannot be read.</summary>
     int? ReadGpuWatts();
 
+    /// <summary>
+    /// Whether the last mode sent also moved the GPU's power ceiling; when not, what the GPU allows is not the mode's
+    /// and is not learned (Linux without our module: only EC 0x95 changes).
+    /// </summary>
+    bool ModeMovesGpuLimit => true;
+
     /// <summary>The CPU's power and limits now; null when they cannot be read.</summary>
     CpuPower? ReadCpuPower() => null;
 
@@ -286,7 +292,7 @@ public sealed class PowerManager
     private void MeasureMode(PowerSource source)
     {
         if (_polls < _measureFrom || _applied is not { } mode) return;
-        if (!source.CanRunFast) { _measureFrom = int.MaxValue; return; } // battery limits are not the mode's
+        if (!source.CanRunFast || !_hw.ModeMovesGpuLimit) { _measureFrom = int.MaxValue; return; } // battery limits are not the mode's
         if (_gpuWatts is not { } gpu) return;
         if (_measureLast != gpu) { _measureLast = gpu; return; }
         int? cpu = _cpu?.ModePl1Watts;

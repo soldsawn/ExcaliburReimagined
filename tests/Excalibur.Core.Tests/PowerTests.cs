@@ -323,6 +323,18 @@ public sealed class PowerTests : IDisposable
     }
 
     [Fact]
+    public void A_mode_that_did_not_move_the_gpu_limit_is_not_measured()
+    {
+        // Linux through ec_sys: only EC 0x95 changes, the GPU stays at the last mode's ceiling (100 W learned for Office, 2026-11-01).
+        _hw.ModeMovesGpuLimit = false;
+        Poll(Wall);
+        Assert.True(_power.SetMode(PowerMode.Office).Ok);
+        _hw.GpuWatts = 100;
+        PollMany(6);
+        Assert.All(_power.Status.Modes!, m => Assert.Null(m.GpuWatts));
+    }
+
+    [Fact]
     public void Battery_limits_are_not_taken_for_the_mode()
     {
         Poll(Battery);
@@ -398,6 +410,7 @@ public sealed class PowerTests : IDisposable
         public int? GpuWatts { get; set; } = 70;
         public bool FailSet { get; set; }
         public List<PowerMode> Sent { get; } = [];
+        public bool ModeMovesGpuLimit { get; set; } = true;
 
         public void SetMode(PowerMode mode)
         {

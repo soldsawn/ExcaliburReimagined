@@ -43,8 +43,12 @@ internal sealed class LinuxPowerHardware(
     /// <summary>The firmware's CPU limits back (the service stops; the mode itself stays in the EC).</summary>
     public void RestoreFirmware() => rapl?.RestoreFirmware();
 
+    /// <summary>Only the BIOS's own mode call moves the GPU's power ceiling.</summary>
+    public bool ModeMovesGpuLimit { get; private set; }
+
     private void WriteMode(PowerMode mode)
     {
+        ModeMovesGpuLimit = false;
         bool wroteProfile = TryWritePlatformProfile(mode);
         if (ec?.Module is { } module)
         {
@@ -53,6 +57,7 @@ internal sealed class LinuxPowerHardware(
                 var command = Excalibur.Core.Hardware.SmiCommand.Set(PowerModeFunction);
                 command.A2 = (uint)mode;
                 module.Call(command);
+                ModeMovesGpuLimit = true;
                 return;
             }
             catch (IOException ex)
