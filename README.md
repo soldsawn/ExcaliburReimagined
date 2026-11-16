@@ -150,7 +150,8 @@ sudo bash install.sh
 | Dağıtım | Durum |
 |---|---|
 | Ubuntu (26.04, G870 / CQ212) | ✅ Denendi |
-| Linux Mint, Pop!_OS, Zorin OS, Debian | ✅ Büyük olasılıkla çalışır (aynı çekirdek modülü) |
+| Linux Mint, Pop!_OS, Zorin OS | ✅ Büyük olasılıkla çalışır (aynı çekirdek modülü; çekirdek 6.8 ve sonrası) |
+| Debian 12 | 🟡 Çekirdeği (6.1) modül için eski; `tar.gz` ile, Secure Boot kapalıyken denenebilir |
 | Arch, Manjaro, EndeavourOS, openSUSE | 🟡 Denenmedi |
 | Fedora | ❌ Büyük olasılıkla çalışmaz (`tar.gz` kurulumu `ec_sys` ister, Fedora çekirdeğinde yok gibi görünüyor; modül için `.rpm` henüz yok) |
 | Bazzite, SteamOS, Fedora Silverblue | ❌ Sistem klasörleri yazılamadığı için kurulum yapılamaz |
