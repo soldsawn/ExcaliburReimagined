@@ -64,6 +64,49 @@ public class CpuPowerTests
         Assert.Equal(2, regs.Writes.Count);
     }
 
+    private static string TempFile() => Path.Combine(Path.GetTempPath(), $"exr-cpu-{Guid.NewGuid():N}.txt");
+
+    [Fact]
+    public void A_service_that_died_with_a_limit_written_still_restores_the_original()
+    {
+        // Code review 2026-11-14 (B1): the next service took the 15/30 W left in the register for the original.
+        string path = TempFile();
+        var regs = new FakeRegisters();
+        new CpuLimiter(regs, new SavedCpuLimits(path, () => "boot 1")).Apply(new CpuLimit(15, 30)); // then dies
+        var next = new CpuLimiter(regs, new SavedCpuLimits(path, () => "boot 1"));
+        next.Apply(null);
+        Assert.Equal(Msr, regs.Limit);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void A_saved_original_from_an_earlier_boot_is_not_used()
+    {
+        string path = TempFile();
+        var regs = new FakeRegisters();
+        new CpuLimiter(regs, new SavedCpuLimits(path, () => "boot 1")).Apply(new CpuLimit(15, 30));
+        regs.Limit = 0x0042839800DF8300; // the restart put the firmware's (here: different) value back
+        regs.Writes.Clear();
+        new CpuLimiter(regs, new SavedCpuLimits(path, () => "boot 2")).Apply(null);
+        Assert.Empty(regs.Writes);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void A_limit_after_a_restore_captures_the_register_again()
+    {
+        string path = TempFile();
+        var regs = new FakeRegisters();
+        var limiter = new CpuLimiter(regs, new SavedCpuLimits(path, () => "boot 1"));
+        limiter.Apply(new CpuLimit(25, 35));
+        limiter.Apply(null);
+        limiter.Apply(new CpuLimit(25, 35));
+        Assert.True(File.Exists(path));
+        limiter.Apply(null);
+        Assert.Equal(Msr, regs.Limit);
+        Assert.False(File.Exists(path));
+    }
+
     [Fact]
     public void Clearing_without_ever_limiting_touches_nothing()
     {

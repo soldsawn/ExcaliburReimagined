@@ -124,6 +124,29 @@ public sealed class LinuxHardwareTests : IDisposable
     }
 
     [Fact]
+    public void Rapl_after_a_service_that_did_not_stop_cleanly_still_brings_the_firmware_values_back()
+    {
+        // Code review 2026-11-14 (B1): the next service took the user's 30 W PL2 for the firmware's.
+        string pkg = Path.Combine(_temp, "intel-rapl_0");
+        Directory.CreateDirectory(pkg);
+        File.WriteAllText(Path.Combine(pkg, "name"), "package-0\n");
+        File.WriteAllText(Path.Combine(pkg, "constraint_0_power_limit_uw"), "200000000\n");
+        File.WriteAllText(Path.Combine(pkg, "constraint_1_power_limit_uw"), "115000000\n");
+        string saved = Path.Combine(_temp, SavedCpuLimits.FileName);
+        string Pl1() => File.ReadAllText(Path.Combine(pkg, "constraint_0_power_limit_uw")).Trim();
+        string Pl2() => File.ReadAllText(Path.Combine(pkg, "constraint_1_power_limit_uw")).Trim();
+
+        new LinuxRapl(_temp, new SavedCpuLimits(saved, () => "boot 1")).Apply(new CpuLimit(15, 30)); // then killed
+        var next = new LinuxRapl(_temp, new SavedCpuLimits(saved, () => "boot 1"));
+        next.SetModeLimit(45);
+        Assert.Equal("45000000", Pl1());
+        Assert.Equal("115000000", Pl2());
+        next.RestoreFirmware();
+        Assert.Equal("200000000", Pl1());
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
     public void Rapl_handles_energy_counter_wraparound()
     {
         string pkg = Path.Combine(_temp, "intel-rapl_0");

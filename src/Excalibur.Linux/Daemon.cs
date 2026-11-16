@@ -26,6 +26,7 @@ internal sealed record LinuxPaths(string Data, string Logs, string Socket)
     public string PowerModes => Path.Combine(Data, "power-modes.txt");
     public string History => Path.Combine(Data, "history");
     public string Battery => Path.Combine(Data, "battery");
+    public string CpuLimitOriginal => Path.Combine(Data, SavedCpuLimits.FileName);
 }
 
 /// <summary>
@@ -115,7 +116,7 @@ internal sealed class Daemon
         {
             Log(ec.Module is not null ? "ec: through the excalibur_ec module (BIOS commands available)" : "ec: through ec_sys");
             hardware = new LinuxFanHardware(ec, Log);
-            powerHardware = _linuxPower = new LinuxPowerHardware(ec, new LinuxRapl(), new GpuLimiter(new NvmlGpuClocks()));
+            powerHardware = _linuxPower = new LinuxPowerHardware(ec, new LinuxRapl(saved: new SavedCpuLimits(_paths.CpuLimitOriginal)), new GpuLimiter(new NvmlGpuClocks()));
             // The light key's level is read from the EC either way; the light itself goes through the BIOS when the module is there.
             _smi = new LinuxEcSmiChannel(ec, Log);
             smiChannel = ec.Module is { } module ? new ModuleSmiChannel(module) : _smi;

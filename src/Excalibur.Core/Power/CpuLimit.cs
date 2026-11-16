@@ -22,15 +22,16 @@ public sealed record CpuLimit(int Pl1Watts, int Pl2Watts)
 /// <summary>
 /// Writes <see cref="CpuLimit"/> to MSR 0x610 and puts the original back. Only the two power fields change
 /// (enable, clamp and time-window bits keep the firmware's values), and only when the register differs, so
-/// calling <see cref="Apply"/> every minute costs one read. The original is captured on the first write;
-/// a restart of Windows restores the BIOS values in any case.
+/// calling <see cref="Apply"/> every minute costs one read. The original is captured before the first write and kept in
+/// <paramref name="saved"/> until it is back, so a service that died with a limit written still knows it; a restart of
+/// Windows restores the BIOS values in any case.
 /// </summary>
-public sealed class CpuLimiter(ICpuPowerRegisters registers)
+public sealed class CpuLimiter(ICpuPowerRegisters registers, SavedCpuLimits? saved = null)
 {
     private const uint PowerUnitMsr = 0x606, PackageLimitMsr = 0x610;
     private const ulong PowerFields = 0x7FFFUL | (0x7FFFUL << 32);
 
-    private ulong? _original;
+    private ulong? _original = saved?.Load() is [var first, ..] ? first : null;
     private double? _watt;
 
     /// <summary>Makes the register hold <paramref name="limit"/>, or the original when null.</summary>
@@ -38,9 +39,19 @@ public sealed class CpuLimiter(ICpuPowerRegisters registers)
     {
         if (limit is null && _original is null) return; // never touched: nothing to undo
         ulong current = registers.ReadMsr(PackageLimitMsr);
-        _original ??= current;
+        if (_original is null)
+        {
+            _original = current;
+            saved?.Save(current);
+        }
         ulong wanted = limit is null ? _original.Value : Compose(_original.Value, limit);
         if (current != wanted) registers.WriteMsr(PackageLimitMsr, wanted);
+        if (limit is null)
+        {
+            // The original is in the register again: forget it, the next limit captures it afresh.
+            _original = null;
+            saved?.Clear();
+        }
     }
 
     private ulong Compose(ulong original, CpuLimit limit)

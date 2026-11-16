@@ -190,15 +190,17 @@ internal sealed class LinuxPowerHardware(
 
 /// <summary>
 /// Reads the CPU package energy counter and reads/writes its PL1/PL2 power limits through the Linux kernel's intel-rapl
-/// powercap sysfs (/sys/class/powercap/intel-rapl:0). Captures the original limits before the first write and puts them
-/// back when the limit is cleared or the service stops.
+/// powercap sysfs (/sys/class/powercap/intel-rapl:0). Captures the original limits before the first write (kept in
+/// <paramref name="saved"/> for this boot, so a service that did not stop cleanly still knows them) and puts them back when
+/// the limit is cleared or the service stops.
 /// </summary>
-internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
+internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap", SavedCpuLimits? saved = null)
 {
     private readonly string? _pkgDir = FindPackageDir(powercapRoot, mmio: false);
     private readonly string? _mmioPkgDir = FindPackageDir(powercapRoot, mmio: true);
     private (ulong EnergyUj, TimeSpan At)? _last;
-    private ulong? _originalPl1Uw, _originalPl2Uw;
+    private ulong? _originalPl1Uw = saved?.Load() is [var pl1, _] ? pl1 : null;
+    private ulong? _originalPl2Uw = saved?.Load() is [_, var pl2] ? pl2 : null;
     // What the power mode allows, set by the app: on Windows the BIOS moves the limit with the mode, on Linux nothing does
     // (the MMIO copy stayed 55 W in every mode, 2026-11-01), so the mode's value goes into the MSR copy.
     private int? _modePl1Watts;
@@ -276,8 +278,11 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
         {
             ulong curPl1 = ReadUlong(pl1Path) ?? throw new PowerException("Could not read constraint_0_power_limit_uw.");
             ulong curPl2 = ReadUlong(pl2Path) ?? throw new PowerException("Could not read constraint_1_power_limit_uw.");
-            _originalPl1Uw ??= curPl1;
-            _originalPl2Uw ??= curPl2;
+            if (_originalPl1Uw is null || _originalPl2Uw is null)
+            {
+                (_originalPl1Uw, _originalPl2Uw) = (curPl1, curPl2);
+                saved?.Save(curPl1, curPl2);
+            }
 
             ulong wantedPl1 = limit is not null ? (ulong)limit.Pl1Watts * 1_000_000UL
                 : _modePl1Watts is { } mode ? (ulong)mode * 1_000_000UL
@@ -288,6 +293,12 @@ internal sealed class LinuxRapl(string powercapRoot = "/sys/class/powercap")
             // BIOS moves it with the mode), left alone as on Windows, which only reads it.
             if (curPl1 != wantedPl1) File.WriteAllText(pl1Path, wantedPl1.ToString(CultureInfo.InvariantCulture));
             if (curPl2 != wantedPl2) File.WriteAllText(pl2Path, wantedPl2.ToString(CultureInfo.InvariantCulture));
+            if (limit is null && _modePl1Watts is null)
+            {
+                // The firmware's values are back: forget them, the next write captures them afresh.
+                (_originalPl1Uw, _originalPl2Uw) = (null, null);
+                saved?.Clear();
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

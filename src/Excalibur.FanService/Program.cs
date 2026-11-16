@@ -91,7 +91,7 @@ else
     (batteryHardware, batteryMeter) = (wmiBattery, wmiBattery);
     powerHardware = cpuRegisters is null
         ? new EcPowerHardware(gateway)
-        : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters), new GpuLimiter(new NvmlGpuClocks()));
+        : new EcPowerHardware(gateway, new CpuPowerMeter(cpuRegisters), new CpuLimiter(cpuRegisters, new SavedCpuLimits(Path.Combine(runtimeDir, SavedCpuLimits.FileName))), new GpuLimiter(new NvmlGpuClocks()));
 }
 
 var runtime = new FanRuntime(simulate, fake, DateTimeOffset.Now, runtimeDir);
