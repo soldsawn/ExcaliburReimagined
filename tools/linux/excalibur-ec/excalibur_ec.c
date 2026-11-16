@@ -186,7 +186,6 @@ static struct wmi_driver exr_driver = {
 	.id_table = exr_id_table,
 	.probe = exr_probe,
 	.remove = exr_remove,
-	.no_singleton = false,
 };
 module_wmi_driver(exr_driver);
 
