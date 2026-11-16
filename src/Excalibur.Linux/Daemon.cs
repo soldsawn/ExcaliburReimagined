@@ -313,33 +313,71 @@ internal sealed class Daemon
         using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(_paths.Socket));
         // Local users may ask for the status and change the profile (as with the Windows pipe); the fans stay under the safety rules.
+        // Stopping the fan control (sleep) is root's alone (Handle).
         File.SetUnixFileMode(_paths.Socket, (UnixFileMode)0b110_110_110);
         listener.Listen(8);
         while (!stop.IsCancellationRequested)
         {
             var client = await listener.AcceptAsync(stop);
+            // Each connection holds a pool thread; a few are enough (the window, the tray, a command), many would slow the ticks.
+            if (Interlocked.Increment(ref _connections) > MaxConnections)
+            {
+                Interlocked.Decrement(ref _connections);
+                client.Dispose();
+                continue;
+            }
             _ = Task.Run(() => Serve(client, stop));
         }
     }
+
+    private const int MaxConnections = 16;
+    private int _connections;
 
     /// <summary>As the Windows pipe: one JSON line in, one out, any number of exchanges per connection.</summary>
     private void Serve(Socket client, CancellationToken stop)
     {
         try
         {
+            bool root = PeerUid(client) == 0;
             using (client)
             using (var stream = new NetworkStream(client))
             using (var reader = new StreamReader(stream, Encoding.UTF8))
             using (var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true })
             {
-                while (!stop.IsCancellationRequested && reader.ReadLine() is { } line)
-                    writer.WriteLine(JsonSerializer.Serialize(Handle(line), FanPipe.Json));
+                while (!stop.IsCancellationRequested && ReadLine(reader) is { } line)
+                    writer.WriteLine(JsonSerializer.Serialize(Handle(line, root), FanPipe.Json));
             }
         }
-        catch (IOException) { } // the client went away
+        catch (IOException) { } // the client went away, or sent a line too long
+        finally { Interlocked.Decrement(ref _connections); }
     }
 
-    private FanResponse Handle(string line)
+    /// <summary>The connecting process's user id (SO_PEERCRED), or null when the kernel does not say.</summary>
+    private static uint? PeerUid(Socket client)
+    {
+        try
+        {
+            Span<byte> cred = stackalloc byte[12]; // struct ucred { pid_t pid; uid_t uid; gid_t gid; }
+            const int SolSocket = 1, SoPeerCred = 17;
+            return client.GetRawSocketOption(SolSocket, SoPeerCred, cred) == 12 ? BitConverter.ToUInt32(cred[4..8]) : null;
+        }
+        catch (SocketException) { return null; }
+    }
+
+    /// <summary>A line of at most <see cref="FanCommandHandler.MaxLineLength"/> characters; a longer one ends the connection.</summary>
+    private static string? ReadLine(StreamReader reader)
+    {
+        var line = new StringBuilder();
+        while (reader.Read() is var c and >= 0)
+        {
+            if (c == '\n') return line.ToString().TrimEnd('\r');
+            if (line.Length >= FanCommandHandler.MaxLineLength) throw new IOException("request too long");
+            line.Append((char)c);
+        }
+        return line.Length > 0 ? line.ToString() : null;
+    }
+
+    private FanResponse Handle(string line, bool root)
     {
         FanRequest? req = null;
         try { req = JsonSerializer.Deserialize<FanRequest>(line, FanPipe.Json); }
@@ -347,6 +385,9 @@ internal sealed class Daemon
         var now = DateTimeOffset.Now;
         switch (req?.Cmd?.ToLowerInvariant())
         {
+            // Any local process could otherwise stop the fan control until a "wake".
+            case "sleep" or "wake" when !root && !_simulate:
+                return new FanResponse(false, "Only root (the system's sleep hook) may send this.", Code: "not_root");
             // systemd's sleep hook (excalibur-reimagined sleep pre/post).
             case "sleep" when _loop is not null:
                 _resumeAt = null;
