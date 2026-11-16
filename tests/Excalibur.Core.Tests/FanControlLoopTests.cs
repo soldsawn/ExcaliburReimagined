@@ -249,6 +249,17 @@ public class FanControlLoopTests
     }
 
     [Fact]
+    public void A_long_busy_streak_is_logged_once()
+    {
+        _loop.Start(Balanced, T0);
+        _hw.BusyNextWrites = 30;
+        for (int t = 1; t <= 15; t++) TickAt(t);
+        Assert.Single(_loop.Events, e => e.Message.Contains("EC busy"));
+        TickAt(16); // writes go through again
+        Assert.Equal(P(30), _hw.CpuTarget);
+    }
+
+    [Fact]
     public void Stop_hands_fans_to_the_ec()
     {
         _loop.Start(Balanced, T0);

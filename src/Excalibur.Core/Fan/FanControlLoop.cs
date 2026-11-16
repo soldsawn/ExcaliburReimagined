@@ -106,6 +106,8 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
     private FanDecision? _applied;
     private string? _ecVersion;
     private int _readFailures, _writeFailures;
+    private const int BusySkipsToLog = 10;
+    private int _busySkips;
     private bool _holdsFans;
     private long _totalEvents;
     private string? _safetyReason;
@@ -334,10 +336,13 @@ public sealed class FanControlLoop(IFanHardware hardware, FanLoopOptions? option
                     if (want.IsAuto) hardware.SetAutoUnread(fan);
                     else hardware.SetTarget(fan, want);
                     _lastWrite[(int)fan] = now;
+                    _busySkips = 0;
                 }
                 catch (FanBusyException)
                 {
                     // Nothing was sent, so not a failure; the cached target is unchanged and a later tick writes it.
+                    // A streak is said once, so a fan stuck on an old target shows in the log.
+                    if (++_busySkips == BusySkipsToLog) Log(now, $"EC busy: {BusySkipsToLog} fan writes in a row skipped");
                 }
                 catch (FanWriteException ex)
                 {
