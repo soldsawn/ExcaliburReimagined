@@ -6,7 +6,7 @@
 
 **Casper Excalibur G870 için hafif, hızlı ve açık kaynaklı Control Center alternatifi.**
 
-[![Sürüm](https://img.shields.io/badge/Sürüm-v0.2.1-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
+[![Sürüm](https://img.shields.io/badge/Sürüm-v0.2.2-orange.svg)](https://github.com/soldsawn/ExcaliburReimagined/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows_11_%7C_Linux-blue.svg)](#)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-green.svg)](LICENSE)
 
@@ -55,7 +55,7 @@ Orijinal Excalibur Control Center bazen yavaş açılır, arka planda gereksiz k
 - 🧹 **Casper Programlarını Kapatma:** Control Center'ın arka planda çalışan sürücüsü, açılış görevleri ve programları tek tuşla durdurulup devre dışı bırakılır; hiçbir şey silinmez, "Geri al" eski hâline döndürür (Ayarlar). Fan denetleyicisini kullanan başka programlar (NoteBook FanControl, WinRing0) uyarı olarak gösterilir.
 - ⌨️ **Kısayol Tuşları:** Her yerden fan profilini (Ctrl+Alt+F) ve güç modunu (Ctrl+Alt+M) değiştirme, pencereyi açma (Ctrl+Alt+E); birleşimler Ayarlar'dan değiştirilebilir.
 - 🖥️ **Ekran Kartı Modu:** Hibrit (Intel + NVIDIA), Dahili (yalnız Intel; NVIDIA kartı kapanır, pil daha uzun gider) ve Harici (yalnız NVIDIA; dizüstünün ekran anahtarıyla dahili ekran da NVIDIA'ya geçer). Hibrit ile Dahili arasında yeniden başlatma gerekmez; HDMI kablosu takılıyken Dahili'ye geçilmez (HDMI çıkışı NVIDIA'ya bağlı), Dahili'deyken kablo takılınca kendiliğinden Hibrit'e dönülür. Harici'ye geçiş ve dönüş bilgisayarı yeniden başlatır; BIOS ekranı taşırken bu açılış 1-2 dakika sürer, bilgisayar bir kez kapanıp açılabilir. BitLocker açıkken Harici'ye geçilmez. Yöntem orijinal Control Center'ın bu modeldekiyle aynıdır (Ekran sayfası).
-> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux'ta ekran kartı modu ve Fedora desteği.
+> **🛠️ Planlanan Özellikler:** İngilizce dil seçeneği; Linux'ta Fedora desteği.
 
 <a id="diğer-modeller"></a>
 ### 🧪 Diğer Modeller ve EC Sürümleri
@@ -104,9 +104,11 @@ Sürüm sayfasında ayrıca **`ExcaliburReimagined-<sürüm>-zip-kurulum.zip`** 
 
 Linux sürümü arka plan servisi, **Windows'takiyle aynı pencere** (Panel, Soğutma, Geçmiş, Profiller, Performans, Pil, Aydınlatma, Otomasyon, Ayarlar; masaüstü destekliyorsa sistem tepsisi simgesi) ve komut satırından (`exr`) oluşur: aynı fan profilleri ve özel eğriler, aynı güvenlik kuralları ve EC sürüm denemesi, güç modları (pilde otomatik Ofis kilidi), işlemci/ekran kartı watt sınırları, şarja/pile göre otomatik geçiş, üç bölgeli klavye ışığı, pil sağlığı/tahminleri ve yerel geçmiş. Servis durunca, çökünce ya da bilgisayar uykuya geçince fanlar dizüstünün kendi ayarına döner; servis durunca watt sınırları da geri alınır.
 
-**Kendi çekirdek modülümüz (`.deb` ile gelir):** `.deb` paketi `excalibur_ec` modülünü kurar (DKMS: çekirdek güncellenince kendiliğinden yeniden derlenir). Modül yüklüyken güç modu BIOS'un kendi komutuyla uygulanır, yani **ekran kartının sınırı da moda göre değişir** (Windows'taki gibi); klavye ışığı ve fan devirleri de BIOS üzerinden okunur. Modül yoksa uygulama eskisi gibi çekirdeğin `ec_sys` modülüyle çalışır.
+**Kendi çekirdek modülümüz (`.deb` ile gelir):** `.deb` paketi `excalibur_ec` modülünü kurar (DKMS: çekirdek güncellenince kendiliğinden yeniden derlenir). Modül yüklüyken güç modu BIOS'un kendi komutuyla uygulanır, yani **ekran kartının sınırı da moda göre değişir** (Windows'taki gibi); klavye ışığı ve fan devirleri de BIOS üzerinden okunur. Modül yoksa uygulama eskisi gibi çekirdeğin `ec_sys` modülüyle çalışır. Modül için çekirdek 6.8 ya da daha yenisi gerekir (Ubuntu 24.04 ve sonrası, Linux Mint 22 ve sonrası).
 
-**Secure Boot:** Modül Secure Boot açıkken de çalışır. Secure Boot açıksa kurulum, modülün imza anahtarını **bir kez onaylamanızı** ister: bir parola belirlersiniz, yeniden başlatınca çıkan mavi ekranda **Enroll MOK > Continue > Yes** seçip parolayı girersiniz (NVIDIA sürücüsündeki adımın aynısı). İstemezseniz BIOS'ta Secure Boot'u kapatabilirsiniz (açılışta F2 > Security). `tar.gz` kurulumu modülü kurmaz; onda Secure Boot kapalı olmalı. *Secure Boot açıkken kurulum henüz gerçek cihazda denenmedi; sorun olursa `exr report` zip'iyle bildirin.*
+**Ekran kartı modu (`.deb`, modülle):** Performans sayfasından ya da `exr gpu hibrit` / `exr gpu harici` komutuyla Hibrit ile Harici arasında geçilir. Geçiş bilgisayarı yeniden başlatır; BIOS ekranı taşırken bu açılış 1-2 dakika sürer. Diskte BitLocker bölümü varsa Harici'ye geçilmez. Dahili (yalnız Intel) Linux'ta yok. *Linux'ta ekran kartı modu henüz gerçek cihazda denenmedi: Harici açılışında masaüstü gelmezse Windows'tan uygulamayla Hibrit'e dönebilirsiniz; sonucu `exr report` zip'iyle bildirin.*
+
+**Secure Boot:** Modül Secure Boot açıkken de çalışır. Secure Boot açıksa kurulum, modülün imza anahtarını **bir kez onaylamanızı** ister: bir parola belirlersiniz, yeniden başlatınca çıkan mavi ekranda **Enroll MOK > Continue > Yes** seçip parolayı girersiniz (NVIDIA sürücüsündeki adımın aynısı; parola yazılırken ekranda bir şey görünmez). İstemezseniz BIOS'ta Secure Boot'u kapatabilirsiniz (açılışta F2 > Security). `tar.gz` kurulumu modülü kurmaz; onda Secure Boot kapalı olmalı. Secure Boot açıkken kurulum Ubuntu'da (G870) denendi.
 
 **Ubuntu, Linux Mint, Pop!_OS, Zorin, Debian:** sürüm sayfasından **`excalibur-reimagined_<sürüm>_amd64.deb`** dosyasını indirip çift tıklayın ya da:
 
@@ -133,6 +135,7 @@ sudo bash install.sh
 | `exr manual 60` | Fanları geçici olarak (1–10 dk) sabit yüzdede tutar |
 | `exr mode oyun` | Güç modunu değiştirir (`ofis`, `oyun`, `yuksek`; pilde yalnız Ofis) |
 | `exr cpu-limit 35 60` / `exr gpu-limit 65` | İşlemci (PL1/PL2) ve ekran kartı watt sınırları (`off` ile kaldırılır) |
+| `exr gpu` / `exr gpu harici` | Ekran kartı modunu gösterir / değiştirir (`hibrit`, `harici`; yeniden başlatır) |
 | `exr auto ac mode oyun profile dengeli` | Şarja takılınca / pile geçince (`bat`) otomatik güç modu ve fan profili |
 | `exr light #00FFFF --level 2` | Klavye rengi, parlaklığı (0–2) ve efektleri (`breathing`, `cycle`, `zones`, `off`) |
 | `exr battery` / `exr history 60` | Pil sağlığı, süre tahminleri ve son dakikaların fan/sıcaklık özeti |
@@ -156,7 +159,7 @@ Windows ile birlikte kullanıyorsanız Linux'ta bir kez `sudo timedatectl set-lo
 
 Desteklenmeyen bir dağıtımda hiçbir şey bozulmaz: uygulama EC'ye ulaşamazsa fanlara dokunmaz ve `exr status` nedenini söyler. Denediğiniz dağıtımın sonucunu `exr report` zip'iyle bir Issue olarak paylaşırsanız tabloyu güncelleriz.
 
-**Henüz Linux'ta olmayanlar:** ekran kartı modu; boşta klavye ışığını söndürme, program kuralları, ekran yenileme hızı ve kısayol tuşları; Fedora desteği. `tar.gz` kurulumunda (modülsüz) güç modu ekran kartının sınırını değiştirmez; ekran kartını watt sınırıyla kısabilirsiniz.
+**Henüz Linux'ta olmayanlar:** ekran kartının Dahili modu; boşta klavye ışığını söndürme, program kuralları, ekran yenileme hızı ve kısayol tuşları; Fedora desteği. `tar.gz` kurulumunda (modülsüz) güç modu ekran kartının sınırını değiştirmez; ekran kartını watt sınırıyla kısabilirsiniz.
 
 ### Kod üzerinden kurulum (geliştiriciler için)
 
@@ -416,7 +419,7 @@ Başka bir donanım modelinde veya BIOS sürümünde test etmek isterseniz, lüt
 A lightweight, open-source, and bloat-free replacement for Casper's Excalibur Control Center, built specifically for the **Casper Excalibur G870** laptop (Windows 11).
 
 > [!WARNING]
-> **`v0.2.1`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**; `P009B0` (BIOS CQ171/CQ212) and `P006B0` (BIOS CQ111) are supported the same way. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. A trial runs once per machine; afterwards the app starts without it, on the profile you last chose. Use at your own risk.
+> **`v0.2.2`.** This application writes directly to the laptop's embedded controller (EC). It was built and tested on **EC version `P008B0`, BIOS CQ141**; `P009B0` (BIOS CQ171/CQ212) and `P006B0` (BIOS CQ111) are supported the same way. On unknown versions it starts in monitor-only mode; fan control is enabled only after a short trial you approve (the fans must follow the targets written). The trial first tries the BIOS's own fan command (WMI 0x0205); if the fans follow it, they are always set that way and the EC is never written directly. Otherwise it tries the EC registers. Trials have passed on `P003K0` (G770), `P009C0` and `P007B0` (G870), which are offered as a one-click calibration. A trial runs once per machine; afterwards the app starts without it, on the profile you last chose. Use at your own risk.
 
 **Tested devices:** G870 · BIOS CQ141 · EC `P008B0` (developed on, fans through the EC) · G870 · BIOS CQ212 · EC `P009B0` (trial passed, fans through the EC; now enabled without a trial) · G870 · BIOS CP211 · EC `P009C0` (trial passed, fans through the BIOS/WMI) · G870 · BIOS CQ131 · EC `P007B0` (trial passed, fans through the EC) · G870 · BIOS CQ111 · EC `P006B0` (trials passed on two machines, both fans through the EC; now enabled without a trial) · G770 · BIOS CP221 · EC `P003K0` (trial passed, fans through the EC).
 
@@ -441,7 +444,7 @@ Hardcoded limits ensure fans never go below 25% (30% when they are set through t
 
 **Installation:** download **`ExcaliburReimagined-<version>-setup.exe`** from the [latest release](https://github.com/soldsawn/ExcaliburReimagined/releases/latest) and run it. .NET comes inside it, and if the PawnIO driver is missing it downloads the official setup, checks its hash and installs it. Uninstall from Windows Settings > Apps (you are asked whether to keep your settings and fan history; by default they are kept). The setup is not signed, so Windows may warn about an unknown publisher (More info > Run anyway). The release also has a `-zip-kurulum.zip` with the same install as a folder (`1-Kur.cmd` / `2-Kaldir.cmd`).
 
-**Linux** (no graphics mode on Linux yet): on Ubuntu/Mint/Debian install `excalibur-reimagined_<version>_amd64.deb` (`sudo apt install ./excalibur-reimagined_*_amd64.deb`); elsewhere extract `ExcaliburReimagined-<version>-linux-x64.tar.gz` and run `sudo bash install.sh`. It has the same window as on Windows (all nine pages, tray icon where the desktop supports it), a systemd service and a command line (`exr`): fan profiles and custom curves, power modes (Office only on battery), CPU/GPU watt limits, AC/battery automation, three-zone keyboard lighting, battery health/estimates, local history, EC trial and bug reports (`exr report`). The `.deb` installs our own kernel module (`excalibur_ec`, DKMS): with it the power mode goes through the BIOS's own command, so the GPU limit follows the mode as on Windows, and it works with Secure Boot after you enroll its signing key once (set a password during install, then choose Enroll MOK > Continue > Yes on the blue screen after the restart; the Secure Boot path is not yet tested on a real machine). Without the module (the tar.gz) it uses the kernel's `ec_sys` module, which needs **Secure Boot off**, and the power mode does not change the GPU limit. Tested on Ubuntu 26.04 (G870, CQ212); likely not on Fedora (no `ec_sys`, no `.rpm` yet).
+**Linux:** on Ubuntu/Mint/Debian install `excalibur-reimagined_<version>_amd64.deb` (`sudo apt install ./excalibur-reimagined_*_amd64.deb`); elsewhere extract `ExcaliburReimagined-<version>-linux-x64.tar.gz` and run `sudo bash install.sh`. It has the same window as on Windows (all nine pages, tray icon where the desktop supports it), a systemd service and a command line (`exr`): fan profiles and custom curves, power modes (Office only on battery), CPU/GPU watt limits, AC/battery automation, three-zone keyboard lighting, battery health/estimates, local history, EC trial and bug reports (`exr report`). The `.deb` installs our own kernel module (`excalibur_ec`, DKMS): with it the power mode goes through the BIOS's own command, so the GPU limit follows the mode as on Windows, and it works with Secure Boot after you enroll its signing key once (set a password during install, then choose Enroll MOK > Continue > Yes on the blue screen after the restart; tested on Ubuntu). The module needs kernel 6.8 or newer. With the module, the graphics mode switches between Hybrid and Discrete (Performance page or `exr gpu hibrit|harici`, restarts the machine; not yet tested on a real machine under Linux, and Integrated is not available on Linux). Without the module (the tar.gz) it uses the kernel's `ec_sys` module, which needs **Secure Boot off**, and the power mode does not change the GPU limit. Tested on Ubuntu 26.04 (G870, CQ212); likely not on Fedora (no `ec_sys`, no `.rpm` yet).
 
 **From source (elevated PowerShell):**
 ```powershell
