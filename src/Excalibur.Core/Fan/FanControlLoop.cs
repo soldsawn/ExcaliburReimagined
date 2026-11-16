@@ -47,12 +47,13 @@ public sealed record FanLoopOptions
     /// </summary>
     /// P009C0: two G870s (2026-10-21 a tester's CPU fan; 2026-10-25 a user's trial, both fans followed).
     /// P007B0: a G870 with BIOS CQ131 (GitHub issue #1, 2026-10-30: 0.1.6 trial passed, WMI 0x0205 not followed, both fans through the EC).
-    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0", "P009C0", "P007B0" };
+    /// P00BC0: a G870 with BIOS CP241 (a user's report, 2026-11-16: 0.2.1 trial passed, WMI 0x0205 followed, fans through the BIOS).
+    public IReadOnlySet<string> SeenElsewhereEcVersions { get; init; } = new HashSet<string> { "P003K0", "P009C0", "P007B0", "P00BC0" };
     /// <summary>
     /// EC versions the built-in curves suit (tuned on the G870's P008B0); a machine with another one starts on EC automatic after its
-    /// trial. P009B0, P006B0, P009C0 and P007B0 have only been seen on G870s, the same laptop and fans.
+    /// trial. P009B0, P006B0, P009C0, P007B0 and P00BC0 have only been seen on G870s, the same laptop and fans.
     /// </summary>
-    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009B0", "P006B0", "P009C0", "P007B0" };
+    public IReadOnlySet<string> CurveEcVersions { get; init; } = new HashSet<string> { "P008B0", "P009B0", "P006B0", "P009C0", "P007B0", "P00BC0" };
     /// <summary>Trusted EC versions whose fans are written through the BIOS (WMI SET 0x0205): their trial passed that way.</summary>
     public IReadOnlySet<string> WmiEcVersions { get; init; } = new HashSet<string>();
     public int MaxReadFailures { get; init; } = 3;

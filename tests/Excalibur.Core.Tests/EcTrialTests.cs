@@ -73,6 +73,7 @@ public class EcTrialTests
     [Theory]
     [InlineData("P009C0")]
     [InlineData("P007B0")]
+    [InlineData("P00BC0")]
     public void G870_versions_keep_the_g870_curves_after_their_trial(string version) =>
         Assert.Contains(version, new FanLoopOptions().CurveEcVersions);
 
@@ -80,6 +81,7 @@ public class EcTrialTests
     [InlineData("P003K0", true)]
     [InlineData("P009C0", true)]
     [InlineData("P007B0", true)]
+    [InlineData("P00BC0", true)]
     [InlineData("P010A0", false)]
     public void A_version_seen_on_another_machine_is_flagged_while_unverified(string version, bool expected)
     {
