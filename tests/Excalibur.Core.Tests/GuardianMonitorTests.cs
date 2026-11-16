@@ -42,6 +42,27 @@ public class GuardianMonitorTests
     }
 
     [Fact]
+    public void A_long_gap_between_evaluations_is_a_sleep_not_a_death()
+    {
+        // 2026-11-11 22:07:50: after 3.7 h asleep the guardian woke before the service and reset the fans ("quiet 13413 s").
+        var last = Beat(holds: false);
+        _g.Evaluate(last, Sensors(), true, S(0));
+        var v = _g.Evaluate(last, Sensors(), true, S(13413));
+        Assert.Equal(GuardianAction.None, v.Action);
+        Assert.True(v.ServiceAlive);
+    }
+
+    [Fact]
+    public void A_service_that_does_not_come_back_after_a_sleep_is_still_handed_back()
+    {
+        var last = Beat();
+        _g.Evaluate(last, Sensors(), true, S(0));
+        _g.Evaluate(last, Sensors(), true, S(13413));
+        Assert.Equal(GuardianAction.None, _g.Evaluate(last, Sensors(), true, S(13431)).Action);
+        Assert.Equal(GuardianAction.ResetToAuto, _g.Evaluate(last, Sensors(), true, S(13433)).Action);
+    }
+
+    [Fact]
     public void A_dead_process_is_detected_sooner()
     {
         var last = Beat();

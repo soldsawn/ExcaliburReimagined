@@ -28,6 +28,11 @@ public sealed record GuardianOptions
     public int HotMinPercent { get; init; } = 80;
     /// <summary>The guardian cannot see the targets, so after overriding a live service it waits this long before doing it again.</summary>
     public TimeSpan HotCooldown { get; init; } = TimeSpan.FromSeconds(60);
+    /// <summary>
+    /// Two evaluations this far apart (normally 2 s; a stalled firmware read is cut at 5 s) mean the machine slept: the
+    /// service gets a new window. On 2026-11-11 the guardian woke first and wrote 0xFF twice, at the EC's busiest moment.
+    /// </summary>
+    public TimeSpan SleepGap { get; init; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>
@@ -42,7 +47,7 @@ public sealed record GuardianOptions
 ///   <item>the service is alive and holds the fans, but a chip stays very hot while a fan runs
 ///   below <see cref="GuardianOptions.HotMinPercent"/>: the service is misbehaving.</item>
 /// </list>
-/// Time is a monotonic value from the host (Stopwatch), so clock changes do not matter.
+/// Time is a monotonic value from the host (Stopwatch, which also counts sleep), so clock changes do not matter.
 /// </summary>
 public sealed class GuardianMonitor(GuardianOptions? options = null)
 {
@@ -53,6 +58,7 @@ public sealed class GuardianMonitor(GuardianOptions? options = null)
     private int _hotCount;
     private bool _handedBack;
     private TimeSpan? _lastHandBack;
+    private TimeSpan _lastEvaluation;
 
     /// <param name="heartbeat">The last heartbeat file contents, or null if missing.</param>
     /// <param name="sensors">A fresh WMI sensor reading, or null if it could not be read.</param>
@@ -60,12 +66,15 @@ public sealed class GuardianMonitor(GuardianOptions? options = null)
     /// <param name="now">Monotonic time.</param>
     public GuardianVerdict Evaluate(HeartbeatRecord? heartbeat, FanSensors? sensors, bool heartbeatProcessAlive, TimeSpan now)
     {
-        if (!_started)
+        bool slept = _started && now - _lastEvaluation >= _o.SleepGap;
+        _lastEvaluation = now;
+        if (!_started || slept)
         {
-            // Give an already running service one full window before judging it.
+            // Give an already running (or just resumed) service one full window before judging it.
             _started = true;
             _lastSequence = heartbeat?.Sequence;
             _lastChange = now;
+            _hotCount = 0;
         }
         else if (heartbeat?.Sequence != _lastSequence)
         {
