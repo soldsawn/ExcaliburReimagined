@@ -14,7 +14,8 @@ namespace Excalibur.FanService;
 /// </summary>
 public sealed class LightingWorker(LightingManager lighting, PowerSignal signal, FanRuntime runtime, ILogger<LightingWorker> logger) : BackgroundService
 {
-    private static readonly TimeSpan ResumeDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan ResumeDelay = TimeSpan.FromSeconds(11);
     public static readonly TimeSpan KeyQuiet = TimeSpan.FromSeconds(1.5);
     private Timer? _keyTimer;
     private readonly object _keyGate = new();
@@ -29,6 +30,7 @@ public sealed class LightingWorker(LightingManager lighting, PowerSignal signal,
         using var watcher = runtime.Simulated ? null : StartKeyWatcher();
         try
         {
+            if (!runtime.Simulated) await Task.Delay(StartDelay, stoppingToken);
             await Task.Run(lighting.Reapply, stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {

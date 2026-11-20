@@ -14,7 +14,7 @@ namespace Excalibur.FanService;
 public sealed class GraphicsWorker(GraphicsModeMonitor graphics, GraphicsSwitcher switcher, PowerSignal signal, FanRuntime runtime, Excalibur.Core.Fan.FanFileLog fileLog, ILogger<GraphicsWorker> logger) : BackgroundService
 {
     public const byte HdmiEvent = 4;
-    private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(10), ResumeDelay = TimeSpan.FromSeconds(5), HdmiDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(10), ResumeDelay = TimeSpan.FromSeconds(14), HdmiDelay = TimeSpan.FromSeconds(3);
 
     private readonly SemaphoreSlim _wake = new(0);
     private volatile string? _why;

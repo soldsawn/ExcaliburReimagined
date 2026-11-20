@@ -227,7 +227,11 @@ public sealed class EcFanHardware : IFanHardware
             Log?.Invoke("sensors: from WMI again");
             _withoutWmi = false;
         }
+        return StoreWmiSensors(sensors);
+    }
 
+    private (int CpuC, int GpuC, int CpuRpm, int GpuRpm) StoreWmiSensors(SmiCommand sensors)
+    {
         int cpuC = (int)sensors.A2, gpuC = (int)sensors.A3, cpuRpm = (int)sensors.A4, gpuRpm = (int)sensors.A5;
         if (cpuTemperature?.Invoke() is { } msrC and >= 1 and <= MaxTempC) cpuC = msrC;
         var (resolvedGpuC, gpuSource) = ResolveGpuTemperature(gpuC, cpuC, Power.Nvml.TemperatureC);
@@ -329,6 +333,8 @@ public sealed class EcFanHardware : IFanHardware
             catch (TimeoutException) { }
         }
 
+        if (!target.IsAuto) SyncBeforeWrite(fan, target);
+
         // One retry: a write that timed out may or may not have landed, and for 0xFF a stray byte from
         // Windows' EC driver can spoil the single read-back.
         for (int attempt = 0; attempt < 2; attempt++)
@@ -393,6 +399,7 @@ public sealed class EcFanHardware : IFanHardware
             SetTarget(fan, FanTarget.Auto);
             return;
         }
+        SyncBeforeWrite(fan, FanTarget.Auto);
         try { ec.WriteByte(FanRegisters.TargetOf(fan), FanTarget.Auto.Value); }
         catch (EcBusyException ex) { throw new FanBusyException($"{fan} fan target auto not written: the EC is busy.", ex); }
         catch (TimeoutException ex) { throw new FanWriteException($"{fan} fan target auto could not be written.", ex); }
@@ -401,6 +408,38 @@ public sealed class EcFanHardware : IFanHardware
             _ec = fan == FanId.Cpu ? _ec with { CpuTarget = FanTarget.Auto } : _ec with { GpuTarget = FanTarget.Auto };
         else
             Learnt(fan, FanTarget.Auto);
+    }
+
+    private static readonly TimeSpan FreshWmiWindow = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Every runtime ACPI 13 of 2026-11-13..20 (15 of 15) followed by 5.00 s an EC write on a tick that reused the cached
+    /// WMI block: without a WMI call through Windows' ACPI driver (which takes the AML ECMT mutex), the raw port write at
+    /// the top of the second could hit Windows' own 5-s thermal poll (_TZ.TZ01._TMP) mid-transaction. When a reused tick
+    /// wants to write, one WMI 0x0200 read goes through Windows' driver first so the write lands right after ECMT is free;
+    /// while the EC is held quiet, the write waits for the next tick.
+    /// </summary>
+    private void SyncBeforeWrite(FanId fan, FanTarget target)
+    {
+        if (_ec is null) return;
+        if (EcQuiet.IsQuiet)
+            throw new FanBusyException($"{fan} fan target {target} not written: the EC is held quiet.");
+        if (_withoutWmi || _sinceWmi.IsRunning && _sinceWmi.Elapsed < FreshWmiWindow) return;
+        if (!TryWarmWmi())
+            throw new FanBusyException($"{fan} fan target {target} not written: the EC lock is held elsewhere.");
+    }
+
+    private bool TryWarmWmi()
+    {
+        SmiCommand? reply;
+        try { reply = wmi.TryExecute(SmiCommand.Get(0x0200)); }
+        catch (WmiStalledException) { return true; } // WMI is stalling: let fallback fan control write anyway
+        catch (Exception) { return false; }
+        if (reply is not { } sensors) return false;
+        try { _ = StoreWmiSensors(sensors); }
+        catch (FanReadException) { _sinceWmi.Restart(); }
+        _reused = false;
+        return true;
     }
 
     /// <summary>One SET 0x0205 with both fans' targets; a fan below <see cref="FanControlLoop.WmiFloor"/> gets the floor.</summary>
@@ -423,6 +462,9 @@ public sealed class EcFanHardware : IFanHardware
     {
         string? version = ReadEcVersionCached();
         _scale.UseEcVersion(version);
+        // FanControlLoop.Start calls ResetToAutoUnread right after this: a WMI 0x0200 read first lines the start's 0x2C/0x2D
+        // writes up behind Windows' ACPI ECMT mutex (2026-11-17 21:28:40.049 collided on a cold start write).
+        if (version is not null && !EcQuiet.IsQuiet) TryWarmWmi();
         return version;
     }
 
